@@ -45,6 +45,9 @@ class DeskViewModel(
     private var audioTick = 0
     private var holdingAudioUntil: TimeMark? = null
     private var pendingHostLoad: Job? = null
+    private var volumeSendJob: Job? = null
+    private var micSendJob: Job? = null
+    private var lastMicLevel = 75
 
     private var pinnedButtonId: String? = null
     private var pinnedWindowNumber: String? = null
@@ -140,8 +143,22 @@ class DeskViewModel(
         val clamped = level.coerceIn(0, 100)
         armAudioHold()
         _uiState.update { it.copy(volumeLevel = clamped, volumeMuted = false) }
-        viewModelScope.launch {
+        volumeSendJob?.cancel()
+        volumeSendJob = viewModelScope.launch {
+            delay(AUDIO_SEND_DEBOUNCE_MS)
             runCatching { agentGateway.setVolume(host, level = clamped, mute = false) }
+                .onFailure { error ->
+                    _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar volume") }
+                }
+        }
+    }
+
+    fun onVolumeAdjustFinished() {
+        val host = _uiState.value.selectedHost ?: return
+        val level = _uiState.value.volumeLevel
+        volumeSendJob?.cancel()
+        viewModelScope.launch {
+            runCatching { agentGateway.setVolume(host, level = level, mute = false) }
                 .onFailure { error ->
                     _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar volume") }
                 }
@@ -173,11 +190,50 @@ class DeskViewModel(
         val currentlyMuted = _uiState.value.micMuted
         val nextMuted = !currentlyMuted
         armAudioHold()
-        _uiState.update { it.copy(micMuted = nextMuted) }
+        if (nextMuted) {
+            lastMicLevel = _uiState.value.micLevel.coerceAtLeast(lastMicLevel)
+            _uiState.update { it.copy(micMuted = true) }
+        } else {
+            val restored = lastMicLevel.coerceIn(25, 100)
+            _uiState.update { it.copy(micMuted = false, micLevel = restored) }
+        }
         viewModelScope.launch {
-            runCatching { agentGateway.setMic(host, mute = nextMuted, toggle = false) }
+            runCatching {
+                if (nextMuted) {
+                    agentGateway.setMic(host, mute = true, toggle = false)
+                } else {
+                    agentGateway.setMic(host, mute = false, toggle = false, level = lastMicLevel.coerceIn(25, 100))
+                }
+            }.onFailure { error ->
+                _uiState.update { it.copy(micMuted = currentlyMuted, feedback = error.message ?: "Falha no microfone") }
+            }
+        }
+    }
+
+    fun onMicLevelChange(level: Int) {
+        val host = _uiState.value.selectedHost ?: return
+        val clamped = level.coerceIn(0, 100)
+        armAudioHold()
+        if (clamped > 1) lastMicLevel = clamped
+        _uiState.update { it.copy(micLevel = clamped, micMuted = clamped <= 1) }
+        micSendJob?.cancel()
+        micSendJob = viewModelScope.launch {
+            delay(AUDIO_SEND_DEBOUNCE_MS)
+            runCatching { agentGateway.setMic(host, level = clamped) }
                 .onFailure { error ->
-                    _uiState.update { it.copy(micMuted = currentlyMuted, feedback = error.message ?: "Falha no microfone") }
+                    _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar mic") }
+                }
+        }
+    }
+
+    fun onMicAdjustFinished() {
+        val host = _uiState.value.selectedHost ?: return
+        val level = _uiState.value.micLevel
+        micSendJob?.cancel()
+        viewModelScope.launch {
+            runCatching { agentGateway.setMic(host, level = level) }
+                .onFailure { error ->
+                    _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar mic") }
                 }
         }
     }
@@ -356,6 +412,7 @@ class DeskViewModel(
                 volumeLevel = audio?.volumeLevel ?: it.volumeLevel,
                 volumeMuted = audio?.volumeMuted ?: it.volumeMuted,
                 micMuted = audio?.micMuted ?: it.micMuted,
+                micLevel = audio?.micLevel?.takeIf { level -> level > 1 } ?: it.micLevel,
                 isLoadingApps = buttons.isEmpty(),
             )
         }
@@ -364,12 +421,14 @@ class DeskViewModel(
     private fun applyAudio(host: PairedHost, audio: AudioState) {
         if (holdingAudioUntil?.hasPassedNow() == false) return
         audioCache[host.id] = audio
+        if (audio.micLevel > 1) lastMicLevel = audio.micLevel
         if (_uiState.value.selectedHost?.id == host.id) {
             _uiState.update {
                 it.copy(
                     volumeLevel = audio.volumeLevel,
                     volumeMuted = audio.volumeMuted,
                     micMuted = audio.micMuted,
+                    micLevel = if (audio.micMuted) it.micLevel.takeIf { level -> level > 1 } ?: lastMicLevel else audio.micLevel,
                 )
             }
         }
@@ -450,6 +509,7 @@ class DeskViewModel(
         const val AUTO_REFRESH_MS = 400L
         const val AUDIO_REFRESH_MS = 2500L
         const val AUDIO_HOLD_MS = 2000L
+        const val AUDIO_SEND_DEBOUNCE_MS = 80L
         const val BURST_REFRESH_MS = 200L
         const val BURST_REFRESH_COUNT = 5
         const val PINNED_FOCUS_MAX_MS = 8000L

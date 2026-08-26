@@ -28,9 +28,11 @@ class DeskScreenTest {
                     onRefresh = {},
                     onSelectHost = {},
                     onAppClick = {},
-                    onVolumeDown = {},
-                    onVolumeUp = {},
+                    onVolumeChange = {},
+                    onVolumeChangeFinished = {},
                     onMuteClick = {},
+                    onMicChange = {},
+                    onMicChangeFinished = {},
                     onMicClick = {},
                     onClearFeedback = {},
                 )
@@ -67,17 +69,19 @@ class DeskScreenTest {
                     onRefresh = {},
                     onSelectHost = {},
                     onAppClick = {},
-                    onVolumeDown = {},
-                    onVolumeUp = {},
+                    onVolumeChange = {},
+                    onVolumeChangeFinished = {},
                     onMuteClick = {},
+                    onMicChange = {},
+                    onMicChangeFinished = {},
                     onMicClick = {},
                     onClearFeedback = {},
                 )
             }
         }
         composeRule.onNodeWithText("Mac Mini").assertIsDisplayed()
-        composeRule.onNodeWithText("Safari").assertIsDisplayed()
-        composeRule.onNodeWithText("Volume").assertIsDisplayed()
-        composeRule.onNodeWithText("Mic").assertIsDisplayed()
+        composeRule.onNodeWithText("GitHub").assertIsDisplayed()
+        composeRule.onNodeWithText("50%").assertIsDisplayed()
+        composeRule.onNodeWithText("75%").assertIsDisplayed()
     }
 }

@@ -21,7 +21,7 @@ interface AgentGateway {
     suspend fun openBrowser(host: PairedHost, url: String)
     suspend fun closeBrowser(host: PairedHost)
     suspend fun setVolume(host: PairedHost, level: Int? = null, delta: Int? = null, mute: Boolean? = null)
-    suspend fun setMic(host: PairedHost, mute: Boolean? = null, toggle: Boolean = false)
+    suspend fun setMic(host: PairedHost, mute: Boolean? = null, toggle: Boolean = false, level: Int? = null)
 }
 
 interface PairHostRemote {

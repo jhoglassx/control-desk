@@ -102,19 +102,19 @@ Toque → UI otimista (0 ms)
 
 | Regra | Detalhe |
 |-------|---------|
-| Slider | Valor local durante drag; envia ao **soltar** |
-| +/− | UI ±5 imediato; request com nível absoluto |
-| Mute | Toggle visual imediato; reverte só em erro HTTP |
-| Poll de áudio | **Suspenso** durante interação do usuário (~2 s) para não “lutar” com o slider |
-| Conflito | Poll não altera slider enquanto `isDragging` |
+| Knob | Valor local durante o giro; envia com debounce e de novo ao **soltar** |
+| Mute | Toque no knob; toggle visual imediato; reverte só em erro HTTP |
+| Poll de áudio | **Suspenso** durante interação do usuário (~2 s) para não “lutar” com o knob |
+| Conflito | Poll não altera o nível enquanto o áudio está em hold |
 
 ### 5.3 Microfone
 
 | Regra | Detalhe |
 |-------|---------|
-| Toggle | Estado imediato na UI |
+| Knob | Giro ajusta input volume (0–100), igual ao volume de saída |
+| Toggle | Toque muta; unmute restaura o último nível |
 | Erro | Reverte mute visual |
-| Poll | Idem volume — hold durante toggle |
+| Poll | Idem volume — hold durante o giro |
 
 ### 5.4 Trocar host
 
@@ -210,9 +210,9 @@ O mobile é otimista; o agente deve ser **rápido** para a confirmação chegar 
 | Área | Arquivo |
 |------|---------|
 | Otimista grade | `DeskViewModel.onButtonClick`, `applyPinnedFocus` |
-| Otimista áudio | `onVolumeKnobClick`, `onVolumeLevelChange`, `onMicKnobClick` |
+| Otimista áudio | `onVolumeKnobClick`, `onVolumeLevelChange`, `onMicKnobClick`, `onMicLevelChange` |
 | Poll / burst | `DeskViewModel.startAutoRefresh`, `startBurstRefresh` |
-| Slider local | Tiles Volume (−/+) |
+| Knob local | `AudioKnob` em Volume e Mic |
 | Cache host | `DeskViewModel.selectHost`, `buttonsCache` |
 
 **Gap conhecido:** código atual tem timers e otimista parcial; reimplementação deve tratar **instantâneo** como requisito, não otimização opcional.

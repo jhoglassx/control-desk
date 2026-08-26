@@ -8,8 +8,13 @@ object MacAudioControl {
     fun read(): AudioResponse {
         val volume = Shell.osascript("output volume of (get volume settings)", timeoutMs = 400).toIntOrNull()?.coerceIn(0, 100) ?: 50
         val muted = Shell.osascript("output muted of (get volume settings)", timeoutMs = 400).equals("true", ignoreCase = true)
-        val input = Shell.osascript("input volume of (get volume settings)", timeoutMs = 400).toIntOrNull() ?: 75
-        return AudioResponse(volumeLevel = volume, volumeMuted = muted, micMuted = input <= 1)
+        val input = Shell.osascript("input volume of (get volume settings)", timeoutMs = 400).toIntOrNull()?.coerceIn(0, 100) ?: 75
+        return AudioResponse(
+            volumeLevel = volume,
+            volumeMuted = muted,
+            micMuted = input <= 1,
+            micLevel = if (input <= 1) 0 else input,
+        )
     }
 
     fun setVolume(request: VolumeRequest) {
@@ -34,6 +39,10 @@ object MacAudioControl {
     }
 
     fun setMic(request: MicRequest) {
+        if (request.level != null) {
+            Shell.spawn("/usr/bin/osascript", "-e", "set volume input volume ${request.level!!.coerceIn(0, 100)}")
+            return
+        }
         val currentlyMuted = (Shell.osascript("input volume of (get volume settings)", timeoutMs = 300).toIntOrNull() ?: 75) <= 1
         val mute = when {
             request.mute != null -> request.mute == true

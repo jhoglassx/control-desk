@@ -6,7 +6,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -28,8 +30,8 @@ import com.controldesk.app.theme.DeskColors
 import com.controldesk.app.util.accentForLabel
 import com.controldesk.app.util.emojiForLabel
 import com.controldesk.app.util.rememberBase64Image
+import com.controldesk.app.util.tileAppName
 import com.controldesk.app.util.tileLabel
-import com.controldesk.app.util.tileSubtitle
 import com.controldesk.domain.model.GridButton
 
 @Composable
@@ -50,73 +52,72 @@ fun AppLauncherTile(
         else -> 1.dp
     }
     val label = button.tileLabel()
-    val subtitle = button.tileSubtitle()
+    val appName = button.tileAppName()
     val icon = rememberBase64Image(button.iconBase64)
     val monitorTint = if (button.monitorIndex == 2) DeskColors.Mint else DeskColors.Accent
 
-    Column(
+    val cardShape = RoundedCornerShape(16.dp)
+    BoxWithConstraints(
         modifier
             .fillMaxWidth()
+            .aspectRatio(1f)
             .alpha(if (!button.isVisible && !button.isActive) 0.45f else 1f)
             .then(
-                if (button.isActive) Modifier.shadow(12.dp, RoundedCornerShape(16.dp), ambientColor = DeskColors.Accent)
+                if (button.isActive) Modifier.shadow(12.dp, cardShape, ambientColor = DeskColors.Accent)
                 else Modifier,
             )
-            .background(DeskColors.SurfaceRaised, RoundedCornerShape(16.dp))
-            .border(borderWidth, borderColor, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .clip(cardShape)
+            .background(DeskColors.SurfaceRaised)
+            .border(borderWidth, borderColor, cardShape)
+            .clickable(onClick = onClick),
     ) {
-        Box(
-            Modifier.size(if (compact) 32.dp else 40.dp).clip(RoundedCornerShape(9.dp)),
-            contentAlignment = Alignment.Center,
+        val iconSize = (maxWidth * 0.38f).coerceIn(28.dp, 56.dp)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            if (icon != null) {
-                Image(
-                    bitmap = icon,
-                    contentDescription = label,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit,
-                )
-            } else {
-                Text(emojiForLabel(label), fontSize = if (compact) 20.sp else 24.sp, color = accentForLabel(label))
+            Box(
+                Modifier.size(iconSize).clip(RoundedCornerShape(9.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (icon != null) {
+                    Image(
+                        bitmap = icon,
+                        contentDescription = label,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit,
+                    )
+                } else {
+                    Text(emojiForLabel(appName), fontSize = if (compact) 20.sp else 24.sp, color = accentForLabel(appName))
+                }
             }
-        }
-        Text(
-            label,
-            color = DeskColors.TextPrimary,
-            fontSize = 12.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            lineHeight = 14.sp,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        if (!compact && subtitle != null && !subtitle.startsWith("#")) {
             Text(
-                subtitle,
-                color = DeskColors.TextMuted,
-                fontSize = 10.sp,
+                label,
+                color = DeskColors.TextPrimary,
+                fontSize = 12.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
-                lineHeight = 12.sp,
-                modifier = Modifier.fillMaxWidth(),
+                lineHeight = 14.sp,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
             )
         }
         if (button.monitorIndex > 0) {
             Text(
                 "M${button.monitorIndex}",
                 color = monitorTint,
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 modifier = Modifier
-                    .background(DeskColors.Surface, RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 1.dp),
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .shadow(4.dp, RoundedCornerShape(8.dp))
+                    .background(DeskColors.Surface, RoundedCornerShape(8.dp))
+                    .border(1.dp, monitorTint, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
             )
-        } else if (button.isActive) {
-            Text("Em uso", color = DeskColors.Accent, fontSize = 10.sp)
         }
     }
 }

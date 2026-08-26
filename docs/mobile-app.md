@@ -90,7 +90,7 @@ Topbar de uma linha (sem card grande):
 
 **Seção:** "Apps no Mac" (subtitle dinâmico).
 
-**Layout:** `LazyVerticalGrid` Adaptive — portrait `96.dp`, landscape `168.dp` (cerca de 3 colunas, nomes visíveis). Tiles crescem com o conteúdo (sem `aspectRatio` que cortava texto). Primeiros itens: **Volume** e **Mic**.
+**Layout:** `LazyVerticalGrid` Adaptive — portrait `96.dp`, landscape `168.dp`. Tiles são **quadrados** (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**.
 
 **Subtitle:** `{N} apps · {focused} em uso · M1: n · M2: n · {hidden} ocultos`
 
@@ -98,32 +98,39 @@ Topbar de uma linha (sem card grande):
 
 | Estado | Borda | Extra |
 |--------|-------|--------|
-| **Em uso** | Azul 3dp + glow | Chip M{n} ou "Em uso" |
-| **Visível** | Verde 2dp | Chip M{n} |
-| **Oculto** | Cinza 1dp, alpha 0.45 | Chip M{n} |
+| **Em uso** | Azul 3dp + glow | Badge M{n} no canto |
+| **Visível** | Verde 2dp | Badge M{n} no canto |
+| **Oculto** | Cinza 1dp, alpha 0.45 | Badge M{n} no canto |
 
-Landscape (`compact`): sem subtitle da janela, só ícone, nome e M{n}.
+**Monitor:** `M1` / `M2` é badge suspenso no canto superior direito, **dentro** do card (overlay, fora da pilha de conteúdo).
+
+**Texto:** título da janela (não o nome do app). Se a janela não tem título, cai no nome do app. O ícone do `.app` já identifica o programa.
+
+Landscape (`compact`): ícone, título da janela e badge M{n}.
 
 **Clique:** `onAppClick(button)` → `DeskViewModel.onButtonClick`.
 
 ### 3.6 Tiles de sistema (`VolumeAppTile`, `MicAppTile`)
 
-Mesma grade dos apps:
+Knobs rotativos na mesma grade dos apps, **sem card nem título** — só o disco com o % no centro. Giro horário aumenta; anti-horário diminui; toque muta (anel vermelho).
 
 | Tile | Ação |
 |------|------|
-| Volume − / + | `onVolumeDown` / `onVolumeUp` (delta 5) |
-| Volume ícone / % | `onVolumeKnobClick` (mute) |
-| Mic | `onMicKnobClick` |
+| Giro Volume | `onVolumeLevelChange` (nível 0–100, unmute) |
+| Soltar Volume | `onVolumeAdjustFinished` (envia nível absoluto) |
+| Toque Volume | `onVolumeKnobClick` (mute) |
+| Giro Mic | `onMicLevelChange` (input 0–100) |
+| Soltar Mic | `onMicAdjustFinished` |
+| Toque Mic | `onMicKnobClick` (mute; unmute restaura último nível) |
 
 **Regras de negócio (ViewModel):**
 
 | Ação | API | Detalhe |
 |------|-----|---------|
-| Slider / +/− | `POST /system/volume` | `level` absoluto; unmute implícito |
-| Mute toggle | `POST /system/volume` | `mute=true/false`; se unmute, envia `level` atual |
-| Mic toggle | `POST /system/mic` | `mute=true/false` |
-| Rotação knob (se usado) | volume: `delta = steps × 2`; mic: `inputDelta = steps × 2` | steps de `deltaDegrees / 5`, clamp ±20 |
+| Giro / soltar volume | `POST /system/volume` | `level` absoluto; unmute implícito; debounce 80 ms no giro, commit ao soltar |
+| Mute volume | `POST /system/volume` | `mute=true/false`; se unmute, envia `level` atual |
+| Giro / soltar mic | `POST /system/mic` | `level` de input; 0 = mudo |
+| Mute mic | `POST /system/mic` | `mute=true` ou `level` restaurado |
 
 **Otimista:** mute volume/mic atualiza UI antes da resposta; **reverte** em falha.
 
@@ -411,7 +418,7 @@ Build: ver [ios-setup.md](ios-setup.md).
 - [ ] Sub-páginas: Apps · Browser · Áudio
 - [ ] Editor drag-and-drop de botões
 - [ ] Exibir VOL+/MIC templates na grade ou mixer dedicado
-- [ ] `RotaryKnob` (existe componente; volume usa tile −/+)
+- [x] Knobs rotativos de Volume e Mic na grade
 - [ ] Revogar token no agente ao remover host
 - [ ] HTTPS LAN opcional
 
