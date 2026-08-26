@@ -32,6 +32,7 @@ data class AudioState(
     val volumeLevel: Int = 50,
     val volumeMuted: Boolean = false,
     val micMuted: Boolean = false,
+    val micLevel: Int = 75,
 )
 
 data class RunningApp(

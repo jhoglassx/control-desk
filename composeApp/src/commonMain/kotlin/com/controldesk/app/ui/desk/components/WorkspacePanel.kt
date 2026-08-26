@@ -24,10 +24,13 @@ fun WorkspacePanel(
     onAppClick: (GridButton) -> Unit,
     volumeLevel: Int,
     volumeMuted: Boolean,
+    micLevel: Int,
     micMuted: Boolean,
-    onVolumeDown: () -> Unit,
-    onVolumeUp: () -> Unit,
+    onVolumeChange: (Int) -> Unit,
+    onVolumeChangeFinished: () -> Unit,
     onMuteClick: () -> Unit,
+    onMicChange: (Int) -> Unit,
+    onMicChangeFinished: () -> Unit,
     onMicClick: () -> Unit,
     compact: Boolean,
     modifier: Modifier = Modifier,
@@ -64,13 +67,21 @@ fun WorkspacePanel(
                 VolumeAppTile(
                     volumeLevel = volumeLevel,
                     muted = volumeMuted,
+                    compact = compact,
+                    onLevelChange = onVolumeChange,
+                    onAdjustFinished = onVolumeChangeFinished,
                     onMuteClick = onMuteClick,
-                    onVolumeDown = onVolumeDown,
-                    onVolumeUp = onVolumeUp,
                 )
             }
             item(key = "sys-mic", contentType = "system") {
-                MicAppTile(muted = micMuted, onClick = onMicClick)
+                MicAppTile(
+                    micLevel = micLevel,
+                    muted = micMuted,
+                    compact = compact,
+                    onLevelChange = onMicChange,
+                    onAdjustFinished = onMicChangeFinished,
+                    onMuteClick = onMicClick,
+                )
             }
             items(buttons, key = { it.id }) { button ->
                 AppLauncherTile(button = button, onClick = { onAppClick(button) }, compact = compact)

@@ -63,6 +63,7 @@ data class MicRequest(
     val mute: Boolean? = null,
     val toggle: Boolean = false,
     val inputDelta: Int? = null,
+    val level: Int? = null,
 )
 
 @Serializable
@@ -83,6 +84,7 @@ data class AudioResponse(
     val volumeLevel: Int = 50,
     val volumeMuted: Boolean = false,
     val micMuted: Boolean = false,
+    val micLevel: Int = 75,
 )
 
 @Serializable

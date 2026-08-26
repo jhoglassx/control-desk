@@ -50,6 +50,7 @@ class AgentGatewayImpl(
             volumeLevel = audio.volumeLevel.coerceIn(0, 100),
             volumeMuted = audio.volumeMuted,
             micMuted = audio.micMuted,
+            micLevel = audio.micLevel.coerceIn(0, 100),
         )
     }
 
@@ -93,8 +94,8 @@ class AgentGatewayImpl(
         api.setVolume(host.baseUrl(), host.token, VolumeRequest(level = level, delta = delta, mute = mute))
     }
 
-    override suspend fun setMic(host: PairedHost, mute: Boolean?, toggle: Boolean) = mapErrors {
-        api.setMic(host.baseUrl(), host.token, MicRequest(mute = mute, toggle = toggle))
+    override suspend fun setMic(host: PairedHost, mute: Boolean?, toggle: Boolean, level: Int?) = mapErrors {
+        api.setMic(host.baseUrl(), host.token, MicRequest(mute = mute, toggle = toggle, level = level))
     }
 
     private fun PairedHost.baseUrl(): String = agentBaseUrl(host, port)

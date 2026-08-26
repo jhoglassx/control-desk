@@ -6,13 +6,15 @@ import com.controldesk.domain.model.GridButton
 
 fun GridButton.tileLabel(): String {
     val cleaned = label.replace(" · min", "", ignoreCase = true)
-    return cleaned.substringBefore(" · ").ifBlank { cleaned }
+    val parts = cleaned.split(" · ", limit = 2)
+    val appName = parts[0].ifBlank { cleaned }
+    val title = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+    return title ?: appName
 }
 
-fun GridButton.tileSubtitle(): String? {
+fun GridButton.tileAppName(): String {
     val cleaned = label.replace(" · min", "", ignoreCase = true)
-    val parts = cleaned.split(" · ", limit = 2)
-    return parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+    return cleaned.substringBefore(" · ").ifBlank { cleaned }
 }
 
 fun emojiForLabel(label: String): String {

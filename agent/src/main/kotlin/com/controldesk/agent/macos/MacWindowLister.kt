@@ -16,7 +16,7 @@ object MacWindowLister {
     private val ignored = setOf(
         "ControlDeskAgent", "AutoFill", "coreauthd", "loginwindow", "Wallpaper",
         "Window Server", "SystemUIServer", "Dock", "Control Center", "NotificationCenter",
-        "Finder", "Spotlight", "JavaApplicationStub", "WindowManager", "Control Desk Agent",
+        "Spotlight", "JavaApplicationStub", "WindowManager", "Control Desk Agent",
     )
 
     fun warmUp() {

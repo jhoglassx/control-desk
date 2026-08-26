@@ -23,6 +23,7 @@ class LoggingPlatformExecutor : PlatformExecutor {
     @Volatile private var volume = 50
     @Volatile private var volumeMuted = false
     @Volatile private var micMuted = false
+    @Volatile private var micLevel = 75
     private val apps = mutableListOf(
         RunningAppInfo(name = "Safari", appName = "Safari", windowTitle = "GitHub", isActive = true, isVisible = true, windowNumber = 1, monitorIndex = 1),
         RunningAppInfo(name = "Notes", appName = "Notes", isActive = false, isVisible = true, windowNumber = 2, monitorIndex = 1),
@@ -39,7 +40,7 @@ class LoggingPlatformExecutor : PlatformExecutor {
     override fun openBrowser(url: String, browser: String?) = Unit
     override fun closeBrowser(browser: String?) = Unit
     override fun switchBrowserTab(request: BrowserTabSwitchRequest) = Unit
-    override fun audio(): AudioResponse = AudioResponse(volume, volumeMuted, micMuted)
+    override fun audio(): AudioResponse = AudioResponse(volume, volumeMuted, micMuted, if (micMuted) 0 else micLevel)
     override fun setVolume(request: VolumeRequest) {
         request.mute?.let { volumeMuted = it }
         request.level?.let { volume = it.coerceIn(0, 100); volumeMuted = false }
@@ -47,6 +48,14 @@ class LoggingPlatformExecutor : PlatformExecutor {
     }
     override fun setMic(request: MicRequest) {
         when {
+            request.level != null -> {
+                micLevel = request.level!!.coerceIn(0, 100)
+                micMuted = micLevel <= 1
+            }
+            request.inputDelta != null -> {
+                micLevel = (micLevel + request.inputDelta!!).coerceIn(0, 100)
+                micMuted = micLevel <= 1
+            }
             request.mute != null -> micMuted = request.mute == true
             request.toggle -> micMuted = !micMuted
         }

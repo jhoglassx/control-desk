@@ -33,7 +33,7 @@ class FakeAgentGateway(
 ) : AgentGateway {
     val launched = mutableListOf<GridButton>()
     val volumes = mutableListOf<Triple<Int?, Int?, Boolean?>>()
-    val mics = mutableListOf<Pair<Boolean?, Boolean>>()
+    val mics = mutableListOf<Triple<Boolean?, Boolean, Int?>>()
 
     private fun <T> result(value: T): T {
         failWith?.let { throw it }
@@ -56,9 +56,9 @@ class FakeAgentGateway(
         result(Unit)
         volumes += Triple(level, delta, mute)
     }
-    override suspend fun setMic(host: PairedHost, mute: Boolean?, toggle: Boolean) {
+    override suspend fun setMic(host: PairedHost, mute: Boolean?, toggle: Boolean, level: Int?) {
         result(Unit)
-        mics += mute to toggle
+        mics += Triple(mute, toggle, level)
     }
 }
 

@@ -226,7 +226,7 @@ Antes do servidor, no Mac:
 | POST | `/browser/open` | Bearer | Abrir URL |
 | POST | `/browser/close` | Bearer | Fechar navegador |
 | POST | `/browser/tabs/switch` | Bearer | Aba próxima/anterior/selecionar |
-| GET | `/system/audio` | Bearer | Volume + mute |
+| GET | `/system/audio` | Bearer | Volume + mute + nível do mic |
 | POST | `/system/volume` | Bearer | Ajustar volume |
 | POST | `/system/mic` | Bearer | Ajustar mic |
 
@@ -240,7 +240,7 @@ Ver `core/protocol/.../AgentDtos.kt`.
 
 **VolumeRequest:** `level?`, `delta?`, `mute?`
 
-**MicRequest:** `mute?`, `toggle` (default `false`), `inputDelta?`
+**MicRequest:** `mute?`, `toggle` (default `false`), `inputDelta?`, `level?`
 
 **RunningAppInfo:** `name`, `appName`, `windowTitle`, `windowIndex`, `axWindowIndex`, `windowNumber`, `iconBase64`, `isActive`, `isVisible`, `browserWindowIndex`, `isBrowserTab`, `monitorIndex`
 
@@ -260,7 +260,7 @@ Ver `core/protocol/.../AgentDtos.kt`.
 
 **Requisito:** permissão de **Acessibilidade** para ControlDeskAgent (e `java`/Terminal em dev).
 
-**Processos ignorados:** ControlDeskAgent, AutoFill, coreauthd, loginwindow, Wallpaper, etc.
+**Processos ignorados:** ControlDeskAgent, AutoFill, coreauthd, loginwindow, Wallpaper, Dock, Spotlight, etc. **Finder entra na grade.**
 
 **Chrome:** janelas substituídas por **abas individuais** na grade.
 
@@ -295,15 +295,16 @@ Ver `core/protocol/.../AgentDtos.kt`.
 | Volume saída | 0–100 via AppleScript |
 | Mute saída | `output muted` |
 | Mic muted | `input volume ≤ 1` |
+| Mic level | `input volume` 0–100 |
 
 | Ação | Regra |
 |------|-------|
 | Mute volume | `set volume output muted true/false` |
 | Nível | Desmuta + define volume (clamp 0–100) |
 | Delta volume | Lê atual + delta, clamp |
-| Mute mic | input 0; unmute → 75 |
-| Toggle mic | 0 ↔ 75 |
-| inputDelta | Ajusta input volume |
+| Mute mic | input 0; unmute → último nível (ou 75) |
+| Toggle mic | 0 ↔ último nível |
+| inputDelta / level | Ajusta input volume |
 
 ### 6.6 Windows / Linux (parcial)
 
@@ -326,7 +327,7 @@ Resumo:
 | **Pair** | Nome, IP, porta, PIN; defaults `10.0.2.2` / `8741` |
 | **Polling** | Apps 1,5 s; áudio 2,5 s; burst após clique |
 | **Clique app** | Foco otimista + `REMOTE_LAUNCH` ou `REMOTE_BROWSER_TAB` |
-| **Mixer** | Slider 0–100, ±5, mute otimista, mic toggle |
+| **Mixer** | Knobs Volume/Mic: giro 0–100, toque mute |
 | **Persistência** | `control_desk_hosts.json` (Android/iOS); token no JSON |
 | **Remover host** | Só local; não revoga token no agente |
 | **Interação** | Instantânea na UI (otimista); ver [interaction-rules.md](interaction-rules.md) |
