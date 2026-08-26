@@ -67,6 +67,7 @@ class AgentApiClient(
 
     suspend fun audio(baseUrl: String, token: String): AudioResponse =
         httpClient.get("$baseUrl/system/audio") {
+            timeout { requestTimeoutMillis = 800 }
             bearerAuth(token)
         }.body()
 

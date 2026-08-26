@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
@@ -45,8 +44,11 @@ class DeskViewModel(
     private var audioTick = 0
     private var holdingAudioUntil: TimeMark? = null
     private var pendingHostLoad: Job? = null
+    private var audioPollJob: Job? = null
     private var volumeSendJob: Job? = null
     private var micSendJob: Job? = null
+    private var pendingVolume: Int? = null
+    private var pendingMic: Int? = null
     private var lastMicLevel = 75
 
     private var pinnedButtonId: String? = null
@@ -143,26 +145,12 @@ class DeskViewModel(
         val clamped = level.coerceIn(0, 100)
         armAudioHold()
         _uiState.update { it.copy(volumeLevel = clamped, volumeMuted = false) }
-        volumeSendJob?.cancel()
-        volumeSendJob = viewModelScope.launch {
-            delay(AUDIO_SEND_DEBOUNCE_MS)
-            runCatching { agentGateway.setVolume(host, level = clamped, mute = false) }
-                .onFailure { error ->
-                    _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar volume") }
-                }
-        }
+        enqueueVolume(host, clamped)
     }
 
     fun onVolumeAdjustFinished() {
         val host = _uiState.value.selectedHost ?: return
-        val level = _uiState.value.volumeLevel
-        volumeSendJob?.cancel()
-        viewModelScope.launch {
-            runCatching { agentGateway.setVolume(host, level = level, mute = false) }
-                .onFailure { error ->
-                    _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar volume") }
-                }
-        }
+        enqueueVolume(host, _uiState.value.volumeLevel)
     }
 
     fun onVolumeKnobClick() {
@@ -216,25 +204,41 @@ class DeskViewModel(
         armAudioHold()
         if (clamped > 1) lastMicLevel = clamped
         _uiState.update { it.copy(micLevel = clamped, micMuted = clamped <= 1) }
-        micSendJob?.cancel()
-        micSendJob = viewModelScope.launch {
-            delay(AUDIO_SEND_DEBOUNCE_MS)
-            runCatching { agentGateway.setMic(host, level = clamped) }
-                .onFailure { error ->
-                    _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar mic") }
-                }
-        }
+        enqueueMic(host, clamped)
     }
 
     fun onMicAdjustFinished() {
         val host = _uiState.value.selectedHost ?: return
-        val level = _uiState.value.micLevel
-        micSendJob?.cancel()
-        viewModelScope.launch {
-            runCatching { agentGateway.setMic(host, level = level) }
-                .onFailure { error ->
-                    _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar mic") }
-                }
+        enqueueMic(host, _uiState.value.micLevel)
+    }
+
+    private fun enqueueVolume(host: PairedHost, level: Int) {
+        pendingVolume = level
+        if (volumeSendJob?.isActive == true) return
+        volumeSendJob = viewModelScope.launch {
+            while (true) {
+                val next = pendingVolume ?: break
+                pendingVolume = null
+                runCatching { agentGateway.setVolume(host, level = next, mute = false) }
+                    .onFailure { error ->
+                        _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar volume") }
+                    }
+            }
+        }
+    }
+
+    private fun enqueueMic(host: PairedHost, level: Int) {
+        pendingMic = level
+        if (micSendJob?.isActive == true) return
+        micSendJob = viewModelScope.launch {
+            while (true) {
+                val next = pendingMic ?: break
+                pendingMic = null
+                runCatching { agentGateway.setMic(host, level = next) }
+                    .onFailure { error ->
+                        _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar mic") }
+                    }
+            }
         }
     }
 
@@ -452,6 +456,7 @@ class DeskViewModel(
 
     private fun startAutoRefresh() {
         autoRefreshJob?.cancel()
+        audioPollJob?.cancel()
         audioTick = 0
         autoRefreshJob = viewModelScope.launch {
             while (true) {
@@ -459,17 +464,20 @@ class DeskViewModel(
                 val host = _uiState.value.selectedHost ?: continue
                 refreshAppsSilent(host)
                 audioTick += 1
-                if (audioTick % ticksForAudio() == 0 && holdingAudioUntil?.hasPassedNow() != false) {
-                    runCatching { agentGateway.fetchAudio(host) }.getOrNull()?.let { applyAudio(host, it) }
-                }
                 if (audioTick % MISSING_ICON_CHECK_EVERY == 0) {
                     refreshMissingIconsIfNeeded(host)
                 }
             }
         }
+        audioPollJob = viewModelScope.launch {
+            while (true) {
+                delay(AUDIO_REFRESH_MS)
+                val host = _uiState.value.selectedHost ?: continue
+                if (holdingAudioUntil?.hasPassedNow() == false) continue
+                runCatching { agentGateway.fetchAudio(host) }.getOrNull()?.let { applyAudio(host, it) }
+            }
+        }
     }
-
-    private fun ticksForAudio(): Int = (AUDIO_REFRESH_MS / AUTO_REFRESH_MS.toDouble()).roundToInt().coerceAtLeast(1)
 
     private suspend fun refreshMissingIconsIfNeeded(host: PairedHost) {
         if (_uiState.value.buttons.none { it.iconBase64.isNullOrBlank() }) return
@@ -498,6 +506,8 @@ class DeskViewModel(
     private fun stopAutoRefresh() {
         autoRefreshJob?.cancel()
         autoRefreshJob = null
+        audioPollJob?.cancel()
+        audioPollJob = null
         burstJob?.cancel()
     }
 
@@ -507,9 +517,8 @@ class DeskViewModel(
 
     private companion object {
         const val AUTO_REFRESH_MS = 400L
-        const val AUDIO_REFRESH_MS = 2500L
-        const val AUDIO_HOLD_MS = 2000L
-        const val AUDIO_SEND_DEBOUNCE_MS = 80L
+        const val AUDIO_REFRESH_MS = 400L
+        const val AUDIO_HOLD_MS = 400L
         const val BURST_REFRESH_MS = 200L
         const val BURST_REFRESH_COUNT = 5
         const val PINNED_FOCUS_MAX_MS = 8000L
