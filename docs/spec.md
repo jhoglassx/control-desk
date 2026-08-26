@@ -17,7 +17,7 @@ Documento de referência para reimplementação do zero. Descreve **o que** o pr
 **Princípios v1:**
 
 - Comunicação **HTTP na LAN** (sem nuvem, sem relay).
-- Pareamento **PIN de uso único** → token Bearer persistido.
+- Pareamento **PIN** (válido até gerar outro) → token Bearer persistido.
 - **Sem SQLDelight** na v1 — JSON em disco é suficiente.
 - Agente **headless por padrão** após instalação; janela de configurações é opcional.
 
@@ -46,6 +46,7 @@ agent            Ktor server + PlatformExecutor por SO
 |------|-------------|------------------------|
 | **Headless (padrão produção)** | `CONTROL_DESK_HEADLESS=1` (LaunchAgent) | Servidor Ktor, mDNS, PIN no log — **sem janela** |
 | **Instalar/atualizar (GUI app)** | Abrir `ControlDeskAgent.app` | Sincroniza instalação em background e **encerra** (sem janela) |
+| **Dev (`./gradlew :agent:run`)** | Sem `.app`, ou `CONTROL_DESK_SKIP_INSTALL=1` | Servidor **neste processo** + janela PIN/IP |
 | **Configurações (opcional)** | `Abrir configurações.command`, `--settings` ou `CONTROL_DESK_OPEN_SETTINGS=1` | Instala se necessário + janela PIN/IP (consulta serviço local) |
 
 **Regra de negócio — instalação padrão:**
@@ -79,7 +80,7 @@ agent            Ktor server + PlatformExecutor por SO
 | Arquivo | Conteúdo |
 |---------|----------|
 | `agent_tokens.txt` | Tokens Bearer (um por linha) |
-| `agent_pin.txt` | PIN ativo (removido após pareamento) |
+| `agent_pin.txt` | PIN ativo (permanece até “Gerar novo PIN”) |
 | `agent.log` | Log headless (`pin=`, hints de IP) |
 | `agent-launchd.log` | stdout do LaunchAgent |
 | `agent-launchd-error.log` | stderr do LaunchAgent |
@@ -154,7 +155,7 @@ Antes do servidor, no Mac:
 | Formato | 6 dígitos (`100000–999999`) |
 | Geração automática | Se não há PIN nem tokens → gera PIN |
 | Armazenamento | `~/.control-desk/agent_pin.txt` |
-| Uso único | Após pareamento bem-sucedido: PIN limpo, arquivo removido |
+| Reuso | O mesmo PIN vale para re-parear até “Gerar novo PIN” |
 | Múltiplos dispositivos | Vários tokens permitidos (um por pareamento) |
 
 ### 4.2 Fluxo de pareamento (mobile)
@@ -193,7 +194,7 @@ Antes do servidor, no Mac:
 |---------|------------|
 | Transporte | HTTP (sem TLS) |
 | Alcance | Bind `0.0.0.0` — acessível na LAN |
-| PIN | Uso único |
+| PIN | Reutilizável até “Gerar novo PIN” |
 | Revogação de token | Não implementada |
 | Android cleartext | `usesCleartextTraffic=true` |
 | iOS ATS | `NSAllowsArbitraryLoads=true` |
@@ -203,7 +204,7 @@ Antes do servidor, no Mac:
 | Situação | Mensagem |
 |----------|----------|
 | `401` | "Sessão expirada. Vá em + Parear, use o PIN do agente e pareie o PC de novo..." |
-| Conexão recusada | "Agente offline. Inicie no Mac: ./gradlew :agent:runDistributable" |
+| Conexão recusada | "Agente offline. Inicie no Mac: ./gradlew :agent:run" |
 
 ---
 
@@ -367,7 +368,8 @@ Documento completo: **[interaction-rules.md](interaction-rules.md)**.
 ```bash
 ./gradlew :agent:packageDmg              # DMG instalador
 ./gradlew :agent:packageDistributionForCurrentOS
-./gradlew :agent:runDistributable        # Dev: janela de configurações
+./gradlew :agent:run                      # Dev: servidor + janela PIN/IP
+./gradlew :agent:runDistributable        # Dev: .app (use se a janela do :run não aparecer)
 ./gradlew :composeApp:assembleDebug    # APK Android
 ```
 

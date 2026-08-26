@@ -386,7 +386,7 @@ Sem token → `ControlDeskError.Unauthorized`.
 | Situação | Mensagem / comportamento |
 |----------|--------------------------|
 | HTTP 401 | "Sessão expirada. Vá em + Parear, use o PIN do agente e pareie o PC de novo..." |
-| Conexão recusada | "Agente offline. Inicie no Mac: ./gradlew :agent:runDistributable" |
+| Conexão recusada | "Agente offline. Inicie no Mac: ./gradlew :agent:run" |
 | Outros | Mensagem da exceção ou genérica |
 
 **Transporte:** HTTP cleartext (sem TLS v1).
