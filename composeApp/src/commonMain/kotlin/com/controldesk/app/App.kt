@@ -34,7 +34,6 @@ fun App() {
                 onAppClick = deskViewModel::onButtonClick,
                 onVolumeDown = deskViewModel::onVolumeDown,
                 onVolumeUp = deskViewModel::onVolumeUp,
-                onVolumeLevelChange = deskViewModel::onVolumeLevelChange,
                 onMuteClick = deskViewModel::onVolumeKnobClick,
                 onMicClick = deskViewModel::onMicKnobClick,
                 onClearFeedback = deskViewModel::clearFeedback,

@@ -30,7 +30,6 @@ class DeskScreenTest {
                     onAppClick = {},
                     onVolumeDown = {},
                     onVolumeUp = {},
-                    onVolumeLevelChange = {},
                     onMuteClick = {},
                     onMicClick = {},
                     onClearFeedback = {},
@@ -70,14 +69,15 @@ class DeskScreenTest {
                     onAppClick = {},
                     onVolumeDown = {},
                     onVolumeUp = {},
-                    onVolumeLevelChange = {},
                     onMuteClick = {},
                     onMicClick = {},
                     onClearFeedback = {},
                 )
             }
         }
-        composeRule.onNodeWithText("Control Desk").assertIsDisplayed()
+        composeRule.onNodeWithText("Mac Mini").assertIsDisplayed()
         composeRule.onNodeWithText("Safari").assertIsDisplayed()
+        composeRule.onNodeWithText("Volume").assertIsDisplayed()
+        composeRule.onNodeWithText("Mic").assertIsDisplayed()
     }
 }

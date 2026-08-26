@@ -212,7 +212,7 @@ O mobile é otimista; o agente deve ser **rápido** para a confirmação chegar 
 | Otimista grade | `DeskViewModel.onButtonClick`, `applyPinnedFocus` |
 | Otimista áudio | `onVolumeKnobClick`, `onVolumeLevelChange`, `onMicKnobClick` |
 | Poll / burst | `DeskViewModel.startAutoRefresh`, `startBurstRefresh` |
-| Slider local | `MixerPanel` (`isDragging`) |
+| Slider local | Tiles Volume (−/+) |
 | Cache host | `DeskViewModel.selectHost`, `buttonsCache` |
 
 **Gap conhecido:** código atual tem timers e otimista parcial; reimplementação deve tratar **instantâneo** como requisito, não otimização opcional.
