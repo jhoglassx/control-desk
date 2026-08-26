@@ -261,13 +261,13 @@ Resumo:
 
 | Constante | Valor | Uso |
 |-----------|-------|-----|
-| `AUTO_REFRESH_MS` | 1500 ms | Poll apps (sem ícones) |
+| `AUTO_REFRESH_MS` | 400 ms | Poll apps (ícones do cache do agente) |
 | `AUDIO_REFRESH_MS` | 2500 ms | Poll áudio + check ícones |
 | `AUDIO_HOLD_MS` | 2000 ms | Bloqueia fetch áudio após ajuste usuário |
 | `BURST_REFRESH_MS` | 350 ms | Intervalo burst após clique |
 | `BURST_REFRESH_COUNT` | 4 | Repetições do burst |
 | `PINNED_FOCUS_MAX_MS` | 8000 ms | Timeout highlight otimista |
-| `ACTIVE_CONFIRM_POLLS` | 2 | Debounce mudança de janela ativa |
+| `ACTIVE_CONFIRM_POLLS` | 1 | Aceita o app ativo no primeiro poll |
 | `FOCUS_SETTLE_MS` | 400 ms | Entre polls de confirmação |
 | `FOCUS_CONFIRM_POLLS` | 3 | Polls após foco bem-sucedido |
 | `HOST_SWITCH_SETTLE_MS` | 180 ms | Após trocar host |

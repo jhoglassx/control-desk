@@ -64,7 +64,7 @@ class AgentServer(
                             ok = true,
                             version = "1.1.0",
                             os = executor.osName,
-                            windowListerVersion = 16,
+                            windowListerVersion = 17,
                         ),
                     )
                 }

@@ -221,7 +221,7 @@ Antes do servidor, no Mac:
 | GET | `/setup` | Local | `port`, `pin`, `backgroundService` |
 | POST | `/setup/new-pin` | Local | Regenera PIN |
 | POST | `/pair` | Não | PIN → `token` |
-| GET | `/apps/running?icons=0\|1` | Bearer | Lista janelas; `icons=0` sem ícones |
+| GET | `/apps/running?icons=0\|1` | Bearer | Lista janelas + monitor; ícone do `.app` em execução (`NSWorkspace`); `icons=1` resolve os que ainda não estão em cache |
 | POST | `/apps/launch` | Bearer | Focar/abrir app |
 | POST | `/browser/open` | Bearer | Abrir URL |
 | POST | `/browser/close` | Bearer | Fechar navegador |

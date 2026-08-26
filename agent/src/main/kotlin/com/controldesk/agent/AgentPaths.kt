@@ -14,4 +14,7 @@ object AgentPaths {
 
     val log: File
         get() = File(home, "agent.log")
+
+    val icons: File
+        get() = File(home, "icons").apply { mkdirs() }
 }

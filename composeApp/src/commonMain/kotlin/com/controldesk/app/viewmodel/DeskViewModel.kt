@@ -447,17 +447,17 @@ class DeskViewModel(
     }
 
     private companion object {
-        const val AUTO_REFRESH_MS = 1500L
+        const val AUTO_REFRESH_MS = 400L
         const val AUDIO_REFRESH_MS = 2500L
         const val AUDIO_HOLD_MS = 2000L
-        const val BURST_REFRESH_MS = 350L
-        const val BURST_REFRESH_COUNT = 4
+        const val BURST_REFRESH_MS = 200L
+        const val BURST_REFRESH_COUNT = 5
         const val PINNED_FOCUS_MAX_MS = 8000L
-        const val ACTIVE_CONFIRM_POLLS = 2
-        const val FOCUS_SETTLE_MS = 400L
+        const val ACTIVE_CONFIRM_POLLS = 1
+        const val FOCUS_SETTLE_MS = 250L
         const val FOCUS_CONFIRM_POLLS = 3
         const val HOST_SWITCH_SETTLE_MS = 180L
-        const val MISSING_ICON_CHECK_EVERY = 6
+        const val MISSING_ICON_CHECK_EVERY = 2
         const val COMMAND_FIRST_MS = 40L
     }
 }

@@ -62,4 +62,15 @@ class RunningAppsGridBuilderTest {
         assertEquals("abc", merged.single().iconBase64)
         assertTrue(RunningAppsGridBuilder.merge(current, emptyList(), preferMerge = false).isEmpty())
     }
+
+    @Test
+    fun keepsMonitorIndexOnTiles() {
+        val apps = listOf(
+            RunningApp(name = "Safari", appName = "Safari", isActive = true, isVisible = true, monitorIndex = 1),
+            RunningApp(name = "Studio", appName = "Android Studio", isActive = false, isVisible = true, monitorIndex = 2),
+        )
+        val buttons = RunningAppsGridBuilder.build(apps)
+        assertEquals(1, buttons.first { it.label == "Safari" }.monitorIndex)
+        assertEquals(2, buttons.first { it.label == "Studio" }.monitorIndex)
+    }
 }

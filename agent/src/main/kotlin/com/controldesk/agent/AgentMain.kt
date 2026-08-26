@@ -17,6 +17,7 @@ fun main(args: Array<String>) {
         System.setProperty("apple.awt.UIElement", "false")
         MacAccessibility.warnIfNeeded()
         MacWindowLister.warmUp()
+        MacChromeTabs.warmUp()
         MacAppIconResolver.warmUp()
         MacFocusApp.warmUp()
     }

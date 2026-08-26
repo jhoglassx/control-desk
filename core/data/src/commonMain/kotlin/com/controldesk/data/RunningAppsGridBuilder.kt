@@ -8,6 +8,7 @@ object RunningAppsGridBuilder {
     fun build(apps: List<RunningApp>, iconCache: Map<String, String> = emptyMap()): List<GridButton> {
         val sorted = apps.sortedWith(
             compareByDescending<RunningApp> { it.isActive }
+                .thenBy { it.monitorIndex }
                 .thenByDescending { it.isVisible }
                 .thenBy { it.label().lowercase() },
         )
@@ -65,11 +66,10 @@ object RunningAppsGridBuilder {
 
     private fun RunningApp.label(): String {
         val title = windowTitle?.takeIf { it.isNotBlank() }
-        return if (title != null && title != name && title != appName) {
-            "$name · $title"
-        } else {
-            name.ifBlank { appName }
-        }
+        val base = name.ifBlank { appName }
+        if (title == null || title == base || title == appName) return base
+        if (base.contains(title)) return base
+        return "$base · $title"
     }
 
     private fun stableId(app: RunningApp): String {

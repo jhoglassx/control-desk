@@ -28,13 +28,16 @@ fun WorkspacePanel(
     modifier: Modifier = Modifier,
 ) {
     val focused = buttons.count { it.isActive }
-    val visible = buttons.count { it.isVisible }
-    val hidden = buttons.size - visible
+    val hidden = buttons.count { !it.isVisible }
+    val monitors = buttons.groupBy { it.monitorIndex.coerceAtLeast(1) }
+        .toSortedMap()
+        .entries
+        .joinToString(" · ") { (monitor, apps) -> "M$monitor: ${apps.size}" }
     Column(modifier.fillMaxSize()) {
         Text("Apps no Mac", color = DeskColors.TextPrimary, fontSize = 16.sp)
         if (buttons.isNotEmpty()) {
             Text(
-                "${buttons.size} apps · $focused em uso · $visible visíveis · $hidden ocultos · azul = em uso · verde = visível · chip = monitor",
+                "${buttons.size} apps · $focused em uso · $monitors · $hidden ocultos",
                 color = DeskColors.TextMuted,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
