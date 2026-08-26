@@ -292,8 +292,8 @@ Ver `core/protocol/.../AgentDtos.kt`.
 
 | Leitura | Detalhe |
 |---------|---------|
-| Volume saída | 0–100 via AppleScript |
-| Mute saída | `output muted` |
+| Volume saída | 0–100, **um** `get volume settings` |
+| Mute saída | `output muted` no mesmo retorno |
 | Mic muted | `input volume ≤ 1` |
 | Mic level | `input volume` 0–100 |
 

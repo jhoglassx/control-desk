@@ -127,7 +127,7 @@ Knobs rotativos na mesma grade dos apps, **sem card nem título** — só o disc
 
 | Ação | API | Detalhe |
 |------|-----|---------|
-| Giro / soltar volume | `POST /system/volume` | `level` absoluto; unmute implícito; debounce 80 ms no giro, commit ao soltar |
+| Giro / soltar volume | `POST /system/volume` | `level` absoluto; unmute implícito; fila do último valor (não cancela HTTP) |
 | Mute volume | `POST /system/volume` | `mute=true/false`; se unmute, envia `level` atual |
 | Giro / soltar mic | `POST /system/mic` | `level` de input; 0 = mudo |
 | Mute mic | `POST /system/mic` | `mute=true` ou `level` restaurado |
@@ -237,8 +237,8 @@ Resumo:
 | Constante | Valor | Uso |
 |-----------|-------|-----|
 | `AUTO_REFRESH_MS` | 400 ms | Poll apps (ícones do cache do agente) |
-| `AUDIO_REFRESH_MS` | 2500 ms | Poll áudio + check ícones |
-| `AUDIO_HOLD_MS` | 2000 ms | Bloqueia fetch áudio após ajuste usuário |
+| `AUDIO_REFRESH_MS` | 400 ms | Poll áudio (job separado da lista de janelas) |
+| `AUDIO_HOLD_MS` | 400 ms | Bloqueia fetch áudio após ajuste do usuário |
 | `BURST_REFRESH_MS` | 350 ms | Intervalo burst após clique |
 | `BURST_REFRESH_COUNT` | 4 | Repetições do burst |
 | `PINNED_FOCUS_MAX_MS` | 8000 ms | Timeout highlight otimista |

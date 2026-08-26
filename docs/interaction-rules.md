@@ -102,7 +102,7 @@ Toque → UI otimista (0 ms)
 
 | Regra | Detalhe |
 |-------|---------|
-| Knob | Valor local durante o giro; envia com debounce e de novo ao **soltar** |
+| Knob | Valor local durante o giro; envia o nível mais recente sem cancelar o HTTP em voo |
 | Mute | Toque no knob; toggle visual imediato; reverte só em erro HTTP |
 | Poll de áudio | **Suspenso** durante interação do usuário (~2 s) para não “lutar” com o knob |
 | Conflito | Poll não altera o nível enquanto o áudio está em hold |
@@ -152,9 +152,9 @@ O mobile é otimista; o agente deve ser **rápido** para a confirmação chegar 
 | Constante | Valor hoje | Papel | Regra |
 |-----------|------------|-------|-------|
 | `AUTO_REFRESH_MS` | 400 ms | Sync de apps | **Não** é o feedback do toque |
-| `AUDIO_REFRESH_MS` | 2500 ms | Sync de áudio | Pausado durante uso do mixer |
+| `AUDIO_REFRESH_MS` | 400 ms | Sync de áudio | Poll **independente** da lista de janelas |
 | `BURST_REFRESH_MS` | 350 ms | Confirmação após clique | Obrigatório após ações do usuário |
-| `AUDIO_HOLD_MS` | 2000 ms | Evita conflito slider/poll | Obrigatório durante ajuste |
+| `AUDIO_HOLD_MS` | 400 ms | Evita conflito knob/poll | Só durante o giro |
 | `PINNED_FOCUS_MAX_MS` | 8000 ms | Teto do otimista | Não reverter foco antes disso sem erro |
 
 **Alvo futuro (opcional):** reduzir burst a **< 200 ms** e confirmar foco em **< 1 s** total; poll de fundo pode permanecer 1–2 s.
