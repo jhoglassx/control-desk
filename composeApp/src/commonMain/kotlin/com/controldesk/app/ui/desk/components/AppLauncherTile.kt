@@ -1,5 +1,6 @@
 package com.controldesk.app.ui.desk.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -7,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,12 +17,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.Image
 import com.controldesk.app.theme.DeskColors
 import com.controldesk.app.util.accentForLabel
 import com.controldesk.app.util.emojiForLabel
@@ -56,6 +56,7 @@ fun AppLauncherTile(
     val subtitle = button.tileSubtitle()
     val instanceBadge = subtitle?.takeIf { it.startsWith("#") }
     val icon = rememberBase64Image(button.iconBase64)
+    val monitorTint = if (button.monitorIndex == 2) DeskColors.Mint else DeskColors.Accent
 
     Column(
         modifier
@@ -70,9 +71,14 @@ fun AppLauncherTile(
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(40.dp).clip(RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
             if (icon != null) {
-                Image(bitmap = icon, contentDescription = label, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                Image(
+                    bitmap = icon,
+                    contentDescription = label,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                )
             } else {
                 Text(emojiForLabel(label), fontSize = 22.sp, color = accentForLabel(label))
             }
@@ -87,7 +93,15 @@ fun AppLauncherTile(
         }
         Text(chip, color = borderColor, fontSize = 10.sp)
         if (button.monitorIndex > 0) {
-            Text("Monitor ${button.monitorIndex}", color = DeskColors.TextMuted, fontSize = 9.sp)
+            Text(
+                "M${button.monitorIndex}",
+                color = monitorTint,
+                fontSize = 10.sp,
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .background(DeskColors.Surface, RoundedCornerShape(6.dp))
+                    .padding(horizontal = 6.dp, vertical = 1.dp),
+            )
         }
     }
 }

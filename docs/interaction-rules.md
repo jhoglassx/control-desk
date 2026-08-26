@@ -151,7 +151,7 @@ O mobile é otimista; o agente deve ser **rápido** para a confirmação chegar 
 
 | Constante | Valor hoje | Papel | Regra |
 |-----------|------------|-------|-------|
-| `AUTO_REFRESH_MS` | 1500 ms | Sync de apps | **Não** é o feedback do toque |
+| `AUTO_REFRESH_MS` | 400 ms | Sync de apps | **Não** é o feedback do toque |
 | `AUDIO_REFRESH_MS` | 2500 ms | Sync de áudio | Pausado durante uso do mixer |
 | `BURST_REFRESH_MS` | 350 ms | Confirmação após clique | Obrigatório após ações do usuário |
 | `AUDIO_HOLD_MS` | 2000 ms | Evita conflito slider/poll | Obrigatório durante ajuste |

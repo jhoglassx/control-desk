@@ -2,15 +2,44 @@ package com.controldesk.agent
 
 import com.controldesk.protocol.BrowserTabSwitchRequest
 import com.controldesk.protocol.RunningAppInfo
+import java.util.concurrent.atomic.AtomicReference
 
 object MacChromeTabs {
+    private val cache = AtomicReference<List<RunningAppInfo>>(emptyList())
+
+    fun warmUp() {
+        Thread({
+            while (true) {
+                runCatching { cache.set(listTabs()) }
+                Thread.sleep(1_200)
+            }
+        }, "chrome-tabs").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
     fun mergeTabs(windows: List<RunningAppInfo>): List<RunningAppInfo> {
-        val chrome = windows.filter { it.appName.contains("Chrome", ignoreCase = true) }
-        if (chrome.isEmpty()) return windows
-        val tabs = listTabs()
+        val chromeWindows = windows.filter { it.appName.contains("Chrome", ignoreCase = true) }
+        if (chromeWindows.isEmpty()) return windows
+        val tabs = cache.get()
         if (tabs.isEmpty()) return windows
         val others = windows.filterNot { it.appName.contains("Chrome", ignoreCase = true) }
-        return others + tabs
+        val orderedChrome = chromeWindows.sortedBy { it.windowIndex ?: 0 }
+        val monitorByWindow = orderedChrome.mapIndexed { index, window -> (index + 1) to window.monitorIndex }.toMap()
+        val activeChromeWindow = orderedChrome.indexOfFirst { it.isActive }.takeIf { it >= 0 }?.plus(1)
+        val icon = MacAppIconResolver.iconFor("Google Chrome")
+        val mapped = tabs.map { tab ->
+            val windowIndex = tab.browserWindowIndex ?: 1
+            tab.copy(
+                monitorIndex = monitorByWindow[windowIndex] ?: chromeWindows.first().monitorIndex,
+                iconBase64 = icon ?: tab.iconBase64,
+                isActive = activeChromeWindow != null &&
+                    windowIndex == activeChromeWindow &&
+                    (tab.windowIndex ?: 1) == 1,
+            )
+        }
+        return others + mapped
     }
 
     fun switchTab(request: BrowserTabSwitchRequest) {
@@ -78,7 +107,7 @@ object MacChromeTabs {
                 windowTitle = title,
                 windowIndex = parts.getOrNull(3)?.toIntOrNull() ?: index,
                 windowNumber = 10_000 + index,
-                isActive = index == 0,
+                isActive = false,
                 isVisible = true,
                 browserWindowIndex = parts.getOrNull(2)?.toIntOrNull(),
                 isBrowserTab = true,
