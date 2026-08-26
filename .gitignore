@@ -16,6 +16,10 @@
 build/
 **/build/
 
+# Kotlin compiler / KMP metadata cache
+.kotlin/
+**/kotlin-tooling-metadata.json
+
 # Android
 local.properties
 *.apk
@@ -24,6 +28,10 @@ local.properties
 *.dex
 captures/
 .cxx/
+.externalNativeBuild/
+
+# JetBrains
+.fleet/
 
 # Keystores / secrets
 *.jks
@@ -36,16 +44,20 @@ captures/
 # Kotlin / JVM
 *.class
 *.log
+*.hprof
 hs_err_pid*
 replay_pid*
 
 # Xcode / iOS
 xcuserdata/
 *.xcuserstate
+*.xccheckout
+*.xcscmblueprint
 DerivedData/
 *.ipa
 *.dSYM.zip
 *.dSYM
+Pods/
 
 # Compose Multiplatform
 kotlin-js-store/

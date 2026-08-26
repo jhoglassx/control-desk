@@ -37,8 +37,14 @@ Painel remoto estilo Stream Deck — **Kotlin Multiplatform** (Android + iOS) + 
 # APK debug
 ./gradlew :composeApp:assembleDebug
 
-# Agente (dev — configurações com --args --settings)
-CONTROL_DESK_SKIP_INSTALL=1 ./gradlew :agent:runDistributable --args --settings
+# Agente (dev — sobe o servidor e abre a janela PIN/IP)
+./gradlew :agent:run
+
+# Sem janela (só terminal)
+./gradlew :agent:run --args="--headless"
+
+# .app local, sem alterar LaunchAgent
+CONTROL_DESK_SKIP_INSTALL=1 ./gradlew :agent:runDistributable
 
 # Instalador macOS (.dmg)
 ./gradlew :agent:packageDmg

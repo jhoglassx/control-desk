@@ -142,15 +142,15 @@ Desmarque **ControlDeskAgent** em Ajustes → Acessibilidade.
 ## Desenvolvimento (sem instalador)
 
 ```bash
-./gradlew :agent:runDistributable
+./gradlew :agent:run
 ```
 
-Abre a janela de configurações se passar `--args --settings` ou `CONTROL_DESK_OPEN_SETTINGS=1`.
+Abre o servidor na porta **8741** e a janela de configurações (PIN e IP). Só terminal: `--args="--headless"`.
 
-Para não alterar LaunchAgent no dev:
+Se a janela não aparecer (Gradle daemon no macOS), use o `.app` gerado:
 
 ```bash
-CONTROL_DESK_SKIP_INSTALL=1 ./gradlew :agent:runDistributable --args --settings
+CONTROL_DESK_SKIP_INSTALL=1 ./gradlew :agent:runDistributable
 ```
 
 ---
