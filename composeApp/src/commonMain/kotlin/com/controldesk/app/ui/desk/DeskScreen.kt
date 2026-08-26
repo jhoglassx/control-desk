@@ -1,6 +1,7 @@
 package com.controldesk.app.ui.desk
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.controldesk.app.theme.DeskColors
 import com.controldesk.app.ui.desk.components.DeskHeader
-import com.controldesk.app.ui.desk.components.MixerPanel
 import com.controldesk.app.ui.desk.components.WorkspacePanel
 import com.controldesk.app.viewmodel.DeskUiState
 import com.controldesk.domain.model.GridButton
@@ -31,7 +31,6 @@ fun DeskScreen(
     onAppClick: (GridButton) -> Unit,
     onVolumeDown: () -> Unit,
     onVolumeUp: () -> Unit,
-    onVolumeLevelChange: (Int) -> Unit,
     onMuteClick: () -> Unit,
     onMicClick: () -> Unit,
     onClearFeedback: () -> Unit,
@@ -55,38 +54,37 @@ fun DeskScreen(
                 modifier = Modifier.padding(padding),
             )
         } else {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                DeskHeader(
-                    uiState = uiState,
-                    onRefresh = onRefresh,
-                    onManageHosts = onManageHosts,
-                    onPairHost = onPairHost,
-                    onSelectHost = onSelectHost,
-                )
-                Spacer(Modifier.height(12.dp))
-                WorkspacePanel(
-                    buttons = uiState.buttons,
-                    listHint = uiState.listHint,
-                    onAppClick = onAppClick,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.height(10.dp))
-                MixerPanel(
-                    volumeLevel = uiState.volumeLevel,
-                    volumeMuted = uiState.volumeMuted,
-                    micMuted = uiState.micMuted,
-                    enabled = uiState.hasHosts,
-                    onVolumeDown = onVolumeDown,
-                    onVolumeUp = onVolumeUp,
-                    onVolumeLevelChange = onVolumeLevelChange,
-                    onMuteClick = onMuteClick,
-                    onMicClick = onMicClick,
-                )
+            BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
+                val landscape = maxWidth > maxHeight
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = if (landscape) 12.dp else 16.dp)
+                        .padding(vertical = if (landscape) 8.dp else 12.dp),
+                ) {
+                    DeskHeader(
+                        uiState = uiState,
+                        onRefresh = onRefresh,
+                        onManageHosts = onManageHosts,
+                        onPairHost = onPairHost,
+                        onSelectHost = onSelectHost,
+                    )
+                    Spacer(Modifier.height(if (landscape) 8.dp else 12.dp))
+                    WorkspacePanel(
+                        buttons = uiState.buttons,
+                        listHint = uiState.listHint,
+                        onAppClick = onAppClick,
+                        volumeLevel = uiState.volumeLevel,
+                        volumeMuted = uiState.volumeMuted,
+                        micMuted = uiState.micMuted,
+                        onVolumeDown = onVolumeDown,
+                        onVolumeUp = onVolumeUp,
+                        onMuteClick = onMuteClick,
+                        onMicClick = onMicClick,
+                        compact = landscape,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }

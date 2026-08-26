@@ -56,39 +56,33 @@ Componente: `EmptyDeskState`
 
 ### 3.2 Com hosts pareados
 
-Layout vertical:
+Layout estilo Steam Deck (topbar + grade de tiles quadrados). Deitado (`maxWidth > maxHeight`) usa tiles maiores e omite o título da seção.
 
-1. **DeskHeader** — título, ações, card de conexão
-2. **WorkspacePanel** — grade de apps (`weight(1f)`)
-3. **MixerPanel** — volume e mic na parte inferior
+1. **DeskHeader** — topbar compacta (host, status, ações)
+2. **WorkspacePanel** — grade: tiles **Volume** e **Mic**, depois os apps (`weight(1f)`)
 
 **Snackbar:** exibe `uiState.feedback` (erros de ação ou carga); `clearFeedback()` após mostrar.
 
 ### 3.3 DeskHeader
 
+Topbar de uma linha (sem card grande):
+
 | Elemento | Comportamento |
 |----------|---------------|
-| Título | "Control Desk" / "Painel remoto" |
-| **↻** | `refreshRunningApps()` — recarga com loading; desabilitado enquanto `isLoadingApps` |
-| **Hosts** | Abre Pair (gerenciar hosts) |
-| **+** | Abre Pair (adicionar PC) |
+| Dot + nome do host | Status (Online / Sincronizando / Re-parear) |
+| IP:porta | Linha menor, monospace |
+| **↻** | `refreshRunningApps()` |
+| **Hosts** | Abre Pair |
+| **+** | Abre Pair |
 
-**Connection card:**
-
-| Campo | Conteúdo |
-|-------|----------|
-| Nome | `host.name` |
-| Status | Ver tabela abaixo |
-| IP | `host:port` (monospace) |
-| Chips de host | Só se `hosts.size > 1` — scroll horizontal |
-
-**Status dot e label:**
+**Chips de host:** só se `hosts.size > 1` — scroll horizontal abaixo da topbar.
 
 | Condição | Dot | Label |
 |----------|-----|-------|
-| `isLoadingApps` | Amarelo (`Warning`) | "Sincronizando…" |
-| `!isLoadingApps && hasHosts` | Verde (`Live`) | "Conectado · atualiza automaticamente" |
-| Outro | Cinza | "Aguardando conexão" |
+| `isLoadingApps` | Amarelo (`Warning`) | "Sincronizando" |
+| Host ok | Verde (`Live`) | "Online" |
+| Sem sessão | Amarelo | "Re-parear" |
+| Outro | Cinza | "Offline" |
 
 **Chip de OS no switcher:** MAC / WIN / LIN / PC (`osShortLabel`).
 
@@ -96,57 +90,31 @@ Layout vertical:
 
 **Seção:** "Apps no Mac" (subtitle dinâmico).
 
-**Layout:** `LazyVerticalGrid` com `GridCells.Adaptive(minSize = 76.dp)` — **não** fixo 3 colunas na UI (o builder usa 3 colunas lógicas `row/col` nos dados).
+**Layout:** `LazyVerticalGrid` Adaptive — portrait `96.dp`, landscape `168.dp` (cerca de 3 colunas, nomes visíveis). Tiles crescem com o conteúdo (sem `aspectRatio` que cortava texto). Primeiros itens: **Volume** e **Mic**.
 
-**Vazio:** `EmptyWorkspaceCard` com `listHint` ou "Nenhuma janela detectada no PC".
-
-**Subtitle da seção** (quando há apps):
-
-```
-{N} apps · {focused} em uso · {onMonitor} visíveis · {hidden} ocultos · azul = em uso · verde = visível · chip = monitor
-```
+**Subtitle:** `{N} apps · {focused} em uso · M1: n · M2: n · {hidden} ocultos`
 
 ### 3.5 Tile de app (`AppLauncherTile`)
 
-| Estado | Borda | Chip | Alpha |
-|--------|-------|------|-------|
-| **Em uso** (`isActive`) | Azul 3dp + glow | "Em uso" | 1.0 |
-| **Visível** (`isVisible && !isActive`) | Verde 2dp | "Visível" | 1.0 |
-| **Oculto** (`!isVisible`) | Cinza 1dp | "Oculto" | 0.45 |
+| Estado | Borda | Extra |
+|--------|-------|--------|
+| **Em uso** | Azul 3dp + glow | Chip M{n} ou "Em uso" |
+| **Visível** | Verde 2dp | Chip M{n} |
+| **Oculto** | Cinza 1dp, alpha 0.45 | Chip M{n} |
 
-**Ícone:**
-
-- Base64 do agente → `rememberBase64Image`
-- Fallback: emoji por label (`emojiForLabel`) + tint (`accentForLabel`)
-
-**Label do tile:**
-
-- `tileLabel`: parte antes do primeiro ` · ` (remove ` · min`)
-- `tileSubtitle`: parte após ` · ` (título da janela)
-- Badge `#N` se subtitle começa com `#` (instância duplicada)
-
-**Monitor:** chip "Monitor N" se `monitorIndex > 0`.
+Landscape (`compact`): sem subtitle da janela, só ícone, nome e M{n}.
 
 **Clique:** `onAppClick(button)` → `DeskViewModel.onButtonClick`.
 
-### 3.6 MixerPanel
+### 3.6 Tiles de sistema (`VolumeAppTile`, `MicAppTile`)
 
-Barra compacta (52dp altura):
+Mesma grade dos apps:
 
-| Controle | Ação ViewModel |
-|----------|----------------|
-| **−** | `onVolumeDown()` → delta −5 |
-| **Slider** 0–100 | `onVolumeLevelChange` ao soltar |
-| **+** | `onVolumeUp()` → delta +5 |
-| **Mute / Unmute** | `onVolumeKnobClick()` |
-| **Mic on / Mic off** | `onMicKnobClick()` |
-
-**Regras UI:**
-
-- Slider não atualiza externamente durante drag (`isDragging`)
-- Mudo: thumb/track vermelho (`Danger`), texto "Mudo"
-- Mic destacado quando muted (`highlighted`, `DangerSoft`)
-- `enabled = hasHosts` — desabilitado sem host
+| Tile | Ação |
+|------|------|
+| Volume − / + | `onVolumeDown` / `onVolumeUp` (delta 5) |
+| Volume ícone / % | `onVolumeKnobClick` (mute) |
+| Mic | `onMicKnobClick` |
 
 **Regras de negócio (ViewModel):**
 
@@ -443,7 +411,7 @@ Build: ver [ios-setup.md](ios-setup.md).
 - [ ] Sub-páginas: Apps · Browser · Áudio
 - [ ] Editor drag-and-drop de botões
 - [ ] Exibir VOL+/MIC templates na grade ou mixer dedicado
-- [ ] `RotaryKnob` (existe componente; Mixer usa slider)
+- [ ] `RotaryKnob` (existe componente; volume usa tile −/+)
 - [ ] Revogar token no agente ao remover host
 - [ ] HTTPS LAN opcional
 
@@ -459,7 +427,7 @@ Build: ver [ios-setup.md](ios-setup.md).
 | Desk lógica | `composeApp/.../viewmodel/DeskViewModel.kt` |
 | Pair lógica | `composeApp/.../viewmodel/PairHostViewModel.kt` |
 | Grade UI | `composeApp/.../components/WorkspacePanel.kt` |
-| Mixer UI | `composeApp/.../components/MixerPanel.kt` |
+| Mixer UI | `composeApp/.../components/MixerPanel.kt` (`VolumeAppTile`, `MicAppTile`) |
 | Header | `composeApp/.../components/DeskHeader.kt` |
 | DI | `composeApp/.../di/AppModule.kt` |
 | Grid builder | `core/data/.../RunningAppsGridBuilder.kt` |

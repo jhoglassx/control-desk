@@ -1,16 +1,13 @@
 package com.controldesk.app.ui.desk.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -25,6 +22,14 @@ fun WorkspacePanel(
     buttons: List<GridButton>,
     listHint: String?,
     onAppClick: (GridButton) -> Unit,
+    volumeLevel: Int,
+    volumeMuted: Boolean,
+    micMuted: Boolean,
+    onVolumeDown: () -> Unit,
+    onVolumeUp: () -> Unit,
+    onMuteClick: () -> Unit,
+    onMicClick: () -> Unit,
+    compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val focused = buttons.count { it.isActive }
@@ -33,42 +38,43 @@ fun WorkspacePanel(
         .toSortedMap()
         .entries
         .joinToString(" · ") { (monitor, apps) -> "M$monitor: ${apps.size}" }
+    val minSize = if (compact) DeskDesign.TileMinSizeLandscape.dp else DeskDesign.TileMinSize.dp
     Column(modifier.fillMaxSize()) {
-        Text("Apps no Mac", color = DeskColors.TextPrimary, fontSize = 16.sp)
-        if (buttons.isNotEmpty()) {
-            Text(
-                "${buttons.size} apps · $focused em uso · $monitors · $hidden ocultos",
-                color = DeskColors.TextMuted,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
-            )
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = DeskDesign.TileMinSize.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 12.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                items(buttons, key = { it.id }) { button ->
-                    AppLauncherTile(button = button, onClick = { onAppClick(button) })
-                }
+        if (!compact) {
+            Text("Apps no Mac", color = DeskColors.TextPrimary, fontSize = 16.sp)
+        }
+        Text(
+            if (buttons.isEmpty()) {
+                listHint ?: "Nenhuma janela detectada no PC"
+            } else {
+                "${buttons.size} apps · $focused em uso · $monitors · $hidden ocultos"
+            },
+            color = DeskColors.TextMuted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = if (compact) 0.dp else 4.dp, bottom = 8.dp),
+        )
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = minSize),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 8.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            item(key = "sys-volume", contentType = "system") {
+                VolumeAppTile(
+                    volumeLevel = volumeLevel,
+                    muted = volumeMuted,
+                    onMuteClick = onMuteClick,
+                    onVolumeDown = onVolumeDown,
+                    onVolumeUp = onVolumeUp,
+                )
             }
-        } else {
-            EmptyWorkspaceCard(listHint)
+            item(key = "sys-mic", contentType = "system") {
+                MicAppTile(muted = micMuted, onClick = onMicClick)
+            }
+            items(buttons, key = { it.id }) { button ->
+                AppLauncherTile(button = button, onClick = { onAppClick(button) }, compact = compact)
+            }
         }
     }
-}
-
-@Composable
-fun EmptyWorkspaceCard(listHint: String?) {
-    Text(
-        listHint ?: "Nenhuma janela detectada no PC",
-        color = DeskColors.TextMuted,
-        fontSize = 14.sp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 16.dp)
-            .background(DeskColors.Surface, RoundedCornerShape(16.dp))
-            .padding(18.dp),
-    )
 }

@@ -322,7 +322,7 @@ Resumo:
 |------|-----------------|
 | **Navegação** | Desk (padrão) ↔ Pair; após parear → `refreshHosts()` |
 | **Desk vazio** | CTA "Parear computador" |
-| **Desk ativo** | Header + grade adaptive + mixer inferior |
+| **Desk ativo** | Topbar + grade de tiles (Volume, Mic, apps) |
 | **Pair** | Nome, IP, porta, PIN; defaults `10.0.2.2` / `8741` |
 | **Polling** | Apps 1,5 s; áudio 2,5 s; burst após clique |
 | **Clique app** | Foco otimista + `REMOTE_LAUNCH` ou `REMOTE_BROWSER_TAB` |

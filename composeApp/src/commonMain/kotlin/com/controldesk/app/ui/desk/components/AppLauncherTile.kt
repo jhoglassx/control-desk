@@ -4,11 +4,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +36,7 @@ import com.controldesk.domain.model.GridButton
 fun AppLauncherTile(
     button: GridButton,
     onClick: () -> Unit,
+    compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val borderColor = when {
@@ -47,19 +49,14 @@ fun AppLauncherTile(
         button.isVisible -> 2.dp
         else -> 1.dp
     }
-    val chip = when {
-        button.isActive -> "Em uso"
-        button.isVisible -> "Visível"
-        else -> "Oculto"
-    }
     val label = button.tileLabel()
     val subtitle = button.tileSubtitle()
-    val instanceBadge = subtitle?.takeIf { it.startsWith("#") }
     val icon = rememberBase64Image(button.iconBase64)
     val monitorTint = if (button.monitorIndex == 2) DeskColors.Mint else DeskColors.Accent
 
     Column(
         modifier
+            .fillMaxWidth()
             .alpha(if (!button.isVisible && !button.isActive) 0.45f else 1f)
             .then(
                 if (button.isActive) Modifier.shadow(12.dp, RoundedCornerShape(16.dp), ambientColor = DeskColors.Accent)
@@ -68,10 +65,14 @@ fun AppLauncherTile(
             .background(DeskColors.SurfaceRaised, RoundedCornerShape(16.dp))
             .border(borderWidth, borderColor, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(8.dp),
+            .padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Box(Modifier.size(40.dp).clip(RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.size(if (compact) 32.dp else 40.dp).clip(RoundedCornerShape(9.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
             if (icon != null) {
                 Image(
                     bitmap = icon,
@@ -80,28 +81,42 @@ fun AppLauncherTile(
                     contentScale = ContentScale.Fit,
                 )
             } else {
-                Text(emojiForLabel(label), fontSize = 22.sp, color = accentForLabel(label))
+                Text(emojiForLabel(label), fontSize = if (compact) 20.sp else 24.sp, color = accentForLabel(label))
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Text(label, color = DeskColors.TextPrimary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (subtitle != null && instanceBadge == null) {
-            Text(subtitle, color = DeskColors.TextMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            label,
+            color = DeskColors.TextPrimary,
+            fontSize = 12.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            lineHeight = 14.sp,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (!compact && subtitle != null && !subtitle.startsWith("#")) {
+            Text(
+                subtitle,
+                color = DeskColors.TextMuted,
+                fontSize = 10.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                lineHeight = 12.sp,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
-        if (instanceBadge != null) {
-            Text(instanceBadge, color = DeskColors.Accent, fontSize = 10.sp)
-        }
-        Text(chip, color = borderColor, fontSize = 10.sp)
         if (button.monitorIndex > 0) {
             Text(
                 "M${button.monitorIndex}",
                 color = monitorTint,
                 fontSize = 10.sp,
                 modifier = Modifier
-                    .padding(top = 2.dp)
                     .background(DeskColors.Surface, RoundedCornerShape(6.dp))
                     .padding(horizontal = 6.dp, vertical = 1.dp),
             )
+        } else if (button.isActive) {
+            Text("Em uso", color = DeskColors.Accent, fontSize = 10.sp)
         }
     }
 }

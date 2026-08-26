@@ -29,6 +29,6 @@ object DeskColors {
 }
 
 object DeskDesign {
-    const val TileMinSize = 76
-    const val MixerHeight = 52
+    const val TileMinSize = 96
+    const val TileMinSizeLandscape = 168
 }
