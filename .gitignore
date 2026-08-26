@@ -1,0 +1,54 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.cxx/
+
+# Keystores / secrets
+*.jks
+*.keystore
+*.p12
+.env
+.env.*
+!.env.example
+
+# Kotlin / JVM
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+
+# Xcode / iOS
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Compose Multiplatform
+kotlin-js-store/
+
+# Agent local data (never commit tokens)
+.control-desk/
