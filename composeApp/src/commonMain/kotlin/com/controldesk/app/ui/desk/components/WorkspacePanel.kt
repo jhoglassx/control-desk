@@ -43,7 +43,6 @@ fun WorkspacePanel(
         .toSortedMap()
         .entries
         .joinToString(" · ") { (monitor, apps) -> "M$monitor: ${apps.size}" }
-    val minSize = if (compact) DeskDesign.TileMinSizeLandscape.dp else DeskDesign.TileMinSize.dp
     Column(modifier.fillMaxSize()) {
         if (!compact) {
             Text("Apps no Mac", color = DeskColors.TextPrimary, fontSize = 16.sp)
@@ -64,7 +63,7 @@ fun WorkspacePanel(
             modifier = Modifier.padding(top = if (compact) 0.dp else 4.dp, bottom = 8.dp),
         )
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = minSize),
+            columns = GridCells.FixedSize(DeskDesign.TileMinSize.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(bottom = 8.dp),
@@ -74,7 +73,6 @@ fun WorkspacePanel(
                 VolumeAppTile(
                     volumeLevel = volumeLevel,
                     muted = volumeMuted,
-                    compact = compact,
                     onLevelChange = onVolumeChange,
                     onAdjustFinished = onVolumeChangeFinished,
                     onMuteClick = onMuteClick,
@@ -84,7 +82,6 @@ fun WorkspacePanel(
                 MicAppTile(
                     micLevel = micLevel,
                     muted = micMuted,
-                    compact = compact,
                     onLevelChange = onMicChange,
                     onAdjustFinished = onMicChangeFinished,
                     onMuteClick = onMicClick,

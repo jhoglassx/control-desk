@@ -13,7 +13,6 @@ import com.controldesk.app.theme.DeskColors
 fun VolumeAppTile(
     volumeLevel: Int,
     muted: Boolean,
-    compact: Boolean,
     onLevelChange: (Int) -> Unit,
     onAdjustFinished: () -> Unit,
     onMuteClick: () -> Unit,
@@ -24,7 +23,6 @@ fun VolumeAppTile(
         muted = muted,
         accent = DeskColors.Accent,
         kind = AudioKnobKind.Speaker,
-        compact = compact,
         onLevelChange = onLevelChange,
         onAdjustFinished = onAdjustFinished,
         onMuteClick = onMuteClick,
@@ -36,7 +34,6 @@ fun VolumeAppTile(
 fun MicAppTile(
     micLevel: Int,
     muted: Boolean,
-    compact: Boolean,
     onLevelChange: (Int) -> Unit,
     onAdjustFinished: () -> Unit,
     onMuteClick: () -> Unit,
@@ -47,7 +44,6 @@ fun MicAppTile(
         muted = muted,
         accent = DeskColors.Mint,
         kind = AudioKnobKind.Mic,
-        compact = compact,
         onLevelChange = onLevelChange,
         onAdjustFinished = onAdjustFinished,
         onMuteClick = onMuteClick,
@@ -61,7 +57,6 @@ private fun AudioControlTile(
     muted: Boolean,
     accent: Color,
     kind: AudioKnobKind,
-    compact: Boolean,
     onLevelChange: (Int) -> Unit,
     onAdjustFinished: () -> Unit,
     onMuteClick: () -> Unit,
@@ -79,7 +74,7 @@ private fun AudioControlTile(
             onLevelChange = onLevelChange,
             onAdjustFinished = onAdjustFinished,
             onMuteClick = onMuteClick,
-            diameter = maxWidth * if (compact) 0.90f else 0.82f,
+            diameter = maxWidth * 0.82f,
         )
     }
 }

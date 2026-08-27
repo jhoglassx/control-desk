@@ -137,4 +137,52 @@ class DeskViewModelTest {
         assertEquals("Safari", gateway.closed.single().payload["target"])
         assertEquals(listOf("Notes"), viewModel.uiState.value.buttons.map { it.label })
     }
+
+    @Test
+    fun closingDockAppKeepsDimmedPlaceholderNotActive() = runTest(dispatcher) {
+        val host = PairedHost(
+            id = "10.0.2.2:8741",
+            name = "Mac",
+            host = "10.0.2.2",
+            port = 8741,
+            osType = OsType.MACOS,
+            sortOrder = 0,
+            token = "tok",
+        )
+        val gateway = FakeAgentGateway(
+            apps = listOf(
+                RunningApp(
+                    name = "Safari",
+                    appName = "Safari",
+                    isActive = true,
+                    isVisible = true,
+                    isDockPinned = true,
+                    dockIndex = 0,
+                ),
+                RunningApp(name = "Notes", appName = "Notes", isActive = false, isVisible = true, isDockPinned = true, dockIndex = 1),
+            ),
+            removeOnClose = false,
+        )
+        val viewModel = DeskViewModel(
+            hostPreferences = FakeHostPreferences(listOf(host)),
+            agentGateway = gateway,
+            executeGridButton = ExecuteGridButtonUseCase(gateway),
+            iconCache = FakeIconCache(),
+        )
+        advanceUntilIdle()
+        val safari = viewModel.uiState.value.buttons.first { it.label == "Safari" }
+        viewModel.onAppClose(safari)
+        val after = viewModel.uiState.value.buttons
+        assertEquals(listOf("Safari", "Notes"), after.map { it.label })
+        val placeholder = after.first { it.label == "Safari" }
+        assertEquals("app-Safari-dock", placeholder.id)
+        assertEquals(false, placeholder.isActive)
+        assertEquals(false, placeholder.isVisible)
+        assertEquals(true, placeholder.isDockPinned)
+        advanceUntilIdle()
+        val polled = viewModel.uiState.value.buttons.first { it.payload["target"] == "Safari" }
+        assertEquals("app-Safari-dock", polled.id)
+        assertEquals(false, polled.isActive)
+        assertEquals(false, polled.isVisible)
+    }
 }
