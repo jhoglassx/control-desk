@@ -11,10 +11,14 @@ fun main(args: Array<String>) {
     val headless = isHeadlessMode(args)
     val openSettings = shouldOpenSettings(args, bundled, headless, skipInstall)
     val runServerHere = headless || !bundled || skipInstall
+    if (headless) {
+        System.setProperty("control.desk.headless", "true")
+    }
 
     if (isMac) {
         System.setProperty("apple.awt.application.name", "Control Desk Agent")
-        System.setProperty("apple.awt.UIElement", "false")
+        // Headless / LaunchAgent: sem ícone no Dock. A janela de PIN só aparece no processo de configurações.
+        System.setProperty("apple.awt.UIElement", if (headless) "true" else "false")
         MacAccessibility.warnIfNeeded()
         MacWindowLister.warmUp()
         MacChromeTabs.warmUp()
@@ -41,9 +45,8 @@ fun main(args: Array<String>) {
         Thread { runHeadlessService(port) }.start()
         Thread.sleep(250)
         println("[agent] Abrindo janela de configurações…")
-        launchAgentSettings(port, exitProcessOnClose = false)
-        println("[agent] Janela fechada. Serviço ainda ativo na porta $port. Ctrl+C para parar.")
-        runBlocking { awaitCancellation() }
+        println("[agent] Cmd+Q / Fechar encerra a janela e deixa o agente em segundo plano (sem Dock).")
+        launchAgentSettings(port, exitProcessOnClose = true)
         return
     }
 
@@ -84,6 +87,8 @@ private fun shouldOpenSettings(
 }
 
 private fun runHeadlessService(port: Int) {
+    AgentPort.replaceOccupant(port)
+    AgentKeepAlive.arm(port)
     val authStore = AgentAuthStore()
     val executor = NativePlatformExecutor()
     val server = AgentServer(port = port, authStore = authStore, executor = executor)

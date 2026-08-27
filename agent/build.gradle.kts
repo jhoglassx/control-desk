@@ -37,7 +37,6 @@ compose.desktop {
         mainClass = "com.controldesk.agent.AgentMainKt"
         jvmArgs += listOf(
             "-Dapple.awt.application.name=Control Desk Agent",
-            "-Dapple.awt.UIElement=false",
         )
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
@@ -47,8 +46,22 @@ compose.desktop {
             copyright = "Control Desk"
             macOS {
                 bundleID = "com.controldesk.agent"
+                infoPlist {
+                    extraKeysRawXml = """
+                        <key>LSUIElement</key>
+                        <string>true</string>
+                    """.trimIndent()
+                }
             }
             appResourcesRootDir.set(project.file("package/resources"))
         }
     }
+}
+
+tasks.register<Exec>("installMacos") {
+    group = "distribution"
+    description = "Gera o .app e instala o LaunchAgent (serviço em segundo plano neste Mac)"
+    dependsOn("packageDistributionForCurrentOS")
+    onlyIf { System.getProperty("os.name").orEmpty().lowercase().contains("mac") }
+    commandLine("bash", file("package/resources/macos/install-macos.sh").absolutePath)
 }
