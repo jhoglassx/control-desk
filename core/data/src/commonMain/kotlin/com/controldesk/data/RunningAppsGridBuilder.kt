@@ -7,15 +7,17 @@ import com.controldesk.domain.model.RunningApp
 object RunningAppsGridBuilder {
     fun build(apps: List<RunningApp>, iconCache: Map<String, String> = emptyMap()): List<GridButton> {
         val sorted = apps.sortedWith(
-            compareByDescending<RunningApp> { it.isActive }
-                .thenBy { it.monitorIndex }
-                .thenByDescending { it.isVisible }
+            compareBy<RunningApp> { if (it.dockIndex >= 0) it.dockIndex else 1_000 }
+                .thenBy { it.appName.lowercase() }
+                .thenBy { it.windowIndex ?: it.windowNumber ?: 0 }
                 .thenBy { it.label().lowercase() },
         )
         return sorted.mapIndexed { index, app ->
             val id = stableId(app)
             val payload = if (app.isBrowserTab) {
                 buildMap {
+                    put("target", app.appName.ifBlank { "Google Chrome" })
+                    put("targetType", "appName")
                     put("browser", "chrome")
                     put("action", "select")
                     app.windowTitle?.let { put("value", it) }
@@ -42,6 +44,7 @@ object RunningAppsGridBuilder {
                 isActive = app.isActive,
                 isVisible = app.isVisible,
                 monitorIndex = app.monitorIndex,
+                isDockPinned = app.isDockPinned,
             )
         }
     }
@@ -72,7 +75,10 @@ object RunningAppsGridBuilder {
         return "$base · $title"
     }
 
+    private fun RunningApp.isDockOnly(): Boolean = isDockPinned && !isActive && !isVisible
+
     private fun stableId(app: RunningApp): String {
+        if (app.isDockOnly()) return "app-${app.appName}-dock"
         val key = app.windowNumber?.let { "wn-$it" }
             ?: app.axWindowIndex?.let { "ax-$it" }
             ?: app.windowIndex?.let { "wi-$it" }

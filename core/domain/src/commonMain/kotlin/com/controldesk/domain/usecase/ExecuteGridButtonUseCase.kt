@@ -18,6 +18,10 @@ class ExecuteGridButtonUseCase(
                 requirePayload(button, "target")
                 gateway.launchApp(host, button)
             }
+            ActionType.REMOTE_CLOSE -> {
+                requirePayload(button, "target")
+                gateway.closeApp(host, button)
+            }
             ActionType.REMOTE_BROWSER_TAB -> gateway.switchBrowserTab(host, button)
             ActionType.REMOTE_BROWSER_OPEN_SITE -> {
                 val url = requirePayload(button, "url")

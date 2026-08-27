@@ -26,6 +26,7 @@ Todas as interações do usuário no **app mobile**:
 | Interação | Feedback imediato obrigatório |
 |-----------|------------------------------|
 | Toque em app/janela na grade | Tile clicado → **Em uso** (azul); outros perdem foco visual |
+| Toque longo em app | Tiles daquele app **somem na hora**; HTTP encerra no Mac |
 | Toque em aba Chrome | Mesmo comportamento de foco |
 | Slider de volume | Thumb e % movem **durante** o drag, sem “pular” |
 | Botões − / + volume | Nível na UI muda na hora |
@@ -93,10 +94,22 @@ Toque → UI otimista (0 ms)
 | Regra | Detalhe |
 |-------|---------|
 | Otimista | Tile clicado `isActive=true`, `isVisible=true`; outros `isActive=false` |
+| Posição | O tile **não muda de lugar** na grade; só o destaque muda |
 | Pinned focus | Manter highlight otimista se poll ainda não confirmou (até ~8 s) |
 | Debounce de poll | Poll não deve “roubar” foco visual em 1 ciclo; exige confirmação antes de trocar tile ativo |
 | Burst | Após clique, polls rápidos (não esperar o intervalo normal de 1,5 s) |
 | Bloqueio | Outros tiles **continuam clicáveis** (ações paralelas permitidas na spec futura; hoje não travar UI) |
+
+### 5.1.1 Encerrar app (`POST /apps/close`)
+
+| Regra | Detalhe |
+|-------|---------|
+| Gesto | Toque longo no tile (**não** dispara foco) |
+| Otimista | Remove da grade todos os tiles com o mesmo `target` e segura fora até o Mac confirmar |
+| Poll | **Não** recoloca o app enquanto o close está em hold (~4 s) |
+| Dock | Se o app está fixado, o poll só mostra o tile esmaecido depois que ele realmente saiu |
+| Erro | Solta o hold + snackbar |
+| Bloqueados | Finder e processos de sistema: snackbar, sem HTTP |
 
 ### 5.2 Volume
 
@@ -133,6 +146,7 @@ O mobile é otimista; o agente deve ser **rápido** para a confirmação chegar 
 | Comando | Expectativa na LAN |
 |---------|-------------------|
 | `POST /apps/launch` | Foco perceptível no Mac em **< 500 ms** (ideal) |
+| `POST /apps/close` | Quit perceptível em **< 1 s** |
 | `POST /browser/tabs/switch` | Idem |
 | `POST /system/volume` / `mic` | **< 300 ms** |
 | `GET /apps/running` sem ícones | **< 400 ms** (lista leve) |

@@ -22,6 +22,8 @@ object MacAppIconResolver {
         paths[appName] = bundlePath
     }
 
+    fun pathFor(appName: String): String? = paths[appName]
+
     fun iconFor(appName: String): String? {
         if (appName.isBlank()) return null
         memory[appName]?.let { return it }

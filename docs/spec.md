@@ -211,7 +211,7 @@ Antes do servidor, no Mac:
 ## 5. API do agente (protocolo v1)
 
 **Versão health:** `1.1.0`  
-**windowListerVersion:** `16`
+**windowListerVersion:** `19`
 
 ### 5.1 Endpoints implementados
 
@@ -221,8 +221,9 @@ Antes do servidor, no Mac:
 | GET | `/setup` | Local | `port`, `pin`, `backgroundService` |
 | POST | `/setup/new-pin` | Local | Regenera PIN |
 | POST | `/pair` | Não | PIN → `token` |
-| GET | `/apps/running?icons=0\|1` | Bearer | Lista janelas + monitor; ícone do `.app` em execução (`NSWorkspace`); `icons=1` resolve os que ainda não estão em cache |
+| GET | `/apps/running?icons=0\|1` | Bearer | Lista janelas + apps fixados na Dock (mesmo fechados); ícone do `.app` (`NSWorkspace`); `icons=1` resolve os que ainda não estão em cache |
 | POST | `/apps/launch` | Bearer | Focar/abrir app |
+| POST | `/apps/close` | Bearer | Encerrar app (`tell application to quit`) |
 | POST | `/browser/open` | Bearer | Abrir URL |
 | POST | `/browser/close` | Bearer | Fechar navegador |
 | POST | `/browser/tabs/switch` | Bearer | Aba próxima/anterior/selecionar |
@@ -236,17 +237,19 @@ Ver `core/protocol/.../AgentDtos.kt`.
 
 **AppLaunchRequest:** `target`, `targetType` (default `appName`), `windowTitle?`, `windowIndex?`, `windowNumber?`
 
+**AppCloseRequest:** `target`, `targetType` (default `appName`)
+
 **BrowserTabSwitchRequest:** `browser`, `action` (`next`/`prev`/`select`), `value?`, `windowIndex?`, `focusFirst` (default `true`)
 
 **VolumeRequest:** `level?`, `delta?`, `mute?`
 
 **MicRequest:** `mute?`, `toggle` (default `false`), `inputDelta?`, `level?`
 
-**RunningAppInfo:** `name`, `appName`, `windowTitle`, `windowIndex`, `axWindowIndex`, `windowNumber`, `iconBase64`, `isActive`, `isVisible`, `browserWindowIndex`, `isBrowserTab`, `monitorIndex`
+**RunningAppInfo:** `name`, `appName`, `windowTitle`, `windowIndex`, `axWindowIndex`, `windowNumber`, `iconBase64`, `isActive`, `isVisible`, `browserWindowIndex`, `isBrowserTab`, `monitorIndex`, `isDockPinned`
 
 ### 5.3 Endpoints planejados (não v1)
 
-`GET /apps/installed`, `POST /apps/focus`, `POST /apps/close`, `POST /input/hotkey`, `GET /browser/tabs`, `POST /browser/tabs/new`, `POST /browser/tabs/close`
+`GET /apps/installed`, `POST /apps/focus`, `POST /input/hotkey`, `GET /browser/tabs`, `POST /browser/tabs/new`, `POST /browser/tabs/close`
 
 ---
 
@@ -264,9 +267,11 @@ Ver `core/protocol/.../AgentDtos.kt`.
 
 **Chrome:** janelas substituídas por **abas individuais** na grade.
 
+**Dock:** apps fixados em `com.apple.dock.plist` (`persistent-apps`) entram na lista mesmo sem janela (`isDockPinned=true`, `isVisible=false`, `dockIndex` = posição na Dock). Leitura via `plutil -extract ... xml1` (JSON falha por causa do bookmark binário). Toque abre/foca (`open -a`); não duplica app que já tem janela.
+
 **Labels:** `"{app} · {título}"` ou `#{index}` para duplicatas; `" · min"` se minimizado.
 
-**Ordenação:** ativo → visível → alfabético.
+**Ordenação:** posição na Dock; apps que não estão fixados depois, por nome. **Não** reordena quando um app fica ativo — só muda o destaque.
 
 **Ícones:** bundle do app, favicon para abas Chrome.
 
@@ -276,6 +281,11 @@ Ver `core/protocol/.../AgentDtos.kt`.
 
 - Primário: binário Swift `MacFocusApp`
 - Fallback: `open -a {appName}`
+
+### 6.3.1 macOS — encerrar app
+
+- `POST /apps/close` → `NSRunningApplication.terminate()` (app regular, inclusive o da frente); fallback AppleScript `quit`
+- Bloqueados: Finder, Dock, SystemUIServer, agente, loginwindow, Spotlight, etc.
 
 ### 6.4 macOS — navegador
 
@@ -327,6 +337,7 @@ Resumo:
 | **Pair** | Nome, IP, porta, PIN; defaults `10.0.2.2` / `8741` |
 | **Polling** | Apps 1,5 s; áudio 2,5 s; burst após clique |
 | **Clique app** | Foco otimista + `REMOTE_LAUNCH` ou `REMOTE_BROWSER_TAB` |
+| **Toque longo no app** | Encerra o app (`POST /apps/close`); tiles somem na hora |
 | **Mixer** | Knobs Volume/Mic: giro 0–100, toque mute |
 | **Persistência** | `control_desk_hosts.json` (Android/iOS); token no JSON |
 | **Remover host** | Só local; não revoga token no agente |

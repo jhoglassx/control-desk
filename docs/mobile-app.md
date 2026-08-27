@@ -92,7 +92,7 @@ Topbar de uma linha (sem card grande):
 
 **Layout:** `LazyVerticalGrid` Adaptive — portrait `96.dp`, landscape `168.dp`. Tiles são **quadrados** (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**.
 
-**Subtitle:** `{N} apps · {focused} em uso · M1: n · M2: n · {hidden} ocultos`
+**Subtitle:** `{N} apps · {focused} em uso · M1: n · M2: n · {dock} na Dock · {hidden} ocultos`
 
 ### 3.5 Tile de app (`AppLauncherTile`)
 
@@ -100,15 +100,18 @@ Topbar de uma linha (sem card grande):
 |--------|-------|--------|
 | **Em uso** | Azul 3dp + glow | Badge M{n} no canto |
 | **Visível** | Verde 2dp | Badge M{n} no canto |
+| **Dock (fechado)** | Cinza 1dp, alpha 0.7 | Sem badge de monitor |
 | **Oculto** | Cinza 1dp, alpha 0.45 | Badge M{n} no canto |
 
-**Monitor:** `M1` / `M2` é badge suspenso no canto superior direito, **dentro** do card (overlay, fora da pilha de conteúdo).
+**Monitor:** `M1` / `M2` é badge suspenso no canto superior direito, **dentro** do card (overlay, fora da pilha de conteúdo). Apps só da Dock (`monitorIndex=0`) não mostram badge.
 
 **Texto:** título da janela (não o nome do app). Se a janela não tem título, cai no nome do app. O ícone do `.app` já identifica o programa.
 
 Landscape (`compact`): ícone, título da janela e badge M{n}.
 
-**Clique:** `onAppClick(button)` → `DeskViewModel.onButtonClick`.
+**Clique:** `onAppClick(button)` → `DeskViewModel.onButtonClick` (abre/foca).
+
+**Toque longo:** `onAppClose(button)` → `DeskViewModel.onAppClose` (encerra o app). Tiles daquele app somem na hora; o poll recoloca o ícone da Dock se estiver fixado. Finder e processos de sistema não fecham.
 
 ### 3.6 Tiles de sistema (`VolumeAppTile`, `MicAppTile`)
 
@@ -183,6 +186,7 @@ Knobs rotativos na mesma grade dos apps, **sem card nem título** — só o disc
 Resumo:
 
 - Toque na grade → tile **Em uso** na hora (otimista); HTTP em paralelo
+- Toque longo no tile → app some da grade na hora; `POST /apps/close` em paralelo
 - Mixer → slider/mute/mic mudam na hora; poll de áudio pausado durante uso
 - Troca de host → cache imediato, sem grade vazia
 - Poll (1,5 s / 2,5 s) só sincroniza fundo; **nunca** é o primeiro feedback do toque
@@ -257,6 +261,16 @@ Resumo:
 5. **Sucesso:** delay `FOCUS_SETTLE_MS` + 3× refresh com `FOCUS_SETTLE_MS`
 6. **Falha:** `clearPinnedFocus()`, snackbar com erro
 
+### 5.6.1 Encerrar app (`onAppClose`)
+
+1. Lê `payload.target`; Finder/sistema → snackbar, sem HTTP
+2. Tile só da Dock (já fechado) → no-op
+3. UI otimista: remove janelas daquele `target` e **segura** o app fora da grade (~4 s) para o poll não recolocar
+4. `POST /apps/close` em background (`NSRunningApplication.terminate`)
+5. **Não** dispara clique/foco; toque longo e toque curto são exclusivos
+6. Quando o agente confirma que o app saiu, mostra o ícone da Dock se estiver fixado
+7. **Falha:** solta o hold + snackbar
+
 ### 5.7 Pinned focus
 
 Mantém tile clicado como "Em uso" até:
@@ -304,11 +318,12 @@ Executado no **data layer**, consumido pelo ViewModel.
 | Tipo | ActionType | Payload |
 |------|------------|---------|
 | Janela normal | `REMOTE_LAUNCH` | `target`, `targetType=appName`, `windowTitle?`, `windowNumber?`, `windowIndex?` |
-| Aba Chrome | `REMOTE_BROWSER_TAB` | `browser=chrome`, `action=select`, `value`, `windowIndex?` |
+| Aba Chrome | `REMOTE_BROWSER_TAB` | `target` (nome do app), `browser=chrome`, `action=select`, `value`, `windowIndex?` |
+| App só na Dock | `REMOTE_LAUNCH` | `target`; `isDockPinned=true`; id `app-{nome}-dock` |
 
-**Ordenação:** ativo → visível → label alfabético.
+**Ordenação:** posição na Dock (`dockIndex`); apps não fixados depois, por nome. Foco **não** muda a posição do tile.
 
-**ID estável:** `windowNumber` → `axWindowIndex` → `windowIndex` → hash título.
+**ID estável:** `windowNumber` → `axWindowIndex` → `windowIndex` → hash título. Dock fechado: `app-{appName}-dock`.
 
 **Grid lógica:** `row = index/3`, `col = index%3` (para futuro editor; UI usa adaptive grid).
 
@@ -319,6 +334,7 @@ Executado no **data layer**, consumido pelo ViewModel.
 | ActionType | Endpoint | Payload obrigatório |
 |------------|----------|---------------------|
 | `REMOTE_LAUNCH` | `POST /apps/launch` | `target` |
+| `REMOTE_CLOSE` | `POST /apps/close` | `target` |
 | `REMOTE_BROWSER_OPEN_SITE` | `POST /browser/open` | `url` |
 | `REMOTE_BROWSER_CLOSE_APP` | `POST /browser/close` | — |
 | `REMOTE_BROWSER_TAB` | `POST /browser/tabs/switch` | — |

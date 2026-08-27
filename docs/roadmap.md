@@ -85,7 +85,8 @@ Corrigir base antes de novas features.
 ## Fase 7 — Protocolo v1 completo
 
 - [ ] `GET /apps/installed`
-- [ ] `POST /apps/focus`, `POST /apps/close`
+- [ ] `POST /apps/focus`
+- [x] `POST /apps/close`
 - [ ] `POST /input/hotkey`
 - [ ] `GET /browser/tabs`, `POST /browser/tabs/new`, `POST /browser/tabs/close`
 - [ ] Widgets: Audio Status, PC Status (online/offline)

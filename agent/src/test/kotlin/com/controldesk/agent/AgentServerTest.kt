@@ -1,5 +1,6 @@
 package com.controldesk.agent
 
+import com.controldesk.protocol.AppCloseRequest
 import com.controldesk.protocol.AppLaunchRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -92,6 +93,27 @@ class AgentServerTest {
                 contentType(ContentType.Application.Json)
                 setBody(AppLaunchRequest(target = "Safari"))
             }
+        }
+    }
+
+    @Test
+    fun closeAppRemovesFromStubList() {
+        runBlocking {
+            val pin = auth.currentPin() ?: auth.activatePin()
+            val pair = client.post("http://127.0.0.1:18741/pair") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"pin":"$pin"}""")
+            }.bodyAsText()
+            val token = Regex("\"token\"\\s*:\\s*\"([^\"]+)\"").find(pair)?.groupValues?.get(1)!!
+            val close = client.post("http://127.0.0.1:18741/apps/close") {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(AppCloseRequest(target = "Notes"))
+            }
+            assertEquals(HttpStatusCode.OK, close.status)
+            val running = client.get("http://127.0.0.1:18741/apps/running") { bearerAuth(token) }.bodyAsText()
+            assertTrue(running.contains("Safari"))
+            assertTrue(!running.contains("Notes"))
         }
     }
 }

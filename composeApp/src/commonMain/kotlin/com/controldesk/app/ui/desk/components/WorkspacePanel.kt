@@ -22,6 +22,7 @@ fun WorkspacePanel(
     buttons: List<GridButton>,
     listHint: String?,
     onAppClick: (GridButton) -> Unit,
+    onAppClose: (GridButton) -> Unit,
     volumeLevel: Int,
     volumeMuted: Boolean,
     micLevel: Int,
@@ -36,8 +37,9 @@ fun WorkspacePanel(
     modifier: Modifier = Modifier,
 ) {
     val focused = buttons.count { it.isActive }
-    val hidden = buttons.count { !it.isVisible }
-    val monitors = buttons.groupBy { it.monitorIndex.coerceAtLeast(1) }
+    val hidden = buttons.count { !it.isVisible && !it.isDockPinned }
+    val docked = buttons.count { it.isDockPinned && !it.isVisible }
+    val monitors = buttons.filter { it.monitorIndex > 0 }.groupBy { it.monitorIndex }
         .toSortedMap()
         .entries
         .joinToString(" · ") { (monitor, apps) -> "M$monitor: ${apps.size}" }
@@ -50,7 +52,12 @@ fun WorkspacePanel(
             if (buttons.isEmpty()) {
                 listHint ?: "Nenhuma janela detectada no PC"
             } else {
-                "${buttons.size} apps · $focused em uso · $monitors · $hidden ocultos"
+                buildString {
+                    append("${buttons.size} apps · $focused em uso")
+                    if (monitors.isNotBlank()) append(" · $monitors")
+                    if (docked > 0) append(" · $docked na Dock")
+                    if (hidden > 0) append(" · $hidden ocultos")
+                }
             },
             color = DeskColors.TextMuted,
             fontSize = 11.sp,
@@ -84,7 +91,12 @@ fun WorkspacePanel(
                 )
             }
             items(buttons, key = { it.id }) { button ->
-                AppLauncherTile(button = button, onClick = { onAppClick(button) }, compact = compact)
+                AppLauncherTile(
+                    button = button,
+                    onClick = { onAppClick(button) },
+                    onLongClick = { onAppClose(button) },
+                    compact = compact,
+                )
             }
         }
     }

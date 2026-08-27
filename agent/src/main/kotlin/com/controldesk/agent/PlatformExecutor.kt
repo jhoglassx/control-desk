@@ -1,5 +1,6 @@
 package com.controldesk.agent
 
+import com.controldesk.protocol.AppCloseRequest
 import com.controldesk.protocol.AppLaunchRequest
 import com.controldesk.protocol.AudioResponse
 import com.controldesk.protocol.BrowserTabSwitchRequest
@@ -11,6 +12,7 @@ interface PlatformExecutor {
     val osName: String
     fun listRunningApps(includeIcons: Boolean): List<RunningAppInfo>
     fun launchApp(request: AppLaunchRequest)
+    fun closeApp(request: AppCloseRequest)
     fun openBrowser(url: String, browser: String?)
     fun closeBrowser(browser: String?)
     fun switchBrowserTab(request: BrowserTabSwitchRequest)
@@ -35,6 +37,10 @@ class LoggingPlatformExecutor : PlatformExecutor {
 
     override fun launchApp(request: AppLaunchRequest) {
         apps.replaceAll { if (it.appName.equals(request.target, true) || it.name.equals(request.target, true)) it.copy(isActive = true) else it.copy(isActive = false) }
+    }
+
+    override fun closeApp(request: AppCloseRequest) {
+        apps.removeAll { it.appName.equals(request.target, ignoreCase = true) }
     }
 
     override fun openBrowser(url: String, browser: String?) = Unit
@@ -78,6 +84,10 @@ class NativePlatformExecutor : PlatformExecutor {
 
     override fun launchApp(request: AppLaunchRequest) {
         if (isMac) MacFocusApp.focus(request) else fallback.launchApp(request)
+    }
+
+    override fun closeApp(request: AppCloseRequest) {
+        if (isMac) MacAppQuit.quit(request.target) else fallback.closeApp(request)
     }
 
     override fun openBrowser(url: String, browser: String?) {

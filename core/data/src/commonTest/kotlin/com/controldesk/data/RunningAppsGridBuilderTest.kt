@@ -9,11 +9,11 @@ import kotlin.test.assertTrue
 
 class RunningAppsGridBuilderTest {
     @Test
-    fun sortsActiveThenVisibleThenLabel() {
+    fun doesNotMoveActiveAppToFront() {
         val apps = listOf(
-            RunningApp(name = "Zed", appName = "Zed", isActive = false, isVisible = false),
+            RunningApp(name = "Zed", appName = "Zed", isActive = true, isVisible = true),
             RunningApp(name = "Safari", appName = "Safari", isActive = false, isVisible = true),
-            RunningApp(name = "Chrome", appName = "Chrome", isActive = true, isVisible = true),
+            RunningApp(name = "Chrome", appName = "Chrome", isActive = false, isVisible = true),
         )
         val buttons = RunningAppsGridBuilder.build(apps)
         assertEquals(listOf("Chrome", "Safari", "Zed"), buttons.map { it.label })
@@ -37,6 +37,36 @@ class RunningAppsGridBuilderTest {
         assertEquals(ActionType.REMOTE_BROWSER_TAB, button.actionType)
         assertEquals("select", button.payload["action"])
         assertEquals("Gmail", button.payload["value"])
+        assertEquals("Google Chrome", button.payload["target"])
+    }
+
+    @Test
+    fun dockOrderStaysEvenWhenAnotherAppIsActive() {
+        val apps = listOf(
+            RunningApp(
+                name = "Safari",
+                appName = "Safari",
+                isActive = true,
+                isVisible = true,
+                monitorIndex = 1,
+                isDockPinned = true,
+                dockIndex = 1,
+            ),
+            RunningApp(
+                name = "Zed",
+                appName = "Zed",
+                isActive = false,
+                isVisible = false,
+                monitorIndex = 0,
+                isDockPinned = true,
+                dockIndex = 0,
+            ),
+        )
+        val buttons = RunningAppsGridBuilder.build(apps)
+        assertEquals(listOf("Zed", "Safari"), buttons.map { it.label })
+        assertEquals("app-Zed-dock", buttons.first().id)
+        assertTrue(buttons.first().isDockPinned)
+        assertEquals(0, buttons.first().monitorIndex)
     }
 
     @Test

@@ -30,8 +30,10 @@ class FakeAgentGateway(
     var apps: List<RunningApp> = emptyList(),
     var audio: AudioState = AudioState(),
     var failWith: Throwable? = null,
+    var removeOnClose: Boolean = true,
 ) : AgentGateway {
     val launched = mutableListOf<GridButton>()
+    val closed = mutableListOf<GridButton>()
     val volumes = mutableListOf<Triple<Int?, Int?, Boolean?>>()
     val mics = mutableListOf<Triple<Boolean?, Boolean, Int?>>()
 
@@ -45,6 +47,13 @@ class FakeAgentGateway(
     override suspend fun launchApp(host: PairedHost, button: GridButton) {
         result(Unit)
         launched += button
+    }
+    override suspend fun closeApp(host: PairedHost, button: GridButton) {
+        result(Unit)
+        closed += button
+        if (!removeOnClose) return
+        val target = button.payload["target"] ?: return
+        apps = apps.filterNot { it.appName.equals(target, ignoreCase = true) }
     }
     override suspend fun switchBrowserTab(host: PairedHost, button: GridButton) {
         result(Unit)

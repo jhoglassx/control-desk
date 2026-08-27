@@ -32,6 +32,12 @@ data class AppLaunchRequest(
 )
 
 @Serializable
+data class AppCloseRequest(
+    val target: String,
+    val targetType: String = "appName",
+)
+
+@Serializable
 data class BrowserOpenRequest(
     val url: String,
     val browser: String? = null,
@@ -101,6 +107,8 @@ data class RunningAppInfo(
     val browserWindowIndex: Int? = null,
     val isBrowserTab: Boolean = false,
     val monitorIndex: Int = 0,
+    val isDockPinned: Boolean = false,
+    val dockIndex: Int = -1,
 )
 
 @Serializable

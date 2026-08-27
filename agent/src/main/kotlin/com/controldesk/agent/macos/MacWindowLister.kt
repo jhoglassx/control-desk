@@ -38,7 +38,8 @@ object MacWindowLister {
     fun list(includeIcons: Boolean): List<RunningAppInfo> {
         val snapshot = cache.get().ifEmpty { query() }
         val merged = MacChromeTabs.mergeTabs(snapshot)
-        return merged.map { app ->
+        val withDock = MacDockApps.merge(merged)
+        return withDock.map { app ->
             val cached = MacAppIconResolver.iconFor(app.appName)
             when {
                 cached != null -> app.copy(iconBase64 = cached)
@@ -77,12 +78,7 @@ object MacWindowLister {
                 monitorIndex = obj.int("monitorIndex")?.coerceAtLeast(1) ?: 1,
             )
         }
-        return windows.sortedWith(
-            compareByDescending<RunningAppInfo> { it.isActive }
-                .thenBy { it.monitorIndex }
-                .thenByDescending { it.isVisible }
-                .thenBy { it.name.lowercase() },
-        )
+        return windows
     }
 
     private fun JsonObject.str(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull

@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
@@ -55,6 +56,7 @@ class DeskViewModel(
     private var pinnedWindowNumber: String? = null
     private var pinnedTarget: String? = null
     private var pinnedUntil: TimeMark? = null
+    private val closingUntil = mutableMapOf<String, TimeMark>()
     private var lastIncomingActiveId: String? = null
     private var incomingActiveStreak = 0
     private var currentActiveId: String? = null
@@ -108,6 +110,8 @@ class DeskViewModel(
 
     fun onButtonClick(button: GridButton) {
         val host = _uiState.value.selectedHost ?: return
+        val target = button.payload["target"]
+        if (target != null && isClosing(target)) return
         armPinnedFocus(button)
         _uiState.update { state ->
             state.copy(
@@ -133,6 +137,32 @@ class DeskViewModel(
         viewModelScope.launch {
             delay(COMMAND_FIRST_MS)
             startBurstRefresh()
+        }
+    }
+
+    fun onAppClose(button: GridButton) {
+        val host = _uiState.value.selectedHost ?: return
+        val target = button.payload["target"]?.takeIf { it.isNotBlank() } ?: return
+        if (target in BLOCKED_QUIT) {
+            _uiState.update { it.copy(feedback = "Não é possível fechar $target") }
+            return
+        }
+        if (button.isDockPinned && !button.isVisible && !button.isActive) return
+        clearPinnedFocus()
+        closingUntil[target.lowercase()] = TimeSource.Monotonic.markNow() + CLOSE_HOLD_MS.milliseconds
+        _uiState.update { state ->
+            state.copy(buttons = applyClosingFilter(state.buttons.filterNot { matchesCloseTarget(it, target) }))
+        }
+        viewModelScope.launch {
+            try {
+                agentGateway.closeApp(host, button)
+                delay(CLOSE_CONFIRM_MS)
+                refreshAppsSilent(host)
+            } catch (error: Throwable) {
+                closingUntil.remove(target.lowercase())
+                _uiState.update { it.copy(feedback = error.message ?: "Falha ao fechar app") }
+                refreshAppsSilent(host)
+            }
         }
     }
 
@@ -321,16 +351,17 @@ class DeskViewModel(
     private fun publishButtons(host: PairedHost, incoming: List<GridButton>, preferMerge: Boolean) {
         val stabilized = stabilizeActiveState(incoming)
         val withPin = applyPinnedFocus(stabilized)
-        buttonsCache[host.id] = withPin
+        val hiddenWhileClosing = applyClosingFilter(withPin)
+        buttonsCache[host.id] = hiddenWhileClosing
         if (_uiState.value.selectedHost?.id == host.id) {
             _uiState.update {
                 it.copy(
-                    buttons = withPin,
-                    listHint = if (withPin.isEmpty()) (listHintCache[host.id] ?: ControlDeskError.EMPTY_WINDOWS) else null,
+                    buttons = hiddenWhileClosing,
+                    listHint = if (hiddenWhileClosing.isEmpty()) (listHintCache[host.id] ?: ControlDeskError.EMPTY_WINDOWS) else null,
                 )
             }
         }
-        currentActiveId = withPin.firstOrNull { it.isActive }?.id
+        currentActiveId = hiddenWhileClosing.firstOrNull { it.isActive }?.id
         if (!preferMerge) {
             lastIncomingActiveId = currentActiveId
             incomingActiveStreak = ACTIVE_CONFIRM_POLLS
@@ -379,6 +410,44 @@ class DeskViewModel(
         }
     }
 
+    private fun matchesCloseTarget(button: GridButton, target: String): Boolean {
+        val buttonTarget = button.payload["target"] ?: return false
+        return buttonTarget.equals(target, ignoreCase = true)
+    }
+
+    private fun isClosing(target: String): Boolean {
+        val until = closingUntil[target.lowercase()] ?: return false
+        if (until.hasPassedNow()) {
+            closingUntil.remove(target.lowercase())
+            return false
+        }
+        return true
+    }
+
+    private fun applyClosingFilter(buttons: List<GridButton>): List<GridButton> {
+        if (closingUntil.isEmpty()) return buttons
+        val released = mutableSetOf<String>()
+        val filtered = buttons.filter { button ->
+            val target = button.payload["target"] ?: return@filter true
+            val key = target.lowercase()
+            val until = closingUntil[key] ?: return@filter true
+            if (until.hasPassedNow()) {
+                released += key
+                return@filter true
+            }
+            if (button.isDockPlaceholder()) {
+                released += key
+                return@filter true
+            }
+            false
+        }
+        released.forEach { closingUntil.remove(it) }
+        return filtered
+    }
+
+    private fun GridButton.isDockPlaceholder(): Boolean =
+        isDockPinned && !isVisible && !isActive && payload["windowNumber"] == null && id.endsWith("-dock")
+
     private fun matchesPinned(button: GridButton): Boolean {
         if (button.id == pinnedButtonId) return true
         val windowNumber = button.payload["windowNumber"]
@@ -424,17 +493,25 @@ class DeskViewModel(
 
     private fun applyAudio(host: PairedHost, audio: AudioState) {
         if (holdingAudioUntil?.hasPassedNow() == false) return
-        audioCache[host.id] = audio
         if (audio.micLevel > 1) lastMicLevel = audio.micLevel
-        if (_uiState.value.selectedHost?.id == host.id) {
-            _uiState.update {
-                it.copy(
-                    volumeLevel = audio.volumeLevel,
-                    volumeMuted = audio.volumeMuted,
-                    micMuted = audio.micMuted,
-                    micLevel = if (audio.micMuted) it.micLevel.takeIf { level -> level > 1 } ?: lastMicLevel else audio.micLevel,
-                )
+        audioCache[host.id] = audio
+        if (_uiState.value.selectedHost?.id != host.id) return
+        _uiState.update { current ->
+            val nextMic = if (audio.micMuted) {
+                current.micLevel.takeIf { it > 1 } ?: lastMicLevel
+            } else {
+                audio.micLevel
             }
+            val muteChanged = current.volumeMuted != audio.volumeMuted || current.micMuted != audio.micMuted
+            val volumeMoved = abs(current.volumeLevel - audio.volumeLevel) > 1
+            val micMoved = !audio.micMuted && abs(current.micLevel - nextMic) > 1
+            if (!muteChanged && !volumeMoved && !micMoved) current
+            else current.copy(
+                volumeLevel = audio.volumeLevel,
+                volumeMuted = audio.volumeMuted,
+                micMuted = audio.micMuted,
+                micLevel = nextMic,
+            )
         }
     }
 
@@ -528,5 +605,12 @@ class DeskViewModel(
         const val HOST_SWITCH_SETTLE_MS = 180L
         const val MISSING_ICON_CHECK_EVERY = 2
         const val COMMAND_FIRST_MS = 40L
+        const val CLOSE_HOLD_MS = 4_000L
+        const val CLOSE_CONFIRM_MS = 700L
+        val BLOCKED_QUIT = setOf(
+            "Finder", "Dock", "SystemUIServer", "Window Server", "Control Center",
+            "NotificationCenter", "loginwindow", "Wallpaper", "Spotlight",
+            "ControlDeskAgent", "Control Desk Agent",
+        )
     }
 }

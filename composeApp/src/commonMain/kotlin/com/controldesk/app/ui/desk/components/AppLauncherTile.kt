@@ -3,7 +3,7 @@ package com.controldesk.app.ui.desk.components
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,12 +39,15 @@ import com.controldesk.domain.model.GridButton
 fun AppLauncherTile(
     button: GridButton,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val dockOnly = button.isDockPinned && !button.isVisible && !button.isActive
     val borderColor = when {
         button.isActive -> DeskColors.Accent
         button.isVisible -> DeskColors.Mint
+        dockOnly -> DeskColors.Idle
         else -> DeskColors.Idle
     }
     val borderWidth = when {
@@ -55,13 +59,18 @@ fun AppLauncherTile(
     val appName = button.tileAppName()
     val icon = rememberBase64Image(button.iconBase64)
     val monitorTint = if (button.monitorIndex == 2) DeskColors.Mint else DeskColors.Accent
+    val tileAlpha = when {
+        button.isActive || button.isVisible -> 1f
+        dockOnly -> 0.7f
+        else -> 0.45f
+    }
 
     val cardShape = RoundedCornerShape(16.dp)
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .alpha(if (!button.isVisible && !button.isActive) 0.45f else 1f)
+            .alpha(tileAlpha)
             .then(
                 if (button.isActive) Modifier.shadow(12.dp, cardShape, ambientColor = DeskColors.Accent)
                 else Modifier,
@@ -69,7 +78,12 @@ fun AppLauncherTile(
             .clip(cardShape)
             .background(DeskColors.SurfaceRaised)
             .border(borderWidth, borderColor, cardShape)
-            .clickable(onClick = onClick),
+            .pointerInput(button.id) {
+                detectTapGestures(
+                    onLongPress = { onLongClick() },
+                    onTap = { onClick() },
+                )
+            },
     ) {
         val iconSize = (maxWidth * 0.38f).coerceIn(28.dp, 56.dp)
         Column(
