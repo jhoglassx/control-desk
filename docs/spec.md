@@ -217,7 +217,7 @@ Antes do servidor, no Mac:
 ## 5. API do agente (protocolo v1)
 
 **Versão health:** `1.1.0`  
-**windowListerVersion:** `19`
+**windowListerVersion:** `20`
 
 ### 5.1 Endpoints implementados
 

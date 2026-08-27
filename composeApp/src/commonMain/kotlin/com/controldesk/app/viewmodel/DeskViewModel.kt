@@ -62,6 +62,10 @@ class DeskViewModel(
     private var lastIncomingActiveId: String? = null
     private var incomingActiveStreak = 0
     private var currentActiveId: String? = null
+    private val currentActiveIdByHost = mutableMapOf<String, String?>()
+    private val lastIncomingActiveIdByHost = mutableMapOf<String, String?>()
+    private val incomingActiveStreakByHost = mutableMapOf<String, Int>()
+    private var activeTrackingHostId: String? = null
 
     init {
         viewModelScope.launch {
@@ -96,6 +100,7 @@ class DeskViewModel(
 
     fun selectHost(index: Int) {
         val host = _uiState.value.hosts.getOrNull(index) ?: return
+        bindActiveTracking(host.id)
         restoreCache(host)
         _uiState.update { it.copy(selectedHostIndex = index) }
         loadHost(host, showLoading = buttonsCache[host.id].isNullOrEmpty())
@@ -155,6 +160,11 @@ class DeskViewModel(
             currentActiveId = null
             lastIncomingActiveId = null
             incomingActiveStreak = 0
+            host.id.let { id ->
+                currentActiveIdByHost[id] = null
+                lastIncomingActiveIdByHost[id] = null
+                incomingActiveStreakByHost[id] = 0
+            }
         }
         val key = target.lowercase()
         closingUntil[key] = TimeSource.Monotonic.markNow() + CLOSE_HOLD_MS.milliseconds
@@ -292,6 +302,7 @@ class DeskViewModel(
     }
 
     private fun loadHost(host: PairedHost, showLoading: Boolean) {
+        bindActiveTracking(host.id)
         pendingHostLoad?.cancel()
         pendingHostLoad = viewModelScope.launch {
             val cached = buttonsCache[host.id]
@@ -358,16 +369,34 @@ class DeskViewModel(
     private suspend fun refreshAppsSilent(host: PairedHost) {
         val apps = runCatching { agentGateway.loadRunningApps(host, includeIcons = false) }.getOrNull() ?: return
         val incoming = RunningAppsGridBuilder.build(apps, memoryIcons)
-        val merged = RunningAppsGridBuilder.merge(_uiState.value.buttons, incoming, preferMerge = true)
+        val baseline = if (_uiState.value.selectedHost?.id == host.id) {
+            _uiState.value.buttons
+        } else {
+            buttonsCache[host.id].orEmpty()
+        }
+        val merged = RunningAppsGridBuilder.merge(baseline, incoming, preferMerge = true)
         publishButtons(host, merged, preferMerge = true)
     }
 
     private fun publishButtons(host: PairedHost, incoming: List<GridButton>, preferMerge: Boolean) {
         confirmClosedApps(incoming)
-        val stabilized = stabilizeActiveState(incoming)
+        val stabilized = stabilizeActiveState(host.id, incoming)
         val withPin = applyPinnedFocus(stabilized)
         val hiddenWhileClosing = applyClosingFilter(withPin)
         buttonsCache[host.id] = hiddenWhileClosing
+        val activeId = hiddenWhileClosing.firstOrNull { it.isActive }?.id
+        currentActiveIdByHost[host.id] = activeId
+        if (!preferMerge) {
+            lastIncomingActiveIdByHost[host.id] = activeId
+            incomingActiveStreakByHost[host.id] = ACTIVE_CONFIRM_POLLS
+        }
+        if (_uiState.value.selectedHost?.id == host.id) {
+            currentActiveId = activeId
+            if (!preferMerge) {
+                lastIncomingActiveId = activeId
+                incomingActiveStreak = ACTIVE_CONFIRM_POLLS
+            }
+        }
         _uiState.update {
             val forSelected = it.selectedHost?.id == host.id
             it.copy(
@@ -378,36 +407,76 @@ class DeskViewModel(
                 cachedButtons = buttonsCache.toMap(),
             )
         }
-        currentActiveId = hiddenWhileClosing.firstOrNull { it.isActive }?.id
-        if (!preferMerge) {
-            lastIncomingActiveId = currentActiveId
-            incomingActiveStreak = ACTIVE_CONFIRM_POLLS
-        }
     }
 
-    private fun stabilizeActiveState(incoming: List<GridButton>): List<GridButton> {
+    private fun stabilizeActiveState(hostId: String, incoming: List<GridButton>): List<GridButton> {
         val incomingActiveId = incoming.firstOrNull { it.isActive && !it.isDockPlaceholder() }?.id
-        if (incomingActiveId == currentActiveId || incomingActiveId == null) {
-            lastIncomingActiveId = incomingActiveId
-            incomingActiveStreak = 0
-            return incoming.map { button ->
-                button.copy(isActive = !button.isDockPlaceholder() && button.id == currentActiveId)
-            }.let { buttons ->
-                if (currentActiveId == null) incoming else buttons
+        var current = currentActiveIdByHost[hostId]
+        var last = lastIncomingActiveIdByHost[hostId]
+        var streak = incomingActiveStreakByHost[hostId] ?: 0
+        if (activeTrackingHostId == hostId) {
+            current = currentActiveId
+            last = lastIncomingActiveId
+            streak = incomingActiveStreak
+        }
+
+        val result = when {
+            incomingActiveId != null && incomingActiveId == current -> {
+                last = incomingActiveId
+                streak = 0
+                incoming.map { button ->
+                    button.copy(isActive = !button.isDockPlaceholder() && button.id == current)
+                }
+            }
+            incomingActiveId == null -> {
+                last = null
+                streak = 0
+                val stillPresent = incoming.any { it.id == current && !it.isDockPlaceholder() }
+                if (!stillPresent) {
+                    current = null
+                    incoming
+                } else {
+                    incoming.map { button ->
+                        button.copy(isActive = !button.isDockPlaceholder() && button.id == current)
+                    }
+                }
+            }
+            else -> {
+                if (incomingActiveId == last) streak += 1 else {
+                    last = incomingActiveId
+                    streak = 1
+                }
+                if (streak >= ACTIVE_CONFIRM_POLLS) {
+                    current = incomingActiveId
+                    incoming
+                } else {
+                    incoming.map { it.copy(isActive = !it.isDockPlaceholder() && it.id == current) }
+                }
             }
         }
-        if (incomingActiveId == lastIncomingActiveId) {
-            incomingActiveStreak += 1
-        } else {
-            lastIncomingActiveId = incomingActiveId
-            incomingActiveStreak = 1
+
+        currentActiveIdByHost[hostId] = current
+        lastIncomingActiveIdByHost[hostId] = last
+        incomingActiveStreakByHost[hostId] = streak
+        if (activeTrackingHostId == hostId || _uiState.value.selectedHost?.id == hostId) {
+            currentActiveId = current
+            lastIncomingActiveId = last
+            incomingActiveStreak = streak
         }
-        return if (incomingActiveStreak >= ACTIVE_CONFIRM_POLLS) {
-            currentActiveId = incomingActiveId
-            incoming
-        } else {
-            incoming.map { it.copy(isActive = !it.isDockPlaceholder() && it.id == currentActiveId) }
+        return result
+    }
+
+    private fun bindActiveTracking(hostId: String) {
+        if (activeTrackingHostId == hostId) return
+        activeTrackingHostId?.let { previous ->
+            currentActiveIdByHost[previous] = currentActiveId
+            lastIncomingActiveIdByHost[previous] = lastIncomingActiveId
+            incomingActiveStreakByHost[previous] = incomingActiveStreak
         }
+        activeTrackingHostId = hostId
+        currentActiveId = currentActiveIdByHost[hostId]
+        lastIncomingActiveId = lastIncomingActiveIdByHost[hostId]
+        incomingActiveStreak = incomingActiveStreakByHost[hostId] ?: 0
     }
 
     private fun applyPinnedFocus(buttons: List<GridButton>): List<GridButton> {
@@ -521,6 +590,7 @@ class DeskViewModel(
         pinnedTarget = if (target != null && title != null) "$target+$title" else null
         pinnedUntil = TimeSource.Monotonic.markNow() + PINNED_FOCUS_MAX_MS.milliseconds
         currentActiveId = button.id
+        _uiState.value.selectedHost?.id?.let { currentActiveIdByHost[it] = button.id }
     }
 
     private fun clearPinnedFocus() {
@@ -531,7 +601,17 @@ class DeskViewModel(
     }
 
     private fun restoreCache(host: PairedHost) {
+        bindActiveTracking(host.id)
         val buttons = buttonsCache[host.id].orEmpty()
+        val cachedActive = buttons.firstOrNull { it.isActive && !it.isDockPlaceholder() }?.id
+        if (cachedActive != null) {
+            currentActiveId = cachedActive
+            currentActiveIdByHost[host.id] = cachedActive
+            lastIncomingActiveId = cachedActive
+            lastIncomingActiveIdByHost[host.id] = cachedActive
+            incomingActiveStreak = ACTIVE_CONFIRM_POLLS
+            incomingActiveStreakByHost[host.id] = ACTIVE_CONFIRM_POLLS
+        }
         val audio = audioCache[host.id]
         _uiState.update {
             it.copy(
