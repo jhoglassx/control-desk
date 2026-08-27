@@ -7,6 +7,7 @@ INSTALL_DIR="/Applications"
 PLIST_PATH="$HOME/Library/LaunchAgents/${LABEL}.plist"
 LOG_DIR="$HOME/.control-desk"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PORT="${CONTROL_DESK_PORT:-8741}"
 
 usage() {
     cat <<EOF
@@ -20,7 +21,7 @@ Sem argumento, detecta o app ao lado do script, no bundle ou em /Applications.
 Regras:
   - Um único app em /Applications/ControlDeskAgent.app
   - Um único LaunchAgent (${LABEL})
-  - Nova versão substitui a anterior e reinicia o serviço
+  - App vindo do DMG (caminho diferente) sempre sincroniza, mesmo com a mesma versão
 EOF
 }
 
@@ -28,6 +29,17 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     usage
     exit 0
 fi
+
+mkdir -p "$LOG_DIR"
+LOCKDIR="$LOG_DIR/install.lockdir"
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
+    if mkdir "$LOCKDIR" 2>/dev/null; then
+        trap 'rmdir "$LOCKDIR" 2>/dev/null || true' EXIT
+        break
+    fi
+    echo "→ Outra instalação em andamento — aguardando…"
+    sleep 0.4
+done
 
 read_bundle_version() {
     local app_path="$1"
@@ -38,15 +50,13 @@ read_bundle_version() {
     defaults read "${app_path}/Contents/Info" CFBundleShortVersionString 2>/dev/null || echo "0"
 }
 
-version_newer_than() {
-    local candidate="$1"
-    local installed="$2"
-    if [[ "$candidate" == "$installed" ]]; then
-        return 1
+canonical_path() {
+    local p="$1"
+    if [[ -d "$p" ]]; then
+        (cd "$p" && pwd -P)
+    else
+        echo "$p"
     fi
-    local newer
-    newer="$(printf '%s\n%s\n' "$installed" "$candidate" | sort -V | tail -n 1)"
-    [[ "$newer" == "$candidate" ]]
 }
 
 resolve_source_app() {
@@ -75,10 +85,29 @@ resolve_source_app() {
     return 1
 }
 
-ensure_launch_agent() {
+agent_service() {
+    echo "gui/$(id -u)/${LABEL}"
+}
+
+service_loaded() {
+    launchctl print "$(agent_service)" >/dev/null 2>&1
+}
+
+port_listening() {
+    /usr/sbin/lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1
+}
+
+unload_agent() {
+    local service
+    service="$(agent_service)"
+    launchctl bootout "$service" >/dev/null 2>&1 || true
+    launchctl disable "$service" >/dev/null 2>&1 || true
+    sleep 1
+}
+
+write_plist() {
     local binary="$1"
     mkdir -p "$LOG_DIR" "$HOME/Library/LaunchAgents"
-
     cat >"$PLIST_PATH" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -108,11 +137,51 @@ ensure_launch_agent() {
 </dict>
 </plist>
 PLIST
+}
 
-    USER_UID="$(id -u)"
-    launchctl bootout "gui/${USER_UID}/${LABEL}" 2>/dev/null || true
-    launchctl bootstrap "gui/${USER_UID}" "$PLIST_PATH"
-    launchctl enable "gui/${USER_UID}/${LABEL}" 2>/dev/null || true
+kick_agent() {
+    local service
+    service="$(agent_service)"
+    launchctl enable "$service" >/dev/null 2>&1 || true
+    launchctl kickstart -k "$service" >/dev/null 2>&1 || true
+}
+
+# Error 5 = já está no launchd. Não é falha se o serviço (ou a porta) estiver no ar.
+load_agent() {
+    local domain service err n
+    domain="gui/$(id -u)"
+    service="${domain}/${LABEL}"
+    err=""
+
+    if service_loaded; then
+        kick_agent
+        echo "→ LaunchAgent já estava carregado — reiniciado."
+        return 0
+    fi
+
+    for n in 1 2 3 4 5 6; do
+        if err="$(launchctl bootstrap "$domain" "$PLIST_PATH" 2>&1)"; then
+            kick_agent
+            return 0
+        fi
+        if service_loaded || port_listening; then
+            kick_agent
+            echo "→ LaunchAgent já estava ativo (bootstrap: ${err%%$'\n'*}) — ok."
+            return 0
+        fi
+        sleep 0.5
+    done
+
+    kick_agent
+    sleep 0.5
+    if service_loaded || port_listening; then
+        echo "→ LaunchAgent ativo após kickstart."
+        return 0
+    fi
+
+    echo "Falha ao registrar LaunchAgent (${service}):"
+    echo "${err:-bootstrap falhou}"
+    return 1
 }
 
 SOURCE_APP="$(resolve_source_app "${1:-}")" || {
@@ -126,38 +195,47 @@ TARGET_APP="$INSTALL_DIR/$APP_NAME"
 BINARY="$TARGET_APP/Contents/MacOS/ControlDeskAgent"
 SOURCE_VER="$(read_bundle_version "$SOURCE_APP")"
 TARGET_VER="$(read_bundle_version "$TARGET_APP")"
+SRC_CANON="$(canonical_path "$SOURCE_APP")"
+DST_CANON=""
+if [[ -d "$TARGET_APP" ]]; then
+    DST_CANON="$(canonical_path "$TARGET_APP")"
+fi
 NEEDS_COPY=false
 
 if [[ ! -d "$TARGET_APP" ]]; then
     echo "→ Instalação inicial (versão $SOURCE_VER)"
     NEEDS_COPY=true
-elif version_newer_than "$SOURCE_VER" "$TARGET_VER"; then
-    echo "→ Atualizando $TARGET_VER → $SOURCE_VER"
+elif [[ "$SRC_CANON" != "$DST_CANON" ]]; then
+    echo "→ Sincronizando $SOURCE_APP → $TARGET_APP (versão $SOURCE_VER)"
     NEEDS_COPY=true
-elif [[ "$SOURCE_VER" != "$TARGET_VER" ]]; then
-    echo "→ Versão instalada ($TARGET_VER) é igual ou mais recente que a fonte ($SOURCE_VER)"
-    echo "  Mantendo instalação atual em $TARGET_APP"
 else
-    echo "→ Versão $TARGET_VER já instalada em $TARGET_APP"
+    echo "→ Já instalado em $TARGET_APP (versão $TARGET_VER)"
 fi
 
 if [[ "$NEEDS_COPY" == true ]]; then
+    unload_agent
     echo "→ Copiando $SOURCE_APP → $TARGET_APP"
     rm -rf "$TARGET_APP"
     ditto "$SOURCE_APP" "$TARGET_APP"
     TARGET_VER="$(read_bundle_version "$TARGET_APP")"
+    xattr -cr "$TARGET_APP" >/dev/null 2>&1 || true
 fi
 
-ensure_launch_agent "$BINARY"
+if [[ ! -x "$BINARY" ]]; then
+    echo "Binário não encontrado: $BINARY"
+    exit 1
+fi
+
+write_plist "$BINARY"
+load_agent
 
 echo
 echo "✓ Control Desk Agent ($TARGET_VER) — instância única em segundo plano."
 echo "  App: $TARGET_APP"
 echo "  Serviço: ${LABEL} (LaunchAgent)"
-echo "  Porta: 8741 (ou CONTROL_DESK_PORT)"
+echo "  Porta: $PORT"
 echo "  Log: $LOG_DIR/agent.log"
 echo "  PIN: grep pin= $LOG_DIR/agent.log"
-echo "  Configurações: Abrir configurações.command ou CONTROL_DESK_OPEN_SETTINGS=1"
 echo
 echo "Acessibilidade (obrigatório para apps/janelas):"
 echo "  Ajustes → Privacidade e Segurança → Acessibilidade → ControlDeskAgent"

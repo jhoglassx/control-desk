@@ -32,18 +32,21 @@ Especificação completa: **[README.md](README.md)** (índice) e **[spec.md](spe
 
 O `.dmg` sai em:
 
-`agent/build/compose/binaries/main/dmg/`
+`agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.0.2.dmg`
+
+Esse arquivo contém o `.app`, **Instalar em segundo plano.command**, **Abrir configurações.command** e a pasta **Documentacao/**.
 
 ### 2. Instalar (usuário)
 
 1. Abra o DMG
-2. Leia **LEIA-ME.txt** ou a pasta **Documentacao/** (cópia de `docs/`)
+2. Leia **LEIA-ME.txt** ou a pasta **Documentacao/**
 3. **Padrão:** duplo clique em **Instalar em segundo plano.command**
+   - Se o macOS bloquear: botão direito → **Abrir**
    - Copia/atualiza app em `/Applications` (instância única)
    - Registra LaunchAgent (`com.controldesk.agent`)
    - Inicia serviço headless na porta 8741
-3. **Ver PIN/IP:** duplo clique em **Abrir configurações.command**
-4. **ControlDeskAgent.app:** instala/atualiza e encerra (sem janela — use o item 3 para PIN)
+4. **Ver PIN/IP:** duplo clique em **Abrir configurações.command**
+5. **ControlDeskAgent.app:** duplo clique também instala (fica em background; aparece uma notificação)
 
 Scripts no DMG: `Instalar em segundo plano.command`, `Abrir configurações.command`, `Remover serviço.command`.
 
@@ -183,7 +186,8 @@ CONTROL_DESK_SKIP_INSTALL=1 ./gradlew :agent:runDistributable
 | Sintoma | O que fazer |
 |---------|-------------|
 | App abre mas serviço não sobe | `cat ~/.control-desk/install.log` |
-| `Instalar em segundo plano.command` fecha rápido | Terminal: `bash .../install-macos.sh` |
+| `Instalar em segundo plano.command` fecha rápido | Botão direito → Abrir. Terminal: `bash .../install-macos.sh` |
+| Duplo clique no .app não faz nada | App é background (sem Dock). Deve aparecer notificação; senão `cat ~/.control-desk/install.log` |
 | Gatekeeper bloqueia | Botão direito → **Abrir** na primeira vez |
 | Porta 8741 vazia | `launchctl print gui/$(id -u)/com.controldesk.agent` e `cat ~/.control-desk/agent-launchd-error.log` |
 | PIN mostra "—" na janela | Aguarde ou `grep pin= ~/.control-desk/agent.log` |

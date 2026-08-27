@@ -7,6 +7,7 @@ Guia curto para quem instalou pelo `.dmg`. Documentação completa: **[README.md
 ## Instalação (padrão — background)
 
 1. Duplo clique em **Instalar em segundo plano.command**
+   - Se o macOS bloquear: botão direito → **Abrir**
    - Instala ou **atualiza** em `/Applications` (instância única)
    - Um único serviço: `com.controldesk.agent`
    - Nova versão substitui a anterior automaticamente

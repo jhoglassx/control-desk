@@ -133,6 +133,7 @@ Toque → UI otimista (0 ms)
 
 | Regra | Detalhe |
 |-------|---------|
+| Gesto | Deslizar a home para o lado (HorizontalPager) |
 | Cache | Mostrar `buttonsCache` + `audioCache` **imediatamente** |
 | Loading | `isLoadingApps` só se não há cache; nunca grade vazia se havia cache |
 | Settle | Delay mínimo (~180 ms) opcional antes de overwrite com rede |

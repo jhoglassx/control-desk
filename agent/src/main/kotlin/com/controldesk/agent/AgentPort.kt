@@ -15,7 +15,15 @@ object AgentPort {
         "control-desk",
     )
 
+    /**
+     * Gradle `:agent:run` (UI, not bundled) takes over port 8741.
+     * The LaunchAgent / `--headless` process must not bootout itself.
+     */
+    internal fun shouldReplaceOccupant(headless: Boolean, bundled: Boolean): Boolean =
+        !headless && !bundled
+
     fun replaceOccupant(port: Int) {
+        if (!shouldReplaceOccupant(headless = isHeadless(), bundled = isBundled())) return
         val self = ProcessHandle.current().pid()
         val pids = listeningPids(port).filter { it != self }
         if (pids.isEmpty() && !isLaunchAgentLoaded()) return
@@ -140,4 +148,15 @@ object AgentPort {
 
     private fun isMac(): Boolean =
         System.getProperty("os.name").orEmpty().lowercase().contains("mac")
+
+    private fun isHeadless(): Boolean {
+        if (System.getenv("CONTROL_DESK_HEADLESS")?.equals("1", ignoreCase = true) == true) return true
+        if (System.getenv("CONTROL_DESK_HEADLESS")?.equals("true", ignoreCase = true) == true) return true
+        return System.getProperty("control.desk.headless")?.equals("true", ignoreCase = true) == true
+    }
+
+    private fun isBundled(): Boolean {
+        val path = AgentPort::class.java.protectionDomain.codeSource?.location?.path ?: return false
+        return path.contains(".app/Contents")
+    }
 }

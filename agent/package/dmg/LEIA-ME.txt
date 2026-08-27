@@ -1,0 +1,12 @@
+Control Desk Agent
+
+1. Duplo clique em "Instalar em segundo plano.command"
+   (se o macOS bloquear: clique com o botão direito → Abrir)
+2. Ajustes → Privacidade e Segurança → Acessibilidade → ControlDeskAgent
+3. Duplo clique em "Abrir configurações.command" para ver PIN e IP
+4. No celular: Parear PC → IP deste Mac, porta 8741, PIN
+
+O app ControlDeskAgent.app também instala ao dar duplo clique
+(fica em segundo plano, sem ícone no Dock).
+
+Guia: Documentacao/dmg-quick-start.md

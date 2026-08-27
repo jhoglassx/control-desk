@@ -28,7 +28,10 @@ fun main(args: Array<String>) {
 
     if (!runServerHere) {
         if (isMac) {
-            MacBackgroundService.ensureInstalledAndUpdated()
+            val ok = MacBackgroundService.ensureInstalledAndUpdated()
+            if (!ok) {
+                println("[agent] Instalação falhou — veja ~/.control-desk/install.log")
+            }
         }
         if (openSettings) {
             launchAgentSettings(port, exitProcessOnClose = true)

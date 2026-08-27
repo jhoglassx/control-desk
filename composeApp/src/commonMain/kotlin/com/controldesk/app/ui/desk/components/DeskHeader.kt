@@ -1,8 +1,6 @@
 package com.controldesk.app.ui.desk.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -27,19 +24,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.controldesk.app.theme.DeskColors
 import com.controldesk.app.viewmodel.DeskUiState
-import com.controldesk.domain.model.osShortLabel
+import com.controldesk.domain.model.PairedHost
 
 @Composable
 fun DeskHeader(
     uiState: DeskUiState,
+    host: PairedHost?,
+    isCurrentPage: Boolean,
+    pageIndex: Int,
     onRefresh: () -> Unit,
     onManageHosts: () -> Unit,
     onPairHost: () -> Unit,
-    onSelectHost: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val host = uiState.selectedHost
     val (dot, status) = when {
+        !isCurrentPage -> {
+            val cached = host?.id?.let { uiState.cachedButtons[it] }.orEmpty()
+            if (cached.isNotEmpty()) DeskColors.Live to "Online" else DeskColors.Idle to "—"
+        }
         uiState.isLoadingApps -> DeskColors.Warning to "Sincronizando"
         !uiState.hasHosts -> DeskColors.Idle to "Offline"
         uiState.listHint != null && uiState.buttons.isEmpty() ->
@@ -79,7 +81,7 @@ fun DeskHeader(
                     )
                 }
             }
-            TextButton(onClick = onRefresh, enabled = !uiState.isLoadingApps) {
+            TextButton(onClick = onRefresh, enabled = !uiState.isLoadingApps && isCurrentPage) {
                 Text("↻", color = if (uiState.isLoadingApps) DeskColors.TextMuted else DeskColors.TextPrimary, fontSize = 18.sp)
             }
             TextButton(onClick = onManageHosts) { Text("Hosts", color = DeskColors.TextPrimary, fontSize = 13.sp) }
@@ -88,22 +90,19 @@ fun DeskHeader(
         if (uiState.hosts.size > 1) {
             Spacer(Modifier.height(8.dp))
             Row(
-                Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                uiState.hosts.forEachIndexed { index, item ->
-                    val selected = index == uiState.selectedHostIndex
-                    Text(
-                        "${item.name} · ${item.osType.osShortLabel()}",
-                        color = if (selected) DeskColors.TextPrimary else DeskColors.TextMuted,
-                        fontSize = 12.sp,
-                        modifier = Modifier
+                uiState.hosts.forEachIndexed { index, _ ->
+                    Box(
+                        Modifier
+                            .padding(horizontal = 3.dp)
+                            .size(if (index == pageIndex) 8.dp else 6.dp)
                             .background(
-                                if (selected) DeskColors.AccentSoft else DeskColors.SurfaceRaised,
-                                RoundedCornerShape(20.dp),
-                            )
-                            .clickable { onSelectHost(index) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                                if (index == pageIndex) DeskColors.Accent else DeskColors.TextMuted.copy(alpha = 0.45f),
+                                CircleShape,
+                            ),
                     )
                 }
             }

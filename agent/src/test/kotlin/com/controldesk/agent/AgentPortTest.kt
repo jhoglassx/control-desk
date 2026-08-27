@@ -21,4 +21,12 @@ class AgentPortTest {
         assertEquals(emptyList(), AgentPort.parseLsofPids(""))
         assertEquals(listOf(12L), AgentPort.parseLsofPids("12\n12\n"))
     }
+
+    @Test
+    fun launchAgentDoesNotKillItself() {
+        assertFalse(AgentPort.shouldReplaceOccupant(headless = true, bundled = true))
+        assertFalse(AgentPort.shouldReplaceOccupant(headless = true, bundled = false))
+        assertTrue(AgentPort.shouldReplaceOccupant(headless = false, bundled = false))
+        assertFalse(AgentPort.shouldReplaceOccupant(headless = false, bundled = true))
+    }
 }

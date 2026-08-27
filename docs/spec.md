@@ -392,7 +392,7 @@ Documento completo: **[interaction-rules.md](interaction-rules.md)**.
 ./gradlew :composeApp:assembleDebug    # APK Android
 ```
 
-DMG: `agent/build/compose/binaries/main/dmg/`
+DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.0.2.dmg`
 
 ### 9.2 Fluxo do usuário (produção)
 
