@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.controldesk.app.theme.DeskColors
@@ -34,6 +35,7 @@ fun WorkspacePanel(
     onMicChangeFinished: () -> Unit,
     onMicClick: () -> Unit,
     compact: Boolean,
+    tileSize: Dp,
     modifier: Modifier = Modifier,
 ) {
     val focused = buttons.count { it.isActive }
@@ -63,9 +65,9 @@ fun WorkspacePanel(
             modifier = Modifier.padding(top = if (compact) 0.dp else 4.dp, bottom = 8.dp),
         )
         LazyVerticalGrid(
-            columns = GridCells.FixedSize(DeskDesign.TileMinSize.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            columns = GridCells.FixedSize(tileSize),
+            horizontalArrangement = Arrangement.spacedBy(DeskDesign.TileGap.dp),
+            verticalArrangement = Arrangement.spacedBy(DeskDesign.TileGap.dp),
             contentPadding = PaddingValues(bottom = 8.dp),
             modifier = Modifier.fillMaxSize(),
         ) {

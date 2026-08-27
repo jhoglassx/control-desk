@@ -15,7 +15,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import com.controldesk.app.theme.DeskColors
+import com.controldesk.app.theme.DeskDesign
 import com.controldesk.app.ui.desk.components.DeskHeader
 import com.controldesk.app.ui.desk.components.WorkspacePanel
 import com.controldesk.app.viewmodel.DeskUiState
@@ -59,6 +61,11 @@ fun DeskScreen(
         } else {
             BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
                 val landscape = maxWidth > maxHeight
+                val tileSize = (
+                    min(maxWidth, maxHeight) -
+                        DeskDesign.HorizontalPad.dp * 2 -
+                        DeskDesign.TileGap.dp * (DeskDesign.GridColumns - 1)
+                    ) / DeskDesign.GridColumns
                 Column(
                     Modifier
                         .fillMaxSize()
@@ -89,6 +96,7 @@ fun DeskScreen(
                         onMicChangeFinished = onMicChangeFinished,
                         onMicClick = onMicClick,
                         compact = landscape,
+                        tileSize = tileSize,
                         modifier = Modifier.weight(1f),
                     )
                 }
