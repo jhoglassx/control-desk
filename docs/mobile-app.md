@@ -285,10 +285,15 @@ Mantém tile clicado como "Em uso" até:
 
 ### 5.8 Estabilização de lista (`stabilizeActiveState`)
 
-Quando janela ativa muda no poll:
+O app ativo é rastreado **por host**. Trocar de PC (swipe) não reaproveita o `currentActiveId` do Mac anterior.
 
-- Exige **2 polls consecutivos** com mesmo novo `incomingActiveId` antes de aceitar
-- Entre polls 1 e 2: mantém visual do `currentActiveId` (evita flicker)
+Quando janela ativa muda no poll do **mesmo** PC:
+
+- Aceita o novo `incomingActiveId` no primeiro poll (`ACTIVE_CONFIRM_POLLS = 1`)
+- Se o agente não marcar ninguém (`incomingActiveId == null`) e o id anterior **não está** nesta lista, limpa o destaque (não força o ativo do outro PC)
+- Se o id anterior ainda está na lista, mantém o highlight até o próximo poll com flag
+
+No agente macOS (`windowListerVersion` 20), `isActive` usa o app da frente do `NSWorkspace` e a janela `AXMain` visível — não só `windows[0]` do System Events. Em Mac com um monitor isso evita ficar sem tile “em uso”.
 
 ### 5.9 Merge de botões (`preferMerge=true`)
 

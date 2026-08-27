@@ -185,4 +185,78 @@ class DeskViewModelTest {
         assertEquals(false, polled.isActive)
         assertEquals(false, polled.isVisible)
     }
+
+    @Test
+    fun switchingHostHighlightsThatPcActiveWindow() = runTest(dispatcher) {
+        val pc1 = pairedHost("10.0.0.1:8741", "Studio", 0)
+        val pc2 = pairedHost("10.0.0.2:8741", "Laptop", 1)
+        val gateway = FakeAgentGateway(
+            appsByHost = mapOf(
+                pc1.id to listOf(
+                    RunningApp(name = "Chrome", appName = "Chrome", isActive = true, isVisible = true),
+                    RunningApp(name = "Safari", appName = "Safari", isActive = false, isVisible = true),
+                ),
+                pc2.id to listOf(
+                    RunningApp(name = "Notes", appName = "Notes", isActive = true, isVisible = true),
+                    RunningApp(name = "Mail", appName = "Mail", isActive = false, isVisible = true),
+                ),
+            ),
+        )
+        val viewModel = DeskViewModel(
+            hostPreferences = FakeHostPreferences(listOf(pc1, pc2)),
+            agentGateway = gateway,
+            executeGridButton = ExecuteGridButtonUseCase(gateway),
+            iconCache = FakeIconCache(),
+        )
+        advanceUntilIdle()
+        assertEquals(listOf("Chrome"), viewModel.uiState.value.buttons.filter { it.isActive }.map { it.label })
+
+        viewModel.selectHost(1)
+        advanceUntilIdle()
+        assertEquals("Laptop", viewModel.uiState.value.selectedHost?.name)
+        assertEquals(listOf("Notes"), viewModel.uiState.value.buttons.filter { it.isActive }.map { it.label })
+        assertEquals(listOf("Mail", "Notes"), viewModel.uiState.value.buttons.map { it.label })
+
+        viewModel.selectHost(0)
+        advanceUntilIdle()
+        assertEquals(listOf("Chrome"), viewModel.uiState.value.buttons.filter { it.isActive }.map { it.label })
+    }
+
+    @Test
+    fun switchingHostDoesNotKeepStaleActiveWhenAgentOmitsFlag() = runTest(dispatcher) {
+        val pc1 = pairedHost("10.0.0.1:8741", "Studio", 0)
+        val pc2 = pairedHost("10.0.0.2:8741", "Laptop", 1)
+        val gateway = FakeAgentGateway(
+            appsByHost = mapOf(
+                pc1.id to listOf(
+                    RunningApp(name = "Chrome", appName = "Chrome", isActive = true, isVisible = true),
+                ),
+                pc2.id to listOf(
+                    RunningApp(name = "Chrome", appName = "Chrome", isActive = false, isVisible = true),
+                    RunningApp(name = "Notes", appName = "Notes", isActive = false, isVisible = true),
+                ),
+            ),
+        )
+        val viewModel = DeskViewModel(
+            hostPreferences = FakeHostPreferences(listOf(pc1, pc2)),
+            agentGateway = gateway,
+            executeGridButton = ExecuteGridButtonUseCase(gateway),
+            iconCache = FakeIconCache(),
+        )
+        advanceUntilIdle()
+        viewModel.selectHost(1)
+        advanceUntilIdle()
+        assertEquals(emptyList(), viewModel.uiState.value.buttons.filter { it.isActive }.map { it.label })
+        assertEquals(listOf("Chrome", "Notes"), viewModel.uiState.value.buttons.map { it.label })
+    }
+
+    private fun pairedHost(id: String, name: String, order: Int) = PairedHost(
+        id = id,
+        name = name,
+        host = id.substringBefore(':'),
+        port = 8741,
+        osType = OsType.MACOS,
+        sortOrder = order,
+        token = "tok",
+    )
 }

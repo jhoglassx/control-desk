@@ -109,6 +109,7 @@ object MacWindowLister {
         function screenRects() {
           var screens = $.NSScreen.screens;
           var n = Number(screens.count);
+          if (n < 1) return [{ index: 1, x: -50000, y: -50000, w: 100000, h: 100000 }];
           var primaryH = Number(screens.objectAtIndex(0).frame.size.height);
           var out = [];
           for (var i = 0; i < n; i++) {
@@ -137,8 +138,29 @@ object MacWindowLister {
             return ObjC.unwrap(app.bundleURL.path) || '';
           } catch (e) { return ''; }
         }
+        function frontmostApp() {
+          try {
+            var app = $.NSWorkspace.sharedWorkspace.frontmostApplication;
+            return {
+              pid: Number(app.processIdentifier),
+              name: ObjC.unwrap(app.localizedName) || ''
+            };
+          } catch (e) { return { pid: 0, name: '' }; }
+        }
+        function activeWindowIndex(windows) {
+          var fallback = -1;
+          for (var w = 0; w < windows.length; w++) {
+            var isMain = false, isMin = false;
+            try { isMin = windows[w].valueOf().attributes.byName('AXMinimized').value(); } catch (e) {}
+            try { isMain = windows[w].valueOf().attributes.byName('AXMain').value(); } catch (e) {}
+            if (isMain) return w;
+            if (fallback < 0 && !isMin) fallback = w;
+          }
+          return fallback >= 0 ? fallback : 0;
+        }
         function run() {
           var screens = screenRects();
+          var frontApp = frontmostApp();
           var se = Application('System Events');
           var procs = se.applicationProcesses.whose({ backgroundOnly: false })();
           var rows = [];
@@ -146,14 +168,18 @@ object MacWindowLister {
           for (var i = 0; i < procs.length; i++) {
             var p = procs[i];
             var name = p.name();
-            var front = false;
             var pid = 0;
-            try { front = p.frontmost(); } catch (e) {}
             try { pid = p.unixId(); } catch (e) {}
+            var front = (frontApp.pid !== 0 && pid === frontApp.pid) ||
+              (frontApp.name !== '' && name === frontApp.name);
+            if (!front) {
+              try { front = p.frontmost(); } catch (e) {}
+            }
             var path = bundlePath(pid);
             var windows = [];
             try { windows = p.windows(); } catch (e) { windows = []; }
             if (!windows || windows.length === 0) continue;
+            var activeAt = front ? activeWindowIndex(windows) : -1;
             for (var w = 0; w < windows.length; w++) {
               var title = '';
               var minimized = false;
@@ -167,7 +193,7 @@ object MacWindowLister {
               rows.push({
                 appName: name,
                 windowTitle: title,
-                isActive: front && w === 0,
+                isActive: w === activeAt,
                 visible: !minimized,
                 minimized: minimized,
                 windowIndex: w,

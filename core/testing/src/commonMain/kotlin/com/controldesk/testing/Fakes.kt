@@ -28,6 +28,7 @@ class FakeHostPreferences(
 
 class FakeAgentGateway(
     var apps: List<RunningApp> = emptyList(),
+    var appsByHost: Map<String, List<RunningApp>> = emptyMap(),
     var audio: AudioState = AudioState(),
     var failWith: Throwable? = null,
     var removeOnClose: Boolean = true,
@@ -42,7 +43,8 @@ class FakeAgentGateway(
         return value
     }
 
-    override suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp> = result(apps)
+    override suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp> =
+        result(appsByHost[host.id] ?: apps)
     override suspend fun fetchAudio(host: PairedHost): AudioState = result(audio)
     override suspend fun launchApp(host: PairedHost, button: GridButton) {
         result(Unit)
