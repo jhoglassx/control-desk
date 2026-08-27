@@ -7,6 +7,7 @@ data class DeskUiState(
     val hosts: List<PairedHost> = emptyList(),
     val selectedHostIndex: Int = 0,
     val buttons: List<GridButton> = emptyList(),
+    val cachedButtons: Map<String, List<GridButton>> = emptyMap(),
     val isExecuting: Boolean = false,
     val isLoadingApps: Boolean = false,
     val volumeLevel: Int = 50,
@@ -18,4 +19,7 @@ data class DeskUiState(
 ) {
     val selectedHost: PairedHost? get() = hosts.getOrNull(selectedHostIndex)
     val hasHosts: Boolean get() = hosts.isNotEmpty()
+
+    fun buttonsFor(hostId: String): List<GridButton> =
+        if (selectedHost?.id == hostId) buttons else cachedButtons[hostId].orEmpty()
 }

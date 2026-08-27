@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -59,6 +61,21 @@ fun DeskScreen(
                 modifier = Modifier.padding(padding),
             )
         } else {
+            val pagerState = rememberPagerState(
+                initialPage = uiState.selectedHostIndex,
+                pageCount = { uiState.hosts.size },
+            )
+            LaunchedEffect(uiState.selectedHostIndex, uiState.hosts.size) {
+                val target = uiState.selectedHostIndex.coerceIn(0, (uiState.hosts.size - 1).coerceAtLeast(0))
+                if (pagerState.currentPage != target) {
+                    pagerState.scrollToPage(target)
+                }
+            }
+            LaunchedEffect(pagerState.settledPage, uiState.selectedHostIndex) {
+                if (pagerState.settledPage != uiState.selectedHostIndex) {
+                    onSelectHost(pagerState.settledPage)
+                }
+            }
             BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
                 val landscape = maxWidth > maxHeight
                 val tileSize = (
@@ -66,39 +83,49 @@ fun DeskScreen(
                         DeskDesign.HorizontalPad.dp * 2 -
                         DeskDesign.TileGap.dp * (DeskDesign.GridColumns - 1)
                     ) / DeskDesign.GridColumns
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = if (landscape) 12.dp else 16.dp)
-                        .padding(vertical = if (landscape) 8.dp else 12.dp),
-                ) {
-                    DeskHeader(
-                        uiState = uiState,
-                        onRefresh = onRefresh,
-                        onManageHosts = onManageHosts,
-                        onPairHost = onPairHost,
-                        onSelectHost = onSelectHost,
-                    )
-                    Spacer(Modifier.height(if (landscape) 8.dp else 12.dp))
-                    WorkspacePanel(
-                        buttons = uiState.buttons,
-                        listHint = uiState.listHint,
-                        onAppClick = onAppClick,
-                        onAppClose = onAppClose,
-                        volumeLevel = uiState.volumeLevel,
-                        volumeMuted = uiState.volumeMuted,
-                        micLevel = uiState.micLevel,
-                        micMuted = uiState.micMuted,
-                        onVolumeChange = onVolumeChange,
-                        onVolumeChangeFinished = onVolumeChangeFinished,
-                        onMuteClick = onMuteClick,
-                        onMicChange = onMicChange,
-                        onMicChangeFinished = onMicChangeFinished,
-                        onMicClick = onMicClick,
-                        compact = landscape,
-                        tileSize = tileSize,
-                        modifier = Modifier.weight(1f),
-                    )
+                HorizontalPager(
+                    state = pagerState,
+                    userScrollEnabled = uiState.hosts.size > 1,
+                    modifier = Modifier.fillMaxSize(),
+                ) { page ->
+                    val host = uiState.hosts.getOrNull(page)
+                    val current = page == uiState.selectedHostIndex
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = if (landscape) 12.dp else 16.dp)
+                            .padding(vertical = if (landscape) 8.dp else 12.dp),
+                    ) {
+                        DeskHeader(
+                            uiState = uiState,
+                            host = host,
+                            isCurrentPage = current,
+                            pageIndex = page,
+                            onRefresh = onRefresh,
+                            onManageHosts = onManageHosts,
+                            onPairHost = onPairHost,
+                        )
+                        Spacer(Modifier.height(if (landscape) 8.dp else 12.dp))
+                        WorkspacePanel(
+                            buttons = host?.id?.let(uiState::buttonsFor).orEmpty(),
+                            listHint = if (current) uiState.listHint else null,
+                            onAppClick = { if (current) onAppClick(it) },
+                            onAppClose = { if (current) onAppClose(it) },
+                            volumeLevel = uiState.volumeLevel,
+                            volumeMuted = uiState.volumeMuted,
+                            micLevel = uiState.micLevel,
+                            micMuted = uiState.micMuted,
+                            onVolumeChange = { if (current) onVolumeChange(it) },
+                            onVolumeChangeFinished = { if (current) onVolumeChangeFinished() },
+                            onMuteClick = { if (current) onMuteClick() },
+                            onMicChange = { if (current) onMicChange(it) },
+                            onMicChangeFinished = { if (current) onMicChangeFinished() },
+                            onMicClick = { if (current) onMicClick() },
+                            compact = landscape,
+                            tileSize = tileSize,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         }

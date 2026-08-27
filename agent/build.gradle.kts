@@ -41,7 +41,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "ControlDeskAgent"
-            packageVersion = "1.0.0"
+            packageVersion = "1.0.2"
             description = "Control Desk Agent"
             copyright = "Control Desk"
             macOS {
@@ -64,4 +64,37 @@ tasks.register<Exec>("installMacos") {
     dependsOn("packageDistributionForCurrentOS")
     onlyIf { System.getProperty("os.name").orEmpty().lowercase().contains("mac") }
     commandLine("bash", file("package/resources/macos/install-macos.sh").absolutePath)
+}
+
+tasks.register<Exec>("packageInstallerDmg") {
+    group = "distribution"
+    description = "DMG com o .app, .command de instalar/remover e a documentação"
+    dependsOn("packageDistributionForCurrentOS")
+    onlyIf { System.getProperty("os.name").orEmpty().lowercase().contains("mac") }
+    val appDir = layout.buildDirectory.dir("compose/binaries/main/app/ControlDeskAgent.app")
+    val stageDir = layout.buildDirectory.dir("installer-stage")
+    val outFile = layout.buildDirectory.file("compose/binaries/main/dmg/ControlDeskAgent-1.0.2.dmg")
+    inputs.dir(file("package/dmg"))
+    inputs.dir(rootProject.file("docs"))
+    outputs.file(outFile)
+    commandLine("bash", file("package/dmg/build-dmg.sh").absolutePath)
+    doFirst {
+        commandLine(
+            "bash",
+            file("package/dmg/build-dmg.sh").absolutePath,
+            appDir.get().asFile.absolutePath,
+            stageDir.get().asFile.absolutePath,
+            outFile.get().asFile.absolutePath,
+            rootProject.projectDir.absolutePath,
+            file("package/dmg").absolutePath,
+        )
+    }
+}
+
+afterEvaluate {
+    tasks.findByName("packageDmg")?.let { dmg ->
+        val installer = tasks.named("packageInstallerDmg")
+        installer.configure { mustRunAfter(dmg) }
+        dmg.finalizedBy(installer)
+    }
 }

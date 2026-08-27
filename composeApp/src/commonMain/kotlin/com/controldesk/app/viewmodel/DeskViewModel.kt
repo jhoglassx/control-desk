@@ -368,13 +368,15 @@ class DeskViewModel(
         val withPin = applyPinnedFocus(stabilized)
         val hiddenWhileClosing = applyClosingFilter(withPin)
         buttonsCache[host.id] = hiddenWhileClosing
-        if (_uiState.value.selectedHost?.id == host.id) {
-            _uiState.update {
-                it.copy(
-                    buttons = hiddenWhileClosing,
-                    listHint = if (hiddenWhileClosing.isEmpty()) (listHintCache[host.id] ?: ControlDeskError.EMPTY_WINDOWS) else null,
-                )
-            }
+        _uiState.update {
+            val forSelected = it.selectedHost?.id == host.id
+            it.copy(
+                buttons = if (forSelected) hiddenWhileClosing else it.buttons,
+                listHint = if (forSelected) {
+                    if (hiddenWhileClosing.isEmpty()) (listHintCache[host.id] ?: ControlDeskError.EMPTY_WINDOWS) else null
+                } else it.listHint,
+                cachedButtons = buttonsCache.toMap(),
+            )
         }
         currentActiveId = hiddenWhileClosing.firstOrNull { it.isActive }?.id
         if (!preferMerge) {
@@ -540,6 +542,7 @@ class DeskViewModel(
                 micMuted = audio?.micMuted ?: it.micMuted,
                 micLevel = audio?.micLevel?.takeIf { level -> level > 1 } ?: it.micLevel,
                 isLoadingApps = buttons.isEmpty(),
+                cachedButtons = buttonsCache.toMap(),
             )
         }
     }

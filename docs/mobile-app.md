@@ -61,6 +61,8 @@ Layout estilo Steam Deck (topbar + grade de tiles quadrados). Deitado (`maxWidth
 1. **DeskHeader** — topbar compacta (host, status, ações)
 2. **WorkspacePanel** — grade: tiles **Volume** e **Mic**, depois os apps (`weight(1f)`)
 
+Com **mais de um PC pareado**, a home inteira é um pager horizontal: deslizar para o lado troca de computador (header + grade).
+
 **Snackbar:** exibe `uiState.feedback` (erros de ação ou carga); `clearFeedback()` após mostrar.
 
 ### 3.3 DeskHeader
@@ -75,7 +77,7 @@ Topbar de uma linha (sem card grande):
 | **Hosts** | Abre Pair |
 | **+** | Abre Pair |
 
-**Chips de host:** só se `hosts.size > 1` — scroll horizontal abaixo da topbar.
+**Chips de host:** removidos. Com `hosts.size > 1`, **deslizar a home inteira** (HorizontalPager) troca de PC. Pontos abaixo do header indicam a página.
 
 | Condição | Dot | Label |
 |----------|-----|-------|
