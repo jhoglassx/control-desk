@@ -99,6 +99,8 @@ ensure_launch_agent() {
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
     <key>StandardOutPath</key>
     <string>${LOG_DIR}/agent-launchd.log</string>
     <key>StandardErrorPath</key>

@@ -46,7 +46,7 @@ agent            Ktor server + PlatformExecutor por SO
 |------|-------------|------------------------|
 | **Headless (padrão produção)** | `CONTROL_DESK_HEADLESS=1` (LaunchAgent) | Servidor Ktor, mDNS, PIN no log — **sem janela** |
 | **Instalar/atualizar (GUI app)** | Abrir `ControlDeskAgent.app` | Sincroniza instalação em background e **encerra** (sem janela) |
-| **Dev (`./gradlew :agent:run`)** | Sem `.app`, ou `CONTROL_DESK_SKIP_INSTALL=1` | Servidor **neste processo** + janela PIN/IP |
+| **Dev (`./gradlew :agent:run`)** | Sem `.app`, ou `CONTROL_DESK_SKIP_INSTALL=1` | Servidor **neste processo** + janela PIN/IP. **Cmd+Q / Fechar** encerra a UI (sai do Dock) e respawna o agente **headless**. `CONTROL_DESK_NO_RESPAWN=1` desliga o respawn |
 | **Configurações (opcional)** | `Abrir configurações.command`, `--settings` ou `CONTROL_DESK_OPEN_SETTINGS=1` | Instala se necessário + janela PIN/IP (consulta serviço local) |
 
 **Regra de negócio — instalação padrão:**
@@ -55,8 +55,9 @@ agent            Ktor server + PlatformExecutor por SO
 2. **Instância única:** sempre `/Applications/ControlDeskAgent.app` + um LaunchAgent `com.controldesk.agent`.
 3. **Atualização:** nova versão no DMG **substitui** a instalada (compara `CFBundleShortVersionString`) e reinicia o serviço.
 4. **Não duplicar:** nunca múltiplos LaunchAgents nem múltiplos apps — `launchctl bootout` antes de `bootstrap`.
-5. **Configurações (opcional):** **Abrir configurações.command** ou `--settings` — janela PIN/IP; fechar **não** para o serviço.
+5. **Configurações (opcional):** **Abrir configurações.command** ou `--settings` — janela PIN/IP; **Cmd+Q / Fechar encerra a janela**; o serviço headless continua **sem ícone no Dock**.
 6. `ControlDeskAgent.app` (duplo clique): instala/atualiza e encerra; use o comando de configurações para ver PIN.
+7. **Outros Macs:** copiar o **mesmo `.dmg`** (ou `./gradlew :agent:packageDmg`) e instalar em cada máquina. `./gradlew :agent:run` **não** é o instalador.
 
 **Regra:** A janela de configurações **não** roda o servidor; consulta `GET /setup` em `127.0.0.1` no processo headless.
 
@@ -64,6 +65,7 @@ agent            Ktor server + PlatformExecutor por SO
 |----------|-----|
 | `CONTROL_DESK_OPEN_SETTINGS=1` | Abre janela após instalar |
 | `CONTROL_DESK_SKIP_INSTALL=1` | Dev: só UI, não altera LaunchAgent |
+| `CONTROL_DESK_NO_RESPAWN=1` | Dev: Ctrl+C não deixa o agente em segundo plano |
 
 ### 3.2 Configuração
 
@@ -74,6 +76,7 @@ agent            Ktor server + PlatformExecutor por SO
 | `CONTROL_DESK_HEADLESS` | `1` no LaunchAgent | Serviço sem UI |
 | `CONTROL_DESK_OPEN_SETTINGS` | `0` (padrão no .app) | `1` ou `--settings` abre janela |
 | `CONTROL_DESK_SKIP_INSTALL` | — | `1` = dev, não altera instalação |
+| `CONTROL_DESK_NO_RESPAWN` | — | `1` = Ctrl+C no `:agent:run` **não** deixa daemon |
 
 ### 3.3 Arquivos no macOS (`~/.control-desk/`)
 
@@ -82,6 +85,7 @@ agent            Ktor server + PlatformExecutor por SO
 | `agent_tokens.txt` | Tokens Bearer (um por linha) |
 | `agent_pin.txt` | PIN ativo (permanece até “Gerar novo PIN”) |
 | `agent.log` | Log headless (`pin=`, hints de IP) |
+| `agent-daemon.log` | stdout do respawn após Ctrl+C no `:agent:run` |
 | `agent-launchd.log` | stdout do LaunchAgent |
 | `agent-launchd-error.log` | stderr do LaunchAgent |
 | `install.log` | Log do script de instalação |
@@ -102,7 +106,9 @@ agent            Ktor server + PlatformExecutor por SO
 |-------------|-------|
 | `RunAtLoad` | `true` — inicia ao login |
 | `KeepAlive` | `true` — reinicia se cair |
+| `ProcessType` | `Background` — não aparece como app em primeiro plano |
 | `EnvironmentVariables` | `CONTROL_DESK_HEADLESS=1` |
+| `LSUIElement` (Info.plist do .app) | `true` — sem ícone no Dock |
 
 **Instalar:** `agent/package/resources/macos/install-macos.sh`  
 **Remover:** `agent/package/resources/macos/uninstall-macos.sh` (mantém `~/.control-desk/`)
@@ -119,7 +125,7 @@ agent            Ktor server + PlatformExecutor por SO
 | PIN | De `/setup` ou fallback `agent_pin.txt` / `grep pin= agent.log` |
 | Hints de IP | `NetworkInfo.connectionHints(port)` |
 | "Gerar novo PIN" | `POST /setup/new-pin` (só se serviço rodando) |
-| "Fechar" | Encerra só a janela; serviço continua |
+| "Fechar" / Cmd+Q | Encerra a janela e o processo de UI; o serviço headless continua sem Dock |
 
 **Hints de rede:**
 
@@ -378,7 +384,8 @@ Documento completo: **[interaction-rules.md](interaction-rules.md)**.
 ### 9.1 Build
 
 ```bash
-./gradlew :agent:packageDmg              # DMG instalador
+./gradlew :agent:packageDmg              # DMG instalador (copie para outros Macs)
+./gradlew :agent:installMacos            # Neste Mac: gera .app e registra LaunchAgent
 ./gradlew :agent:packageDistributionForCurrentOS
 ./gradlew :agent:run                      # Dev: servidor + janela PIN/IP
 ./gradlew :agent:runDistributable        # Dev: .app (use se a janela do :run não aparecer)

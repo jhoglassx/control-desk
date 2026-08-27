@@ -56,11 +56,7 @@ fun launchAgentSettings(port: Int, exitProcessOnClose: Boolean = true) {
                     Button(onClick = ::exitApplication) { Text("Fechar") }
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        if (exitProcessOnClose) {
-                            "Fechar esta janela não para o serviço."
-                        } else {
-                            "Fechar esta janela deixa o serviço no terminal. Ctrl+C para parar."
-                        },
+                        "Fechar ou Cmd+Q encerra esta janela. O agente continua em segundo plano, sem ícone no Dock.",
                     )
                 }
             }

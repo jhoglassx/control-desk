@@ -15,7 +15,7 @@ Guia curto para quem instalou pelo `.dmg`. Documentação completa: **[README.md
 
 2. Duplo clique em **Abrir configurações.command**
    - Janela com PIN, IP e status
-   - Fechar a janela **não** para o serviço
+   - Fechar a janela **ou Cmd+Q** encerra a UI; o serviço continua em segundo plano (sem Dock)
 
 **ControlDeskAgent.app:** instala/atualiza em background e encerra (sem janela). Use **Abrir configurações** para ver o PIN.
 

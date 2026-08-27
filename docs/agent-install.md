@@ -13,7 +13,8 @@ Especificação completa: **[README.md](README.md)** (índice) e **[spec.md](spe
 | **Instalar em segundo plano.command** (padrão) | Instala/atualiza serviço headless, sem janela |
 | **Abrir configurações.command** | Instala se necessário + janela PIN/IP |
 | **ControlDeskAgent.app** | Instala/atualiza em background e encerra |
-| Fechar janela de configurações | Serviço **continua** |
+| Fechar janela de configurações / Cmd+Q | UI some (sai do Dock). Serviço headless **continua** |
+| Ctrl+C em `./gradlew :agent:run` | Processo do Gradle encerra; agente **respawna** headless (use `CONTROL_DESK_NO_RESPAWN=1` para parar) |
 | Nova versão no DMG | Substitui app em `/Applications` e reinicia serviço |
 | Reinstalar mesma versão | Mantém app; garante LaunchAgent ativo |
 
@@ -65,12 +66,17 @@ Sem isso, a lista de apps/janelas fica vazia no celular.
 
 ---
 
-## Instalação via terminal (dev)
+## Instalação via terminal (dev / este Mac)
+
+```bash
+./gradlew :agent:installMacos
+```
+
+Isso gera o `.app` e registra o LaunchAgent (`KeepAlive` + `RunAtLoad`). Equivale a:
 
 ```bash
 ./gradlew :agent:packageDistributionForCurrentOS
-chmod +x agent/scripts/install-macos.sh
-./agent/scripts/install-macos.sh
+bash agent/package/resources/macos/install-macos.sh
 ```
 
 Equivalente ao script dentro do app:
@@ -89,6 +95,7 @@ bash /Applications/ControlDeskAgent.app/Contents/app/resources/install-macos.sh
 | Ver PIN / IP | Abrir `ControlDeskAgent.app` ou `cat ~/.control-desk/agent.log` |
 | Abrir configurações | **Abrir configurações.command** ou `CONTROL_DESK_OPEN_SETTINGS=1 open -a ControlDeskAgent --args --settings` |
 | Parar serviço | `launchctl bootout gui/$(id -u)/com.controldesk.agent` |
+| Parar daemon do `:agent:run` | `kill $(lsof -t -iTCP:8741 -sTCP:LISTEN)` |
 | Iniciar serviço | `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.controldesk.agent.plist` |
 
 ---
@@ -132,10 +139,13 @@ Desmarque **ControlDeskAgent** em Ajustes → Acessibilidade.
 
 ## Vários Macs
 
-1. Copie o **mesmo `.dmg`** em cada máquina
-2. Em cada Mac: abra **ControlDeskAgent.app** (ou instalar em segundo plano)
-3. Habilite **Acessibilidade** em cada Mac
-4. No celular: pareie cada PC com um nome diferente (`Trabalho`, `Pessoal`, …)
+Não use `./gradlew :agent:run` em cada máquina — isso é só desenvolvimento.
+
+1. Gere o instalador uma vez: `./gradlew :agent:packageDmg`
+2. Copie o **mesmo `.dmg`** em cada Mac
+3. Em cada Mac: **Instalar em segundo plano.command** (LaunchAgent, sobrevive a Cmd+Q, logout e reboot)
+4. Habilite **Acessibilidade** em cada Mac
+5. No celular: pareie cada PC com um nome diferente (`Trabalho`, `Pessoal`, …)
 
 ---
 
@@ -145,9 +155,22 @@ Desmarque **ControlDeskAgent** em Ajustes → Acessibilidade.
 ./gradlew :agent:run
 ```
 
-Abre o servidor na porta **8741** e a janela de configurações (PIN e IP). Só terminal: `--args="--headless"`.
+Abre o servidor na porta **8741** e a janela de configurações (PIN e IP).
 
-Se a janela não aparecer (Gradle daemon no macOS), use o `.app` gerado:
+- **Cmd+Q / Fechar:** a janela e o ícone no Dock somem; o agente respawna `--headless` (log em `~/.control-desk/agent-daemon.log`).
+- **Rodar `:agent:run` de novo:** encerra o processo na porta **8741** e sobe a versão nova.
+- **Ctrl+C:** o Gradle encerra e o agente respawna `--headless` (log em `~/.control-desk/agent-daemon.log`).
+- Para **parar** de verdade: `CONTROL_DESK_NO_RESPAWN=1 ./gradlew :agent:run` e então Ctrl+C, ou `kill $(lsof -t -iTCP:8741 -sTCP:LISTEN)`.
+
+Só terminal: `--args="--headless"`.
+
+Se a janela não aparecer (Gradle daemon no macOS), instale de verdade neste Mac:
+
+```bash
+./gradlew :agent:installMacos
+```
+
+Ou, só para testar o `.app` sem LaunchAgent:
 
 ```bash
 CONTROL_DESK_SKIP_INSTALL=1 ./gradlew :agent:runDistributable
