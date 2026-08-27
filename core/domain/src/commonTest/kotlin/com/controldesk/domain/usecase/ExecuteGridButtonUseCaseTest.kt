@@ -46,6 +46,20 @@ class ExecuteGridButtonUseCaseTest {
     }
 
     @Test
+    fun closeCallsGateway() = runTest {
+        val gateway = FakeAgentGateway()
+        val useCase = ExecuteGridButtonUseCase(gateway)
+        val button = GridButton(
+            id = "1",
+            label = "Safari",
+            actionType = ActionType.REMOTE_CLOSE,
+            payload = mapOf("target" to "Safari"),
+        )
+        useCase(button, host)
+        assertEquals(listOf(button), gateway.closed)
+    }
+
+    @Test
     fun missingTokenIsUnauthorized() = runTest {
         val useCase = ExecuteGridButtonUseCase(FakeAgentGateway())
         val button = GridButton(

@@ -7,6 +7,7 @@ import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.RunningApp
 import com.controldesk.domain.repository.AgentGateway
 import com.controldesk.protocol.AgentApiClient
+import com.controldesk.protocol.AppCloseRequest
 import com.controldesk.protocol.AppLaunchRequest
 import com.controldesk.protocol.BrowserCloseRequest
 import com.controldesk.protocol.BrowserOpenRequest
@@ -39,6 +40,8 @@ class AgentGatewayImpl(
                 browserWindowIndex = info.browserWindowIndex,
                 isBrowserTab = info.isBrowserTab,
                 monitorIndex = info.monitorIndex,
+                isDockPinned = info.isDockPinned,
+                dockIndex = info.dockIndex,
             )
         }
     }
@@ -65,6 +68,18 @@ class AgentGatewayImpl(
                 windowTitle = button.payload["windowTitle"],
                 windowIndex = button.payload["windowIndex"]?.toIntOrNull(),
                 windowNumber = button.payload["windowNumber"]?.toIntOrNull(),
+            ),
+        )
+    }
+
+    override suspend fun closeApp(host: PairedHost, button: GridButton) = mapErrors {
+        requireToken(host)
+        api.closeApp(
+            host.baseUrl(),
+            host.token,
+            AppCloseRequest(
+                target = button.payload.getValue("target"),
+                targetType = button.payload["targetType"] ?: "appName",
             ),
         )
     }

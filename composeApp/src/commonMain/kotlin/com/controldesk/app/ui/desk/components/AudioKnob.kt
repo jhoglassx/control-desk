@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.controldesk.app.theme.DeskColors
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -62,7 +63,7 @@ fun AudioKnob(
     var displayLevel by remember { mutableIntStateOf(level) }
     var remainder by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(level) {
-        if (!dragging) displayLevel = level
+        if (!dragging && abs(displayLevel - level) > 1) displayLevel = level
     }
     val ring = if (muted) DeskColors.Danger else accent
     Box(

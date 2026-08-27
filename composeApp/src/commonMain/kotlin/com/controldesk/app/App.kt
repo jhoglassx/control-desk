@@ -32,6 +32,7 @@ fun App() {
                 onRefresh = deskViewModel::refreshRunningApps,
                 onSelectHost = deskViewModel::selectHost,
                 onAppClick = deskViewModel::onButtonClick,
+                onAppClose = deskViewModel::onAppClose,
                 onVolumeChange = deskViewModel::onVolumeLevelChange,
                 onVolumeChangeFinished = deskViewModel::onVolumeAdjustFinished,
                 onMuteClick = deskViewModel::onVolumeKnobClick,

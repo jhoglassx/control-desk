@@ -14,6 +14,7 @@ data class GridButton(
     val isActive: Boolean = false,
     val isVisible: Boolean = true,
     val monitorIndex: Int = 0,
+    val isDockPinned: Boolean = false,
 )
 
 @Serializable
@@ -48,4 +49,6 @@ data class RunningApp(
     val browserWindowIndex: Int? = null,
     val isBrowserTab: Boolean = false,
     val monitorIndex: Int = 0,
+    val isDockPinned: Boolean = false,
+    val dockIndex: Int = -1,
 )

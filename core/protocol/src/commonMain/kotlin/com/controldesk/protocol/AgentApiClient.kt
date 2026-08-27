@@ -38,6 +38,15 @@ class AgentApiClient(
         }
     }
 
+    suspend fun closeApp(baseUrl: String, token: String, request: AppCloseRequest) {
+        httpClient.post("$baseUrl/apps/close") {
+            timeout { requestTimeoutMillis = COMMAND_TIMEOUT_MS }
+            bearerAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }
+    }
+
     suspend fun openBrowser(baseUrl: String, token: String, request: BrowserOpenRequest) {
         httpClient.post("$baseUrl/browser/open") {
             timeout { requestTimeoutMillis = COMMAND_TIMEOUT_MS }

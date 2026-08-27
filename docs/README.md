@@ -81,8 +81,9 @@ agent            Servidor Ktor + PlatformExecutor
 | `GET /health` | Status |
 | `GET /setup` | PIN e porta (localhost only) |
 | `POST /pair` | Pareamento PIN → token |
-| `GET /apps/running` | Apps com janela visível |
+| `GET /apps/running` | Janelas + apps fixados na Dock |
 | `POST /apps/launch` | Abrir/focar app |
+| `POST /apps/close` | Encerrar app |
 | `POST /browser/open` | Abrir URL |
 | `POST /browser/close` | Fechar navegador |
 | `POST /browser/tabs/switch` | Próxima/anterior aba |

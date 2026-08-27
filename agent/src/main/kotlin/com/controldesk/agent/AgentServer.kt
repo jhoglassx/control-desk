@@ -1,6 +1,7 @@
 package com.controldesk.agent
 
 import com.controldesk.protocol.ActionAck
+import com.controldesk.protocol.AppCloseRequest
 import com.controldesk.protocol.AppLaunchRequest
 import com.controldesk.protocol.BrowserCloseRequest
 import com.controldesk.protocol.BrowserOpenRequest
@@ -64,7 +65,7 @@ class AgentServer(
                             ok = true,
                             version = "1.1.0",
                             os = executor.osName,
-                            windowListerVersion = 17,
+                            windowListerVersion = 19,
                         ),
                     )
                 }
@@ -107,6 +108,11 @@ class AgentServer(
                     post("/apps/launch") {
                         val body = call.receive<AppLaunchRequest>()
                         executor.launchApp(body)
+                        call.respond(ActionAck())
+                    }
+                    post("/apps/close") {
+                        val body = call.receive<AppCloseRequest>()
+                        executor.closeApp(body)
                         call.respond(ActionAck())
                     }
                     post("/browser/open") {

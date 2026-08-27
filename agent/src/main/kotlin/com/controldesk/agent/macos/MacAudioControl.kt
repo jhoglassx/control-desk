@@ -3,19 +3,27 @@ package com.controldesk.agent
 import com.controldesk.protocol.AudioResponse
 import com.controldesk.protocol.MicRequest
 import com.controldesk.protocol.VolumeRequest
+import java.util.concurrent.atomic.AtomicReference
 
 object MacAudioControl {
+    private val lastGood = AtomicReference<AudioResponse?>(null)
+
     fun read(): AudioResponse {
-        val raw = Shell.osascript("get volume settings", timeoutMs = 250)
-        val output = raw.intAfter("output volume:") ?: 50
-        val input = raw.intAfter("input volume:") ?: 75
-        val muted = raw.flagAfter("output muted:")
-        return AudioResponse(
+        val raw = Shell.osascript("get volume settings", timeoutMs = 400)
+        val output = raw.intAfter("output volume:")
+        val input = raw.intAfter("input volume:")
+        val hasMute = raw.contains("output muted", ignoreCase = true)
+        if (output == null || input == null || !hasMute) {
+            return lastGood.get() ?: AudioResponse()
+        }
+        val result = AudioResponse(
             volumeLevel = output.coerceIn(0, 100),
-            volumeMuted = muted,
+            volumeMuted = raw.flagAfter("output muted:"),
             micMuted = input <= 1,
             micLevel = if (input <= 1) 0 else input.coerceIn(0, 100),
         )
+        lastGood.set(result)
+        return result
     }
 
     fun setVolume(request: VolumeRequest) {

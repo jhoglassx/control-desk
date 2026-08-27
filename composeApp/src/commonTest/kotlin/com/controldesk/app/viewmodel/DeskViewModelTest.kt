@@ -73,4 +73,68 @@ class DeskViewModelTest {
         advanceUntilIdle()
         assertEquals("Safari", gateway.launched.last().label)
     }
+
+    @Test
+    fun longPressRemovesTilesAndClosesApp() = runTest(dispatcher) {
+        val host = PairedHost(
+            id = "10.0.2.2:8741",
+            name = "Mac",
+            host = "10.0.2.2",
+            port = 8741,
+            osType = OsType.MACOS,
+            sortOrder = 0,
+            token = "tok",
+        )
+        val gateway = FakeAgentGateway(
+            apps = listOf(
+                RunningApp(name = "Safari", appName = "Safari", isActive = true, isVisible = true),
+                RunningApp(name = "Notes", appName = "Notes", isActive = false, isVisible = true),
+            ),
+        )
+        val viewModel = DeskViewModel(
+            hostPreferences = FakeHostPreferences(listOf(host)),
+            agentGateway = gateway,
+            executeGridButton = ExecuteGridButtonUseCase(gateway),
+            iconCache = FakeIconCache(),
+        )
+        advanceUntilIdle()
+        val safari = viewModel.uiState.value.buttons.first { it.label == "Safari" }
+        viewModel.onAppClose(safari)
+        assertEquals(listOf("Notes"), viewModel.uiState.value.buttons.map { it.label })
+        advanceUntilIdle()
+        assertEquals("Safari", gateway.closed.single().payload["target"])
+        assertEquals(listOf("Notes"), viewModel.uiState.value.buttons.map { it.label })
+    }
+
+    @Test
+    fun closeKeepsActiveAppHiddenWhilePollStillSeesIt() = runTest(dispatcher) {
+        val host = PairedHost(
+            id = "10.0.2.2:8741",
+            name = "Mac",
+            host = "10.0.2.2",
+            port = 8741,
+            osType = OsType.MACOS,
+            sortOrder = 0,
+            token = "tok",
+        )
+        val gateway = FakeAgentGateway(
+            apps = listOf(
+                RunningApp(name = "Safari", appName = "Safari", isActive = true, isVisible = true),
+                RunningApp(name = "Notes", appName = "Notes", isActive = false, isVisible = true),
+            ),
+            removeOnClose = false,
+        )
+        val viewModel = DeskViewModel(
+            hostPreferences = FakeHostPreferences(listOf(host)),
+            agentGateway = gateway,
+            executeGridButton = ExecuteGridButtonUseCase(gateway),
+            iconCache = FakeIconCache(),
+        )
+        advanceUntilIdle()
+        val safari = viewModel.uiState.value.buttons.first { it.label == "Safari" }
+        viewModel.onAppClose(safari)
+        advanceUntilIdle()
+        assertEquals("Safari", gateway.closed.single().payload["target"])
+        assertEquals(listOf("Notes"), viewModel.uiState.value.buttons.map { it.label })
+    }
 }

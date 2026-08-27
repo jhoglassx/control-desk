@@ -23,5 +23,6 @@ enum class ActionType {
     REMOTE_BROWSER_TAB,
     REMOTE_VOLUME,
     REMOTE_MIC_MUTE,
+    REMOTE_CLOSE,
     OPEN_URL,
 }
