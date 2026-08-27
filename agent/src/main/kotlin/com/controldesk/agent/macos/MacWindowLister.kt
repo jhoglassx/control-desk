@@ -9,10 +9,12 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
 object MacWindowLister {
     private val cache = AtomicReference<List<RunningAppInfo>>(emptyList())
+    private val suppressedUntil = ConcurrentHashMap<String, Long>()
     private val ignored = setOf(
         "ControlDeskAgent", "AutoFill", "coreauthd", "loginwindow", "Wallpaper",
         "Window Server", "SystemUIServer", "Dock", "Control Center", "NotificationCenter",
@@ -23,7 +25,7 @@ object MacWindowLister {
         Thread({
             while (true) {
                 runCatching {
-                    val windows = query()
+                    val windows = query().filterNot { isSuppressed(it.appName) }
                     cache.set(windows)
                     MacAppIconResolver.resolveMissing(windows.map { it.appName }, limit = 3)
                 }
@@ -35,8 +37,15 @@ object MacWindowLister {
         }
     }
 
+    fun suppress(appName: String, ms: Long = 3_000L) {
+        val key = appName.trim().lowercase()
+        if (key.isEmpty()) return
+        suppressedUntil[key] = System.currentTimeMillis() + ms
+        cache.updateAndGet { windows -> windows.filterNot { it.appName.equals(appName, ignoreCase = true) } }
+    }
+
     fun list(includeIcons: Boolean): List<RunningAppInfo> {
-        val snapshot = cache.get().ifEmpty { query() }
+        val snapshot = cache.get().ifEmpty { query() }.filterNot { isSuppressed(it.appName) }
         val merged = MacChromeTabs.mergeTabs(snapshot)
         val withDock = MacDockApps.merge(merged)
         return withDock.map { app ->
@@ -79,6 +88,16 @@ object MacWindowLister {
             )
         }
         return windows
+    }
+
+    private fun isSuppressed(appName: String): Boolean {
+        val key = appName.lowercase()
+        val until = suppressedUntil[key] ?: return false
+        if (System.currentTimeMillis() >= until) {
+            suppressedUntil.remove(key)
+            return false
+        }
+        return true
     }
 
     private fun JsonObject.str(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull

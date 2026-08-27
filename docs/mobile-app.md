@@ -90,7 +90,7 @@ Topbar de uma linha (sem card grande):
 
 **Seção:** "Apps no Mac" (subtitle dinâmico).
 
-**Layout:** `LazyVerticalGrid` Adaptive — portrait `96.dp`, landscape `168.dp`. Tiles são **quadrados** (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**.
+**Layout:** `LazyVerticalGrid` com `FixedSize(96.dp)` em portrait e landscape — os cards **não crescem** na rotação; só cabe mais colunas. Tiles quadrados (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**.
 
 **Subtitle:** `{N} apps · {focused} em uso · M1: n · M2: n · {dock} na Dock · {hidden} ocultos`
 
@@ -265,10 +265,10 @@ Resumo:
 
 1. Lê `payload.target`; Finder/sistema → snackbar, sem HTTP
 2. Tile só da Dock (já fechado) → no-op
-3. UI otimista: remove janelas daquele `target` e **segura** o app fora da grade (~4 s) para o poll não recolocar
-4. `POST /apps/close` em background (`NSRunningApplication.terminate`)
+3. UI otimista: janelas daquele `target` viram o atalho da Dock (esmaecido); o ícone **não some**
+4. `POST /apps/close` em background (SIGTERM no processo; o agente ignora a janela antiga por ~2 s)
 5. **Não** dispara clique/foco; toque longo e toque curto são exclusivos
-6. Quando o agente confirma que o app saiu, mostra o ícone da Dock se estiver fixado
+6. Poll com janela stale **não** recoloca o app como ativo; só o atalho da Dock
 7. **Falha:** solta o hold + snackbar
 
 ### 5.7 Pinned focus

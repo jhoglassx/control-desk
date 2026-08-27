@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.controldesk.data.RunningAppsGridBuilder
 import com.controldesk.domain.error.ControlDeskError
+import com.controldesk.domain.model.ActionType
 import com.controldesk.domain.model.AudioState
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
@@ -57,6 +58,7 @@ class DeskViewModel(
     private var pinnedTarget: String? = null
     private var pinnedUntil: TimeMark? = null
     private val closingUntil = mutableMapOf<String, TimeMark>()
+    private val closingPlaceholders = mutableMapOf<String, GridButton>()
     private var lastIncomingActiveId: String? = null
     private var incomingActiveStreak = 0
     private var currentActiveId: String? = null
@@ -149,9 +151,20 @@ class DeskViewModel(
         }
         if (button.isDockPinned && !button.isVisible && !button.isActive) return
         clearPinnedFocus()
-        closingUntil[target.lowercase()] = TimeSource.Monotonic.markNow() + CLOSE_HOLD_MS.milliseconds
+        if (currentActiveId == button.id || button.isActive) {
+            currentActiveId = null
+            lastIncomingActiveId = null
+            incomingActiveStreak = 0
+        }
+        val key = target.lowercase()
+        closingUntil[key] = TimeSource.Monotonic.markNow() + CLOSE_HOLD_MS.milliseconds
+        if (button.isDockPinned) {
+            closingPlaceholders[key] = dockPlaceholder(button)
+        } else {
+            closingPlaceholders.remove(key)
+        }
         _uiState.update { state ->
-            state.copy(buttons = applyClosingFilter(state.buttons.filterNot { matchesCloseTarget(it, target) }))
+            state.copy(buttons = replaceClosedApp(state.buttons, target))
         }
         viewModelScope.launch {
             try {
@@ -159,7 +172,8 @@ class DeskViewModel(
                 delay(CLOSE_CONFIRM_MS)
                 refreshAppsSilent(host)
             } catch (error: Throwable) {
-                closingUntil.remove(target.lowercase())
+                closingUntil.remove(key)
+                closingPlaceholders.remove(key)
                 _uiState.update { it.copy(feedback = error.message ?: "Falha ao fechar app") }
                 refreshAppsSilent(host)
             }
@@ -349,6 +363,7 @@ class DeskViewModel(
     }
 
     private fun publishButtons(host: PairedHost, incoming: List<GridButton>, preferMerge: Boolean) {
+        confirmClosedApps(incoming)
         val stabilized = stabilizeActiveState(incoming)
         val withPin = applyPinnedFocus(stabilized)
         val hiddenWhileClosing = applyClosingFilter(withPin)
@@ -369,12 +384,12 @@ class DeskViewModel(
     }
 
     private fun stabilizeActiveState(incoming: List<GridButton>): List<GridButton> {
-        val incomingActiveId = incoming.firstOrNull { it.isActive }?.id
+        val incomingActiveId = incoming.firstOrNull { it.isActive && !it.isDockPlaceholder() }?.id
         if (incomingActiveId == currentActiveId || incomingActiveId == null) {
             lastIncomingActiveId = incomingActiveId
             incomingActiveStreak = 0
             return incoming.map { button ->
-                button.copy(isActive = button.id == currentActiveId)
+                button.copy(isActive = !button.isDockPlaceholder() && button.id == currentActiveId)
             }.let { buttons ->
                 if (currentActiveId == null) incoming else buttons
             }
@@ -389,7 +404,7 @@ class DeskViewModel(
             currentActiveId = incomingActiveId
             incoming
         } else {
-            incoming.map { it.copy(isActive = it.id == currentActiveId) }
+            incoming.map { it.copy(isActive = !it.isDockPlaceholder() && it.id == currentActiveId) }
         }
     }
 
@@ -405,7 +420,7 @@ class DeskViewModel(
             return buttons
         }
         return buttons.map {
-            val match = matchesPinned(it)
+            val match = matchesPinned(it) && !it.isDockPlaceholder()
             it.copy(isActive = match, isVisible = if (match) true else it.isVisible)
         }
     }
@@ -416,37 +431,75 @@ class DeskViewModel(
     }
 
     private fun isClosing(target: String): Boolean {
-        val until = closingUntil[target.lowercase()] ?: return false
-        if (until.hasPassedNow()) {
-            closingUntil.remove(target.lowercase())
-            return false
+        pruneExpiredCloses()
+        return closingUntil.containsKey(target.lowercase())
+    }
+
+    private fun pruneExpiredCloses() {
+        val expired = closingUntil.filterValues { it.hasPassedNow() }.keys
+        expired.forEach {
+            closingUntil.remove(it)
+            closingPlaceholders.remove(it)
         }
-        return true
+    }
+
+    private fun confirmClosedApps(incoming: List<GridButton>) {
+        pruneExpiredCloses()
+        closingUntil.keys.toList().forEach { key ->
+            val stillRunning = incoming.any { matchesCloseTarget(it, key) && !it.isDockPlaceholder() }
+            if (!stillRunning) {
+                closingUntil.remove(key)
+                closingPlaceholders.remove(key)
+            }
+        }
     }
 
     private fun applyClosingFilter(buttons: List<GridButton>): List<GridButton> {
+        pruneExpiredCloses()
         if (closingUntil.isEmpty()) return buttons
-        val released = mutableSetOf<String>()
         val filtered = buttons.filter { button ->
             val target = button.payload["target"] ?: return@filter true
-            val key = target.lowercase()
-            val until = closingUntil[key] ?: return@filter true
-            if (until.hasPassedNow()) {
-                released += key
-                return@filter true
-            }
-            if (button.isDockPlaceholder()) {
-                released += key
-                return@filter true
-            }
-            false
+            if (!closingUntil.containsKey(target.lowercase())) return@filter true
+            button.isDockPlaceholder()
+        }.map { button ->
+            if (button.isDockPlaceholder()) button.copy(isActive = false, isVisible = false) else button
         }
-        released.forEach { closingUntil.remove(it) }
-        return filtered
+        val missing = closingUntil.keys.filter { key ->
+            filtered.none { matchesCloseTarget(it, key) }
+        }
+        if (missing.isEmpty()) return filtered
+        val extras = missing.mapNotNull { closingPlaceholders[it] }
+        return filtered + extras
     }
 
-    private fun GridButton.isDockPlaceholder(): Boolean =
-        isDockPinned && !isVisible && !isActive && payload["windowNumber"] == null && id.endsWith("-dock")
+    private fun replaceClosedApp(buttons: List<GridButton>, target: String): List<GridButton> {
+        val index = buttons.indexOfFirst { matchesCloseTarget(it, target) }.takeIf { it >= 0 } ?: buttons.size
+        val without = buttons.filterNot { matchesCloseTarget(it, target) }
+        val placeholder = closingPlaceholders[target.lowercase()] ?: return without
+        return without.toMutableList().apply { add(index.coerceAtMost(size), placeholder.copy(isActive = false, isVisible = false)) }
+    }
+
+    private fun dockPlaceholder(button: GridButton): GridButton {
+        val target = button.payload.getValue("target")
+        return GridButton(
+            id = "app-$target-dock",
+            label = target,
+            actionType = ActionType.REMOTE_LAUNCH,
+            payload = mapOf("target" to target, "targetType" to "appName"),
+            row = button.row,
+            col = button.col,
+            iconBase64 = button.iconBase64,
+            isActive = false,
+            isVisible = false,
+            monitorIndex = 0,
+            isDockPinned = true,
+        )
+    }
+
+    private fun GridButton.isDockPlaceholder(): Boolean {
+        if (id.endsWith("-dock")) return true
+        return isDockPinned && !isVisible && payload["windowNumber"] == null && payload["windowIndex"] == null
+    }
 
     private fun matchesPinned(button: GridButton): Boolean {
         if (button.id == pinnedButtonId) return true
@@ -606,7 +659,7 @@ class DeskViewModel(
         const val MISSING_ICON_CHECK_EVERY = 2
         const val COMMAND_FIRST_MS = 40L
         const val CLOSE_HOLD_MS = 4_000L
-        const val CLOSE_CONFIRM_MS = 700L
+        const val CLOSE_CONFIRM_MS = 200L
         val BLOCKED_QUIT = setOf(
             "Finder", "Dock", "SystemUIServer", "Window Server", "Control Center",
             "NotificationCenter", "loginwindow", "Wallpaper", "Spotlight",

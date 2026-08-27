@@ -105,9 +105,9 @@ Toque → UI otimista (0 ms)
 | Regra | Detalhe |
 |-------|---------|
 | Gesto | Toque longo no tile (**não** dispara foco) |
-| Otimista | Remove da grade todos os tiles com o mesmo `target` e segura fora até o Mac confirmar |
-| Poll | **Não** recoloca o app enquanto o close está em hold (~4 s) |
-| Dock | Se o app está fixado, o poll só mostra o tile esmaecido depois que ele realmente saiu |
+| Otimista | Janelas daquele `target` viram o atalho da Dock (esmaecido); o ícone **não some** da grade |
+| Poll | Janela stale **não** volta como ativo enquanto o close está em hold |
+| Dock | O atalho permanece; depois que o Mac confirma o quit, continua esmaecido |
 | Erro | Solta o hold + snackbar |
 | Bloqueados | Finder e processos de sistema: snackbar, sem HTTP |
 

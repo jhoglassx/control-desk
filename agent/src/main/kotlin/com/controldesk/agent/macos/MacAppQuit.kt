@@ -1,43 +1,59 @@
 package com.controldesk.agent
 
+import java.io.File
+
 object MacAppQuit {
     private val blocked = setOf(
         "Finder", "Dock", "SystemUIServer", "Window Server", "Control Center",
         "NotificationCenter", "loginwindow", "Wallpaper", "Spotlight",
         "ControlDeskAgent", "Control Desk Agent",
     )
+    private val helpers = listOf(" helper", "/helper", "crashpad", "renderer", "gpu", "plugin-container")
 
     fun quit(appName: String) {
         val app = appName.trim()
         if (app.isEmpty() || app in blocked) return
-        val name = Shell.escape(app)
-        Shell.spawn(
-            "/usr/bin/osascript",
-            "-l",
-            "JavaScript",
-            "-e",
-            """
-            ObjC.import('AppKit');
-            var original = "$name";
-            var needle = original.toLowerCase();
-            var apps = $.NSWorkspace.sharedWorkspace.runningApplications;
-            var n = Number(apps.count);
-            var hit = false;
-            for (var i = 0; i < n; i++) {
-              var a = apps.objectAtIndex(i);
-              if (Number(a.activationPolicy) !== 0) continue;
-              var loc = (ObjC.unwrap(a.localizedName) || '').toLowerCase();
-              var path = '';
-              try { path = ObjC.unwrap(a.bundleURL.path) || ''; } catch (e) {}
-              var base = path.split('/').pop().replace(/\.app${'$'}/i, '').toLowerCase();
-              if (loc !== needle && base !== needle) continue;
-              a.terminate();
-              hit = true;
+        MacWindowLister.suppress(app, ms = 2_000L)
+        val bundle = MacAppIconResolver.pathFor(app)
+        val exe = bundle?.let { mainExecutable(it) }
+        val self = ProcessHandle.current().pid()
+        var signaled = 0
+        ProcessHandle.allProcesses().forEach { handle ->
+            if (handle.pid() == self) return@forEach
+            val command = handle.info().command().orElse("")
+            if (!matchesMainApp(command, app, bundle, exe)) return@forEach
+            if (handle.destroy()) signaled += 1
+        }
+        if (signaled == 0) {
+            Shell.spawn("/usr/bin/killall", "-TERM", app)
+            if (exe != null && !exe.equals(app, ignoreCase = true)) {
+                Shell.spawn("/usr/bin/killall", "-TERM", exe)
             }
-            if (!hit) {
-              try { Application(original).quit(); } catch (e) {}
-            }
-            """.trimIndent(),
-        )
+        }
+    }
+
+    internal fun matchesMainApp(command: String, app: String, bundle: String?, exe: String?): Boolean {
+        if (command.isBlank()) return false
+        val lower = command.lowercase()
+        if (helpers.any { lower.contains(it) }) return false
+        if (bundle != null && command.startsWith("$bundle/Contents/MacOS/")) {
+            val leaf = command.substringAfterLast('/')
+            return exe == null ||
+                leaf.equals(exe, ignoreCase = true) ||
+                leaf.equals(app, ignoreCase = true)
+        }
+        val leaf = command.substringAfterLast('/')
+        return leaf.equals(app, ignoreCase = true) ||
+            (exe != null && leaf.equals(exe, ignoreCase = true))
+    }
+
+    private fun mainExecutable(bundlePath: String): String? {
+        val macos = File(bundlePath, "Contents/MacOS")
+        if (!macos.isDirectory) return null
+        val byName = File(macos, File(bundlePath).name.removeSuffix(".app"))
+        if (byName.isFile) return byName.name
+        return macos.listFiles()
+            ?.firstOrNull { it.isFile && !it.name.contains("Helper", ignoreCase = true) }
+            ?.name
     }
 }

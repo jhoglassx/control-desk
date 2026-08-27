@@ -284,7 +284,7 @@ Ver `core/protocol/.../AgentDtos.kt`.
 
 ### 6.3.1 macOS — encerrar app
 
-- `POST /apps/close` → `NSRunningApplication.terminate()` (app regular, inclusive o da frente); fallback AppleScript `quit`
+- `POST /apps/close` → SIGTERM no processo principal (`ProcessHandle.destroy` / `killall`); sem osascript. Helpers (Chrome Helper, etc.) não são alvo.
 - Bloqueados: Finder, Dock, SystemUIServer, agente, loginwindow, Spotlight, etc.
 
 ### 6.4 macOS — navegador
