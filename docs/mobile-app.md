@@ -90,7 +90,7 @@ Topbar de uma linha (sem card grande):
 
 **Seção:** "Apps no Mac" (subtitle dinâmico).
 
-**Layout:** `LazyVerticalGrid` com `FixedSize(96.dp)` em portrait e landscape — os cards **não crescem** na rotação; só cabe mais colunas. Tiles quadrados (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**.
+**Layout:** `LazyVerticalGrid` com `FixedSize` calculado para **4 colunas no portrait**; na rotação o card **não cresce**, só cabem mais colunas. Tiles quadrados (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**.
 
 **Subtitle:** `{N} apps · {focused} em uso · M1: n · M2: n · {dock} na Dock · {hidden} ocultos`
 

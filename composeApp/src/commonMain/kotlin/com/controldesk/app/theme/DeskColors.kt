@@ -29,5 +29,7 @@ object DeskColors {
 }
 
 object DeskDesign {
-    const val TileMinSize = 96
+    const val GridColumns = 4
+    const val TileGap = 8
+    const val HorizontalPad = 16
 }
