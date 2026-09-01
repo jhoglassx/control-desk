@@ -101,6 +101,9 @@ class DeskViewModel(
 
     fun selectHost(index: Int) {
         val host = _uiState.value.hosts.getOrNull(index) ?: return
+        clearPinnedFocus()
+        closingUntil.clear()
+        closingPlaceholders.clear()
         bindActiveTracking(host.id)
         restoreCache(host)
         _uiState.update { it.copy(selectedHostIndex = index) }
@@ -325,8 +328,10 @@ class DeskViewModel(
                     val buttons = RunningAppsGridBuilder.build(apps, memoryIcons)
                     publishButtons(host, buttons, preferMerge = false)
                     val hint = listHintFor(buttons, accessibility)
-                    _uiState.update { it.copy(isLoadingApps = false, listHint = hint) }
-                    cacheListHint(host)
+                    listHintCache[host.id] = hint
+                    _uiState.update {
+                        it.copy(isLoadingApps = false, listHint = hint, cachedListHints = listHintCache.toMap())
+                    }
                     if (buttons.any { it.iconBase64.isNullOrBlank() }) {
                         val withIcons = runCatching { agentGateway.loadRunningApps(host, includeIcons = true) }.getOrNull()
                         if (withIcons != null) {
@@ -360,12 +365,14 @@ class DeskViewModel(
             return
         }
         stopAutoRefresh()
+        listHintCache[host.id] = message
         _uiState.update {
             it.copy(
                 buttons = emptyList(),
                 isLoadingApps = false,
                 listHint = message,
                 feedback = if (showLoading) message else it.feedback,
+                cachedListHints = listHintCache.toMap(),
             )
         }
     }
@@ -378,8 +385,9 @@ class DeskViewModel(
         } else {
             buttonsCache[host.id].orEmpty()
         }
-        val merged = RunningAppsGridBuilder.merge(baseline, incoming, preferMerge = true)
-        publishButtons(host, merged, preferMerge = true)
+        val preferMerge = baseline.isNotEmpty()
+        val merged = RunningAppsGridBuilder.merge(baseline, incoming, preferMerge = preferMerge)
+        publishButtons(host, merged, preferMerge = preferMerge)
     }
 
     private fun publishButtons(host: PairedHost, incoming: List<GridButton>, preferMerge: Boolean) {
@@ -403,12 +411,16 @@ class DeskViewModel(
         }
         _uiState.update {
             val forSelected = it.selectedHost?.id == host.id
+            val hint = if (hiddenWhileClosing.isEmpty()) {
+                listHintCache[host.id] ?: if (forSelected) it.listHint else null
+            } else {
+                null
+            }
             it.copy(
                 buttons = if (forSelected) hiddenWhileClosing else it.buttons,
-                listHint = if (forSelected) {
-                    if (hiddenWhileClosing.isEmpty()) (listHintCache[host.id] ?: ControlDeskError.EMPTY_WINDOWS) else null
-                } else it.listHint,
+                listHint = if (forSelected) hint else it.listHint,
                 cachedButtons = buttonsCache.toMap(),
+                cachedListHints = listHintCache.toMap(),
             )
         }
     }
@@ -620,6 +632,7 @@ class DeskViewModel(
                 micLevel = audio?.micLevel?.takeIf { level -> level > 1 } ?: it.micLevel,
                 isLoadingApps = buttons.isEmpty(),
                 cachedButtons = buttonsCache.toMap(),
+                cachedListHints = listHintCache.toMap(),
             )
         }
     }
@@ -652,10 +665,6 @@ class DeskViewModel(
         if (accessibilityEnabled == false) return ControlDeskError.ACCESSIBILITY_OFF
         if (buttons.isEmpty()) return ControlDeskError.EMPTY_WINDOWS
         return null
-    }
-
-    private fun cacheListHint(host: PairedHost) {
-        listHintCache[host.id] = _uiState.value.listHint
     }
 
     private fun persistNewIcons(buttons: List<GridButton>) {
