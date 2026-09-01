@@ -1,5 +1,6 @@
 package com.controldesk.agent
 
+import com.controldesk.logging.ControlDeskLog
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -155,11 +156,6 @@ object AgentKeepAlive {
         System.getProperty("os.name").orEmpty().lowercase().contains("win")
 
     private fun log(message: String) {
-        val logFile = File(File(System.getProperty("user.home"), ".control-desk"), "agent.log")
-        runCatching {
-            logFile.parentFile?.mkdirs()
-            logFile.appendText("${System.currentTimeMillis()} [keep-alive] $message\n")
-        }
-        println("[agent] $message")
+        ControlDeskLog.agent.i { "[keep-alive] $message" }
     }
 }

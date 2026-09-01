@@ -12,5 +12,7 @@ sealed class ControlDeskError(message: String) : Exception(message) {
             "Agente offline. Inicie no Mac: ./gradlew :agent:run"
         const val EMPTY_WINDOWS =
             "Nenhuma janela detectada. No Mac, permita Acessibilidade para o agente (foco nas janelas)."
+        const val ACCESSIBILITY_OFF =
+            "No Mac, ative Acessibilidade para ControlDeskAgent (Ajustes → Privacidade e Segurança)."
     }
 }

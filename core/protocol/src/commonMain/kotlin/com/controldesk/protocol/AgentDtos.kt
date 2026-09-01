@@ -8,6 +8,7 @@ data class HealthResponse(
     val version: String = "1.1.0",
     val os: String? = null,
     val windowListerVersion: Int? = null,
+    val accessibilityEnabled: Boolean? = null,
 )
 
 @Serializable
@@ -78,6 +79,7 @@ data class SetupResponse(
     val port: Int,
     val pin: String? = null,
     val backgroundService: Boolean = true,
+    val accessibilityEnabled: Boolean? = null,
 )
 
 @Serializable

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "699571407413",
+    "project_id": "controldesk-cbf71",
+    "storage_bucket": "controldesk-cbf71.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:699571407413:android:fd468fa0afea56f4627f7c",
+        "android_client_info": {
+          "package_name": "js.controldesk"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUpWGhmzxC1cCcIHI2N_tNZixK3OfQaXU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

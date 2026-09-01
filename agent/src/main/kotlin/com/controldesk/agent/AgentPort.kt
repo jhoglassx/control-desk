@@ -1,5 +1,6 @@
 package com.controldesk.agent
 
+import com.controldesk.logging.ControlDeskLog
 import java.util.concurrent.TimeUnit
 
 /**
@@ -28,7 +29,7 @@ object AgentPort {
         val pids = listeningPids(port).filter { it != self }
         if (pids.isEmpty() && !isLaunchAgentLoaded()) return
 
-        println("[agent] Porta $port em uso — encerrando o processo anterior e reiniciando…")
+        ControlDeskLog.agent.i { "Porta $port em uso — encerrando o processo anterior e reiniciando…" }
         stopLaunchAgent()
         val afterBootout = listeningPids(port).filter { it != self }
         afterBootout.forEach { pid ->

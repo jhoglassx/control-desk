@@ -1,8 +1,19 @@
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
 import SwiftUI
 import ComposeApp
 
 @main
 struct iOSApp: App {
+    init() {
+        #if canImport(FirebaseCore)
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

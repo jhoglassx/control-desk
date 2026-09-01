@@ -1,5 +1,6 @@
 package com.controldesk.agent
 
+import com.controldesk.logging.ControlDeskLog
 import com.controldesk.protocol.RunningAppInfo
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -14,6 +15,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 object MacWindowLister {
     private val cache = AtomicReference<List<RunningAppInfo>>(emptyList())
+    private val lastError = AtomicReference<String?>(null)
     private val suppressedUntil = ConcurrentHashMap<String, Long>()
     private val ignored = setOf(
         "ControlDeskAgent", "AutoFill", "coreauthd", "loginwindow", "Wallpaper",
@@ -25,6 +27,9 @@ object MacWindowLister {
         Thread({
             while (true) {
                 runCatching {
+                    if (!MacAccessibility.isTrusted()) {
+                        lastError.set("accessibility_disabled")
+                    }
                     val windows = query().filterNot { isSuppressed(it.appName) }
                     cache.set(windows)
                     MacAppIconResolver.resolveMissing(windows.map { it.appName }, limit = 3)
@@ -59,9 +64,18 @@ object MacWindowLister {
     }
 
     private fun query(): List<RunningAppInfo> {
-        val raw = Shell.run("/usr/bin/osascript", "-l", "JavaScript", "-e", LIST_SCRIPT, timeoutMs = 1_400)
+        val raw = runScriptWithRetry()
         if (raw.isBlank()) return cache.get()
-        val parsed = runCatching { Json.parseToJsonElement(raw).jsonArray }.getOrNull() ?: return cache.get()
+        if (raw.startsWith("execution error", ignoreCase = true)) {
+            noteError("osascript: ${raw.take(240)}")
+            return cache.get()
+        }
+        val parsed = runCatching { Json.parseToJsonElement(raw).jsonArray }.getOrNull()
+        if (parsed == null) {
+            noteError("parse_failed: ${raw.take(120)}")
+            return cache.get()
+        }
+        lastError.set(null)
         val windows = parsed.mapIndexedNotNull { index, element ->
             val obj = element as? JsonObject ?: return@mapIndexedNotNull null
             val appName = obj.str("appName") ?: return@mapIndexedNotNull null
@@ -88,6 +102,22 @@ object MacWindowLister {
             )
         }
         return windows
+    }
+
+    private fun runScriptWithRetry(): String {
+        repeat(2) { attempt ->
+            val raw = Shell.run("/usr/bin/osascript", "-l", "JavaScript", "-e", LIST_SCRIPT, timeoutMs = 2_000)
+            if (raw.isNotBlank()) return raw
+            if (attempt == 0) noteError("window_lister_blank_retry")
+        }
+        noteError("window_lister_blank")
+        return ""
+    }
+
+    private fun noteError(message: String) {
+        if (lastError.get() == message) return
+        lastError.set(message)
+        ControlDeskLog.agent.w { "[window-lister] $message" }
     }
 
     private fun isSuppressed(appName: String): Boolean {

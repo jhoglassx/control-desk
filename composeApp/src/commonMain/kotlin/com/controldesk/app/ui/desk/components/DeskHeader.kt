@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.controldesk.app.theme.DeskColors
 import com.controldesk.app.viewmodel.DeskUiState
+import com.controldesk.domain.error.ControlDeskError
 import com.controldesk.domain.model.PairedHost
 
 @Composable
@@ -44,6 +45,8 @@ fun DeskHeader(
         }
         uiState.isLoadingApps -> DeskColors.Warning to "Sincronizando"
         !uiState.hasHosts -> DeskColors.Idle to "Offline"
+        uiState.listHint == ControlDeskError.ACCESSIBILITY_OFF ->
+            DeskColors.Warning to "Acessibilidade"
         uiState.listHint != null && uiState.buttons.isEmpty() ->
             DeskColors.Warning to "Re-parear"
         else -> DeskColors.Live to "Online"

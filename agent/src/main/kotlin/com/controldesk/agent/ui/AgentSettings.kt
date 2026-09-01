@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -30,33 +31,56 @@ fun launchAgentSettings(port: Int, exitProcessOnClose: Boolean = true) {
     application(exitProcessOnExit = exitProcessOnClose) {
         var setup by remember { mutableStateOf<SetupResponse?>(null) }
         var status by remember { mutableStateOf("Iniciando…") }
+        var accessibility by remember { mutableStateOf<Boolean?>(null) }
         LaunchedEffect(port) {
             while (true) {
                 val next = withContext(Dispatchers.IO) { fetchSetup(port) }
                 setup = next
-                status = if (next?.ok == true) "Rodando" else "Iniciando…"
+                accessibility = next?.accessibilityEnabled
+                status = when {
+                    next?.ok != true -> "Iniciando serviço…"
+                    next.accessibilityEnabled == false -> "Rodando — falta Acessibilidade"
+                    else -> "Rodando"
+                }
                 delay(2_000)
             }
         }
-        Window(onCloseRequest = ::exitApplication, title = "Control Desk — Configurações") {
+        Window(onCloseRequest = ::exitApplication, title = "Control Desk Agent") {
             MaterialTheme {
                 Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Top) {
-                    Text("Control Desk — Configurações", style = MaterialTheme.typography.headlineSmall)
-                    Spacer(Modifier.height(12.dp))
+                    Text("Control Desk Agent", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(8.dp))
                     Text("Status: $status")
                     Text("Porta: ${setup?.port ?: port}")
-                    Text("PIN: ${setup?.pin ?: "—"}")
+                    Text("PIN: ${setup?.pin ?: "—"}", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(12.dp))
                     NetworkInfo.connectionHints(port).forEach { Text(it) }
                     Spacer(Modifier.height(16.dp))
+                    when (accessibility) {
+                        false -> {
+                            Text(
+                                "Ative Acessibilidade para ControlDeskAgent — sem isso o celular não vê qual janela está em uso.",
+                                color = Color(0xFFB45309),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Button(onClick = { MacAccessibility.openPrivacySettings() }) {
+                                Text("Abrir Ajustes de Acessibilidade")
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        true -> Text("Acessibilidade: ativa ✓", color = Color(0xFF15803D))
+                        null -> Unit
+                    }
                     Button(onClick = { Thread { fetchNewPin(port) }.start() }) {
                         Text("Gerar novo PIN")
                     }
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = ::exitApplication) { Text("Fechar") }
-                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = ::exitApplication) { Text("Fechar (fica em segundo plano)") }
+                    Spacer(Modifier.height(12.dp))
                     Text(
-                        "Fechar ou Cmd+Q encerra esta janela. O agente continua em segundo plano, sem ícone no Dock.",
+                        "Feche esta janela quando terminar. O agente continua na porta $port sem ícone no Dock. " +
+                            "Para ver o PIN de novo, abra Control Desk Agent em Aplicativos.",
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }

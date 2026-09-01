@@ -6,6 +6,7 @@ import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.RunningApp
 import com.controldesk.domain.repository.AgentGateway
+import com.controldesk.logging.ControlDeskLog
 import com.controldesk.protocol.AgentApiClient
 import com.controldesk.protocol.AppCloseRequest
 import com.controldesk.protocol.AppLaunchRequest
@@ -23,6 +24,10 @@ import io.ktor.util.network.UnresolvedAddressException
 class AgentGatewayImpl(
     private val api: AgentApiClient,
 ) : AgentGateway {
+
+    override suspend fun fetchHealth(host: PairedHost): Boolean? = mapErrors {
+        api.health(host.baseUrl()).accessibilityEnabled
+    }
 
     override suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp> = mapErrors {
         requireToken(host)
@@ -130,6 +135,9 @@ class AgentGatewayImpl(
             }
             throw ControlDeskError.Generic("Erro do agente (${error.response.status.value})")
         } catch (error: Throwable) {
+            if (error !is ControlDeskError) {
+                ControlDeskLog.gateway.e(error) { "agent request failed: ${error.message}" }
+            }
             if (isOffline(error) || isUnauthorizedBody(error)) {
                 if (isUnauthorizedBody(error)) throw ControlDeskError.Unauthorized()
                 throw ControlDeskError.Offline()
