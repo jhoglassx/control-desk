@@ -11,8 +11,6 @@ kotlin {
     jvmToolchain(21)
 }
 
-val agentVersion = "1.0.4"
-
 dependencies {
     implementation(projects.core.protocol)
     implementation(projects.core.logging)
@@ -44,7 +42,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "ControlDeskAgent"
-            packageVersion = agentVersion
+            packageVersion = "1.0.4"
             description = "Control Desk Agent"
             copyright = "Control Desk"
             macOS {
@@ -52,11 +50,7 @@ compose.desktop {
                 infoPlist {
                     extraKeysRawXml = """
                         <key>LSUIElement</key>
-                        <true/>
-                        <key>CFBundleDisplayName</key>
-                        <string>Control Desk Agent (build $agentVersion)</string>
-                        <key>CFBundleName</key>
-                        <string>Control Desk Agent (build)</string>
+                        <string>true</string>
                     """.trimIndent()
                 }
             }
@@ -80,7 +74,7 @@ tasks.register<Exec>("packageInstallerDmg") {
     onlyIf { System.getProperty("os.name").orEmpty().lowercase().contains("mac") }
     val appDir = layout.buildDirectory.dir("compose/binaries/main/app/ControlDeskAgent.app")
     val stageDir = layout.buildDirectory.dir("installer-stage")
-    val outFile = layout.buildDirectory.file("compose/binaries/main/dmg/ControlDeskAgent-$agentVersion.dmg")
+    val outFile = layout.buildDirectory.file("compose/binaries/main/dmg/ControlDeskAgent-1.0.4.dmg")
     inputs.dir(file("package/dmg"))
     outputs.file(outFile)
     commandLine("bash", file("package/dmg/build-dmg.sh").absolutePath)

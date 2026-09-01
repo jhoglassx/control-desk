@@ -5,9 +5,7 @@ Control Desk Agent
 3. Clique em "Abrir Ajustes de Acessibilidade" e ative ControlDeskAgent
 4. Feche a janela — o agente continua em segundo plano (sem ícone no Dock)
 
-Para ver o PIN de novo: abra **Control Desk Agent** em Aplicativos (não as cópias "build" da pasta do projeto).
-
-Na busca do Mac: use o que aparece só como "Control Desk Agent". Cópias de desenvolvimento mostram "(build)" no nome.
+Para ver o PIN de novo: abra Control Desk Agent em Aplicativos.
 
 Para remover (terminal):
   launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.controldesk.agent.plist

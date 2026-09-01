@@ -108,7 +108,7 @@ fun DeskScreen(
                         Spacer(Modifier.height(if (landscape) 8.dp else 12.dp))
                         WorkspacePanel(
                             buttons = host?.id?.let(uiState::buttonsFor).orEmpty(),
-                            listHint = if (current) uiState.listHint else null,
+                            listHint = host?.id?.let(uiState::listHintFor),
                             onAppClick = { if (current) onAppClick(it) },
                             onAppClose = { if (current) onAppClose(it) },
                             volumeLevel = uiState.volumeLevel,
