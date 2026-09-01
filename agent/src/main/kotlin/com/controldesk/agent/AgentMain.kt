@@ -1,9 +1,12 @@
 package com.controldesk.agent
 
+import com.controldesk.logging.ControlDeskLog
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 
 fun main(args: Array<String>) {
+    ControlDeskLog.init()
+    installUncaughtExceptionLogger()
     val port = System.getenv("CONTROL_DESK_PORT")?.toIntOrNull() ?: 8741
     val isMac = System.getProperty("os.name").lowercase().contains("mac")
     val bundled = isBundledApp()
@@ -30,16 +33,11 @@ fun main(args: Array<String>) {
         if (isMac) {
             val ok = MacBackgroundService.ensureInstalledAndUpdated()
             if (!ok) {
-                println("[agent] Instalação falhou — veja ~/.control-desk/install.log")
+                ControlDeskLog.agent.e { "Instalação falhou — veja ~/.control-desk/install.log" }
             }
         }
         if (openSettings) {
             launchAgentSettings(port, exitProcessOnClose = true)
-        } else {
-            println(
-                "[agent] Serviço em segundo plano instalado/atualizado. " +
-                    "Abra 'Abrir configurações.command' ou use --settings para ver o PIN.",
-            )
         }
         return
     }
@@ -47,8 +45,8 @@ fun main(args: Array<String>) {
     if (openSettings) {
         Thread { runHeadlessService(port) }.start()
         Thread.sleep(250)
-        println("[agent] Abrindo janela de configurações…")
-        println("[agent] Cmd+Q / Fechar encerra a janela e deixa o agente em segundo plano (sem Dock).")
+        ControlDeskLog.agent.i { "Abrindo janela de configurações…" }
+        ControlDeskLog.agent.i { "Cmd+Q / Fechar encerra a janela e deixa o agente em segundo plano (sem Dock)." }
         launchAgentSettings(port, exitProcessOnClose = true)
         return
     }
@@ -80,13 +78,14 @@ private fun shouldOpenSettings(
     skipInstall: Boolean,
 ): Boolean {
     if (headless) return false
+    if (args.any { it == "--no-settings" || it == "-no-settings" }) return false
     if (args.any { it == "--settings" || it == "-settings" }) return true
     val env = System.getenv("CONTROL_DESK_OPEN_SETTINGS")
     if (env != null) {
         return env.equals("1", ignoreCase = true) || env.equals("true", ignoreCase = true)
     }
-    // Gradle / java -jar / SKIP_INSTALL: show PIN/IP. Packaged .app stays silent unless --settings.
-    return !bundled || skipInstall
+    // Packaged .app: install/update service and show PIN + permissions. Dev Gradle: same.
+    return !skipInstall
 }
 
 private fun runHeadlessService(port: Int) {
@@ -99,7 +98,7 @@ private fun runHeadlessService(port: Int) {
 
     server.start()
     runCatching { mdns.start() }.onFailure {
-        println("[agent] mDNS unavailable: ${it.message}")
+        ControlDeskLog.agent.w(it) { "mDNS unavailable: ${it.message}" }
     }
 
     val pin = authStore.currentPin() ?: authStore.activatePin()
@@ -118,14 +117,22 @@ private fun runHeadlessService(port: Int) {
             appendLine()
         },
     )
-    println("[agent] headless mode on port $port")
-    println("[agent] PIN: $pin")
-    hints.forEach { println("[agent] $it") }
-    println("[agent] log: ${logFile.absolutePath}")
+    ControlDeskLog.agent.i { "headless mode on port $port" }
+    ControlDeskLog.agent.i { "PIN: $pin" }
+    hints.forEach { ControlDeskLog.agent.i { it } }
+    ControlDeskLog.agent.i { "log: ${logFile.absolutePath}" }
 
     Runtime.getRuntime().addShutdownHook(Thread { mdns.close() })
 
     runBlocking {
         awaitCancellation()
+    }
+}
+
+private fun installUncaughtExceptionLogger() {
+    val previous = Thread.getDefaultUncaughtExceptionHandler()
+    Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+        ControlDeskLog.agent.e(error) { "uncaught on ${thread.name}" }
+        previous?.uncaughtException(thread, error)
     }
 }

@@ -219,6 +219,8 @@ if [[ "$NEEDS_COPY" == true ]]; then
     ditto "$SOURCE_APP" "$TARGET_APP"
     TARGET_VER="$(read_bundle_version "$TARGET_APP")"
     xattr -cr "$TARGET_APP" >/dev/null 2>&1 || true
+    /usr/bin/defaults write "$TARGET_APP/Contents/Info" CFBundleDisplayName "Control Desk Agent"
+    /usr/bin/defaults write "$TARGET_APP/Contents/Info" CFBundleName "Control Desk Agent"
 fi
 
 if [[ ! -x "$BINARY" ]]; then

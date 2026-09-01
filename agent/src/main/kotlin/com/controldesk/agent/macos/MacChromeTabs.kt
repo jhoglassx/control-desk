@@ -36,7 +36,7 @@ object MacChromeTabs {
                 iconBase64 = icon ?: tab.iconBase64,
                 isActive = activeChromeWindow != null &&
                     windowIndex == activeChromeWindow &&
-                    (tab.windowIndex ?: 1) == 1,
+                    tab.isActive,
             )
         }
         return others + mapped
@@ -86,9 +86,11 @@ object MacChromeTabs {
                 repeat with w in windows
                     set tIndex to 0
                     set wIndex to wIndex + 1
+                    set activeIdx to active tab index of w
                     repeat with t in tabs of w
                         set tIndex to tIndex + 1
-                        set out to out & title of t & tab & URL of t & tab & wIndex & tab & tIndex & linefeed
+                        set isActiveTab to (tIndex = activeIdx)
+                        set out to out & title of t & tab & URL of t & tab & wIndex & tab & tIndex & tab & (if isActiveTab then "1" else "0") & linefeed
                     end repeat
                 end repeat
                 return out
@@ -101,13 +103,14 @@ object MacChromeTabs {
             val parts = line.split('\t')
             if (parts.size < 2) return@mapIndexedNotNull null
             val title = parts[0]
+            val tabActive = parts.getOrNull(4) == "1"
             RunningAppInfo(
                 name = "Chrome · $title",
                 appName = "Google Chrome",
                 windowTitle = title,
                 windowIndex = parts.getOrNull(3)?.toIntOrNull() ?: index,
                 windowNumber = 10_000 + index,
-                isActive = false,
+                isActive = tabActive,
                 isVisible = true,
                 browserWindowIndex = parts.getOrNull(2)?.toIntOrNull(),
                 isBrowserTab = true,

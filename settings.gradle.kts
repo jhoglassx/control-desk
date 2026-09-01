@@ -19,6 +19,7 @@ dependencyResolutionManagement {
 include(":core:domain")
 include(":core:protocol")
 include(":core:data")
+include(":core:logging")
 include(":core:testing")
 include(":composeApp")
 include(":agent")

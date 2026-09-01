@@ -44,16 +44,16 @@ fun WorkspacePanel(
     val monitors = buttons.filter { it.monitorIndex > 0 }.groupBy { it.monitorIndex }
         .toSortedMap()
         .entries
-        .joinToString(" · ") { (monitor, apps) -> "M$monitor: ${apps.size}" }
+        .joinToString(" · ") { entry -> "M${entry.key}: ${entry.value.size}" }
     Column(modifier.fillMaxSize()) {
         if (!compact) {
             Text("Apps no Mac", color = DeskColors.TextPrimary, fontSize = 16.sp)
         }
         Text(
-            if (buttons.isEmpty()) {
-                listHint ?: "Nenhuma janela detectada no PC"
-            } else {
-                buildString {
+            when {
+                buttons.isEmpty() -> listHint ?: "Nenhuma janela detectada no PC"
+                listHint != null -> listHint
+                else -> buildString {
                     append("${buttons.size} apps · $focused em uso")
                     if (monitors.isNotBlank()) append(" · $monitors")
                     if (docked > 0) append(" · $docked na Dock")

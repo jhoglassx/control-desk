@@ -12,6 +12,7 @@ import com.controldesk.domain.repository.AgentGateway
 import com.controldesk.domain.repository.HostPreferences
 import com.controldesk.domain.repository.RunningAppIconCache
 import com.controldesk.domain.usecase.ExecuteGridButtonUseCase
+import com.controldesk.logging.ControlDeskLog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -313,16 +314,18 @@ class DeskViewModel(
                 restoreCache(host)
                 if (!showLoading) delay(HOST_SWITCH_SETTLE_MS)
             }
-            val (appsResult, audioResult) = coroutineScope {
+            val (appsResult, audioResult, accessibility) = coroutineScope {
                 val appsDeferred = async { runCatching { agentGateway.loadRunningApps(host, includeIcons = false) } }
                 val audioDeferred = async { runCatching { agentGateway.fetchAudio(host) } }
-                appsDeferred.await() to audioDeferred.await()
+                val healthDeferred = async { runCatching { agentGateway.fetchHealth(host) }.getOrNull() }
+                Triple(appsDeferred.await(), audioDeferred.await(), healthDeferred.await())
             }
             appsResult.fold(
                 onSuccess = { apps ->
                     val buttons = RunningAppsGridBuilder.build(apps, memoryIcons)
                     publishButtons(host, buttons, preferMerge = false)
-                    _uiState.update { it.copy(isLoadingApps = false, listHint = if (buttons.isEmpty()) ControlDeskError.EMPTY_WINDOWS else null) }
+                    val hint = listHintFor(buttons, accessibility)
+                    _uiState.update { it.copy(isLoadingApps = false, listHint = hint) }
                     cacheListHint(host)
                     if (buttons.any { it.iconBase64.isNullOrBlank() }) {
                         val withIcons = runCatching { agentGateway.loadRunningApps(host, includeIcons = true) }.getOrNull()
@@ -348,6 +351,7 @@ class DeskViewModel(
 
     private fun handleLoadFailure(host: PairedHost, error: Throwable, showLoading: Boolean) {
         val message = error.message ?: ControlDeskError.AGENT_OFFLINE
+        ControlDeskLog.app.e(error) { "loadHost failed host=${host.id}: $message" }
         val hasCache = !buttonsCache[host.id].isNullOrEmpty()
         if (hasCache) {
             _uiState.update {
@@ -431,15 +435,8 @@ class DeskViewModel(
             incomingActiveId == null -> {
                 last = null
                 streak = 0
-                val stillPresent = incoming.any { it.id == current && !it.isDockPlaceholder() }
-                if (!stillPresent) {
-                    current = null
-                    incoming
-                } else {
-                    incoming.map { button ->
-                        button.copy(isActive = !button.isDockPlaceholder() && button.id == current)
-                    }
-                }
+                current = null
+                incoming
             }
             else -> {
                 if (incomingActiveId == last) streak += 1 else {
@@ -649,6 +646,12 @@ class DeskViewModel(
                 micLevel = nextMic,
             )
         }
+    }
+
+    private fun listHintFor(buttons: List<GridButton>, accessibilityEnabled: Boolean?): String? {
+        if (accessibilityEnabled == false) return ControlDeskError.ACCESSIBILITY_OFF
+        if (buttons.isEmpty()) return ControlDeskError.EMPTY_WINDOWS
+        return null
     }
 
     private fun cacheListHint(host: PairedHost) {

@@ -14,6 +14,7 @@ interface HostPreferences {
 }
 
 interface AgentGateway {
+    suspend fun fetchHealth(host: PairedHost): Boolean?
     suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp>
     suspend fun fetchAudio(host: PairedHost): AudioState
     suspend fun launchApp(host: PairedHost, button: GridButton)

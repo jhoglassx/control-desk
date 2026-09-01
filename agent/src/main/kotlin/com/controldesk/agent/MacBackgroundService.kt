@@ -1,5 +1,6 @@
 package com.controldesk.agent
 
+import com.controldesk.logging.ControlDeskLog
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -21,7 +22,7 @@ object MacBackgroundService {
             log("install-macos.sh não encontrado no bundle do app")
             notifyUser(
                 title = "Control Desk Agent",
-                text = "Não achei o instalador dentro do app. Use “Instalar em segundo plano.command” no DMG.",
+                text = "Não achei o instalador dentro do app. Reinstale a partir do DMG.",
                 dialog = true,
             )
             return false
@@ -32,7 +33,7 @@ object MacBackgroundService {
             log("Bundle do app não detectado — pulando instalação automática")
             notifyUser(
                 title = "Control Desk Agent",
-                text = "Não achei o ControlDeskAgent.app para copiar. Abra o DMG e use o comando de instalar.",
+                text = "Não achei o app para copiar. Abra o DMG e instale Control Desk Agent.",
                 dialog = true,
             )
             return false
@@ -55,14 +56,14 @@ object MacBackgroundService {
             }
             notifyUser(
                 title = "Control Desk Agent",
-                text = "Instalado em segundo plano na porta 8741. PIN: grep pin= ~/.control-desk/agent.log",
+                text = "Instalado. A janela de configurações mostra o PIN — feche quando terminar.",
                 dialog = false,
             )
             return true
         }
         notifyUser(
             title = "Control Desk Agent",
-            text = "A instalação falhou. Veja ~/.control-desk/install.log ou use “Instalar em segundo plano.command”.",
+            text = "A instalação falhou. Veja ~/.control-desk/install.log",
             dialog = true,
         )
         return false
@@ -138,6 +139,7 @@ object MacBackgroundService {
         "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
     private fun log(message: String) {
+        ControlDeskLog.install.i { message }
         val logFile = File(System.getProperty("user.home"), ".control-desk/install.log")
         logFile.parentFile?.mkdirs()
         logFile.appendText("${System.currentTimeMillis()} $message\n")

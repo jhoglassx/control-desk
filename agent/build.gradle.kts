@@ -11,8 +11,11 @@ kotlin {
     jvmToolchain(21)
 }
 
+val agentVersion = "1.0.4"
+
 dependencies {
     implementation(projects.core.protocol)
+    implementation(projects.core.logging)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.ktor.server.cio)
@@ -41,7 +44,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "ControlDeskAgent"
-            packageVersion = "1.0.2"
+            packageVersion = agentVersion
             description = "Control Desk Agent"
             copyright = "Control Desk"
             macOS {
@@ -49,7 +52,11 @@ compose.desktop {
                 infoPlist {
                     extraKeysRawXml = """
                         <key>LSUIElement</key>
-                        <string>true</string>
+                        <true/>
+                        <key>CFBundleDisplayName</key>
+                        <string>Control Desk Agent (build $agentVersion)</string>
+                        <key>CFBundleName</key>
+                        <string>Control Desk Agent (build)</string>
                     """.trimIndent()
                 }
             }
@@ -68,14 +75,13 @@ tasks.register<Exec>("installMacos") {
 
 tasks.register<Exec>("packageInstallerDmg") {
     group = "distribution"
-    description = "DMG com o .app, .command de instalar/remover e a documentação"
+    description = "DMG com o .app, atalho para Aplicativos e LEIA-ME"
     dependsOn("packageDistributionForCurrentOS")
     onlyIf { System.getProperty("os.name").orEmpty().lowercase().contains("mac") }
     val appDir = layout.buildDirectory.dir("compose/binaries/main/app/ControlDeskAgent.app")
     val stageDir = layout.buildDirectory.dir("installer-stage")
-    val outFile = layout.buildDirectory.file("compose/binaries/main/dmg/ControlDeskAgent-1.0.2.dmg")
+    val outFile = layout.buildDirectory.file("compose/binaries/main/dmg/ControlDeskAgent-$agentVersion.dmg")
     inputs.dir(file("package/dmg"))
-    inputs.dir(rootProject.file("docs"))
     outputs.file(outFile)
     commandLine("bash", file("package/dmg/build-dmg.sh").absolutePath)
     doFirst {
@@ -85,7 +91,6 @@ tasks.register<Exec>("packageInstallerDmg") {
             appDir.get().asFile.absolutePath,
             stageDir.get().asFile.absolutePath,
             outFile.get().asFile.absolutePath,
-            rootProject.projectDir.absolutePath,
             file("package/dmg").absolutePath,
         )
     }

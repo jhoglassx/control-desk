@@ -45,6 +45,8 @@ class FakeAgentGateway(
 
     override suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp> =
         result(appsByHost[host.id] ?: apps)
+
+    override suspend fun fetchHealth(host: PairedHost): Boolean? = result(true)
     override suspend fun fetchAudio(host: PairedHost): AudioState = result(audio)
     override suspend fun launchApp(host: PairedHost, button: GridButton) {
         result(Unit)

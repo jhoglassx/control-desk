@@ -10,9 +10,7 @@ Especificação completa: **[README.md](README.md)** (índice) e **[spec.md](spe
 
 | Ação | Resultado |
 |------|-----------|
-| **Instalar em segundo plano.command** (padrão) | Instala/atualiza serviço headless, sem janela |
-| **Abrir configurações.command** | Instala se necessário + janela PIN/IP |
-| **ControlDeskAgent.app** | Instala/atualiza em background e encerra |
+| **ControlDeskAgent.app** (duplo clique ou arrastar para Aplicativos) | Instala/atualiza em background e abre janela de PIN/IP |
 | Fechar janela de configurações / Cmd+Q | UI some (sai do Dock). Serviço headless **continua** |
 | Ctrl+C em `./gradlew :agent:run` | Processo do Gradle encerra; agente **respawna** headless (use `CONTROL_DESK_NO_RESPAWN=1` para parar) |
 | Nova versão no DMG | Substitui app em `/Applications` e reinicia serviço |
@@ -32,23 +30,17 @@ Especificação completa: **[README.md](README.md)** (índice) e **[spec.md](spe
 
 O `.dmg` sai em:
 
-`agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.0.2.dmg`
+`agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.0.3.dmg`
 
-Esse arquivo contém o `.app`, **Instalar em segundo plano.command**, **Abrir configurações.command** e a pasta **Documentacao/**.
+Conteúdo: **ControlDeskAgent.app**, atalho **Applications** e **LEIA-ME.txt**.
 
 ### 2. Instalar (usuário)
 
 1. Abra o DMG
-2. Leia **LEIA-ME.txt** ou a pasta **Documentacao/**
-3. **Padrão:** duplo clique em **Instalar em segundo plano.command**
-   - Se o macOS bloquear: botão direito → **Abrir**
-   - Copia/atualiza app em `/Applications` (instância única)
-   - Registra LaunchAgent (`com.controldesk.agent`)
-   - Inicia serviço headless na porta 8741
-4. **Ver PIN/IP:** duplo clique em **Abrir configurações.command**
-5. **ControlDeskAgent.app:** duplo clique também instala (fica em background; aparece uma notificação)
-
-Scripts no DMG: `Instalar em segundo plano.command`, `Abrir configurações.command`, `Remover serviço.command`.
+2. Arraste **ControlDeskAgent.app** para **Aplicativos** (ou dê duplo clique no app)
+3. Leia **LEIA-ME.txt** se precisar
+4. Na janela: copie PIN/IP e habilite **Acessibilidade**
+5. Feche a janela — o serviço continua em segundo plano na porta 8741
 
 ### 3. Acessibilidade (obrigatório)
 
@@ -96,7 +88,7 @@ bash /Applications/ControlDeskAgent.app/Contents/app/resources/install-macos.sh
 |------|------|
 | Ver se está rodando | `lsof -i :8741` |
 | Ver PIN / IP | Abrir `ControlDeskAgent.app` ou `cat ~/.control-desk/agent.log` |
-| Abrir configurações | **Abrir configurações.command** ou `CONTROL_DESK_OPEN_SETTINGS=1 open -a ControlDeskAgent --args --settings` |
+| Abrir configurações | `open -a ControlDeskAgent --args --settings` |
 | Parar serviço | `launchctl bootout gui/$(id -u)/com.controldesk.agent` |
 | Parar daemon do `:agent:run` | `kill $(lsof -t -iTCP:8741 -sTCP:LISTEN)` |
 | Iniciar serviço | `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.controldesk.agent.plist` |
@@ -105,11 +97,7 @@ bash /Applications/ControlDeskAgent.app/Contents/app/resources/install-macos.sh
 
 ## Remover o agente
 
-### Opção 1 — DMG
-
-Duplo clique em **Remover serviço.command**.
-
-### Opção 2 — Terminal
+### Opção 1 — Terminal (recomendado)
 
 ```bash
 bash agent/package/resources/macos/uninstall-macos.sh
@@ -118,7 +106,14 @@ bash agent/package/resources/macos/uninstall-macos.sh
 ou, se o app ainda está instalado:
 
 ```bash
-bash /Applications/ControlDeskAgent.app/Contents/app/resources/uninstall-macos.sh
+bash /Applications/ControlDeskAgent.app/Contents/app/resources/macos/uninstall-macos.sh
+```
+
+### Opção 2 — Manual
+
+```bash
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.controldesk.agent.plist
+rm -rf /Applications/ControlDeskAgent.app
 ```
 
 ### O que é removido
@@ -146,7 +141,7 @@ Não use `./gradlew :agent:run` em cada máquina — isso é só desenvolvimento
 
 1. Gere o instalador uma vez: `./gradlew :agent:packageDmg`
 2. Copie o **mesmo `.dmg`** em cada Mac
-3. Em cada Mac: **Instalar em segundo plano.command** (LaunchAgent, sobrevive a Cmd+Q, logout e reboot)
+3. Em cada Mac: abra o DMG e instale **ControlDeskAgent.app**
 4. Habilite **Acessibilidade** em cada Mac
 5. No celular: pareie cada PC com um nome diferente (`Trabalho`, `Pessoal`, …)
 
@@ -185,8 +180,7 @@ CONTROL_DESK_SKIP_INSTALL=1 ./gradlew :agent:runDistributable
 
 | Sintoma | O que fazer |
 |---------|-------------|
-| App abre mas serviço não sobe | `cat ~/.control-desk/install.log` |
-| `Instalar em segundo plano.command` fecha rápido | Botão direito → Abrir. Terminal: `bash .../install-macos.sh` |
+| `Instalar` / app não sobe | `cat ~/.control-desk/install.log` — botão direito → **Abrir** se o Gatekeeper bloquear |
 | Duplo clique no .app não faz nada | App é background (sem Dock). Deve aparecer notificação; senão `cat ~/.control-desk/install.log` |
 | Gatekeeper bloqueia | Botão direito → **Abrir** na primeira vez |
 | Porta 8741 vazia | `launchctl print gui/$(id -u)/com.controldesk.agent` e `cat ~/.control-desk/agent-launchd-error.log` |
