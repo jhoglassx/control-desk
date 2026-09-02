@@ -28,6 +28,7 @@ object MacChromeTabs {
         val orderedChrome = chromeWindows.sortedBy { it.windowIndex ?: 0 }
         val monitorByWindow = orderedChrome.mapIndexed { index, window -> (index + 1) to window.monitorIndex }.toMap()
         val activeChromeWindow = orderedChrome.indexOfFirst { it.isActive }.takeIf { it >= 0 }?.plus(1)
+            ?: tabs.firstOrNull { it.isActive }?.browserWindowIndex
         val icon = MacAppIconResolver.iconFor("Google Chrome")
         val mapped = tabs.map { tab ->
             val windowIndex = tab.browserWindowIndex ?: 1

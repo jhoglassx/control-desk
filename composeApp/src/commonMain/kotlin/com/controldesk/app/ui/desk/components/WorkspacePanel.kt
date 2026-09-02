@@ -39,6 +39,7 @@ fun WorkspacePanel(
     modifier: Modifier = Modifier,
 ) {
     val focused = buttons.count { it.isActive }
+    val open = buttons.count { it.isVisible && !it.isActive }
     val hidden = buttons.count { !it.isVisible && !it.isDockPinned }
     val docked = buttons.count { it.isDockPinned && !it.isVisible }
     val monitors = buttons.filter { it.monitorIndex > 0 }.groupBy { it.monitorIndex }
@@ -54,7 +55,9 @@ fun WorkspacePanel(
                 buttons.isEmpty() -> listHint ?: "Nenhuma janela detectada no PC"
                 listHint != null -> listHint
                 else -> buildString {
-                    append("${buttons.size} apps · $focused em uso")
+                    append("${buttons.size} apps")
+                    if (open > 0) append(" · $open abertos")
+                    append(" · $focused em uso")
                     if (monitors.isNotBlank()) append(" · $monitors")
                     if (docked > 0) append(" · $docked na Dock")
                     if (hidden > 0) append(" · $hidden ocultos")
