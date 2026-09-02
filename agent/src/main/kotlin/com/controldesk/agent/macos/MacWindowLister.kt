@@ -11,17 +11,23 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
 
 object MacWindowLister {
     private val cache = AtomicReference<List<RunningAppInfo>>(emptyList())
     private val lastError = AtomicReference<String?>(null)
     private val suppressedUntil = ConcurrentHashMap<String, Long>()
+    private val cacheListeners = CopyOnWriteArrayList<() -> Unit>()
     private val ignored = setOf(
         "ControlDeskAgent", "AutoFill", "coreauthd", "loginwindow", "Wallpaper",
         "Window Server", "SystemUIServer", "Dock", "Control Center", "NotificationCenter",
         "Spotlight", "JavaApplicationStub", "WindowManager", "Control Desk Agent",
     )
+
+    fun addCacheListener(listener: () -> Unit) {
+        cacheListeners.add(listener)
+    }
 
     fun warmUp() {
         Thread({
@@ -32,9 +38,10 @@ object MacWindowLister {
                     }
                     val windows = query().filterNot { isSuppressed(it.appName) }
                     cache.set(windows)
+                    notifyCacheListeners()
                     MacAppIconResolver.resolveMissing(windows.map { it.appName }, limit = 3)
                 }
-                Thread.sleep(400)
+                Thread.sleep(80)
             }
         }, "window-lister").apply {
             isDaemon = true
@@ -47,6 +54,17 @@ object MacWindowLister {
         if (key.isEmpty()) return
         suppressedUntil[key] = System.currentTimeMillis() + ms
         cache.updateAndGet { windows -> windows.filterNot { it.appName.equals(appName, ignoreCase = true) } }
+    }
+
+    fun refreshNow() {
+        if (!MacAccessibility.isTrusted()) return
+        runCatching {
+            val windows = query().filterNot { isSuppressed(it.appName) }
+            if (windows.isNotEmpty()) {
+                cache.set(windows)
+                notifyCacheListeners()
+            }
+        }
     }
 
     fun list(includeIcons: Boolean): List<RunningAppInfo> {
@@ -69,6 +87,10 @@ object MacWindowLister {
         if (activeIndexes.size <= 1) return apps
         val keep = activeIndexes.first()
         return apps.mapIndexed { index, app -> app.copy(isActive = index == keep) }
+    }
+
+    private fun notifyCacheListeners() {
+        cacheListeners.forEach { listener -> runCatching { listener() } }
     }
 
     private fun query(): List<RunningAppInfo> {

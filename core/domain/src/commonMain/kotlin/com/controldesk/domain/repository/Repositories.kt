@@ -17,9 +17,9 @@ interface AgentGateway {
     suspend fun fetchHealth(host: PairedHost): Boolean?
     suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp>
     suspend fun fetchAudio(host: PairedHost): AudioState
-    suspend fun launchApp(host: PairedHost, button: GridButton)
-    suspend fun closeApp(host: PairedHost, button: GridButton)
-    suspend fun switchBrowserTab(host: PairedHost, button: GridButton)
+    suspend fun launchApp(host: PairedHost, button: GridButton): List<RunningApp>
+    suspend fun closeApp(host: PairedHost, button: GridButton): List<RunningApp>
+    suspend fun switchBrowserTab(host: PairedHost, button: GridButton): List<RunningApp>
     suspend fun openBrowser(host: PairedHost, url: String)
     suspend fun closeBrowser(host: PairedHost)
     suspend fun setVolume(host: PairedHost, level: Int? = null, delta: Int? = null, mute: Boolean? = null)

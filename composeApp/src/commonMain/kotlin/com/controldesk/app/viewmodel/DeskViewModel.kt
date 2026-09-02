@@ -5,10 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.controldesk.data.RunningAppsGridBuilder
 import com.controldesk.domain.error.ControlDeskError
 import com.controldesk.domain.model.ActionType
+import com.controldesk.domain.model.AgentRealtimeEvent
 import com.controldesk.domain.model.AudioState
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
+import com.controldesk.domain.model.RealtimeConnectionState
 import com.controldesk.domain.repository.AgentGateway
+import com.controldesk.domain.repository.AgentRealtime
 import com.controldesk.domain.repository.HostPreferences
 import com.controldesk.domain.repository.RunningAppIconCache
 import com.controldesk.domain.usecase.ExecuteGridButtonUseCase
@@ -30,6 +33,7 @@ import kotlin.time.TimeSource
 class DeskViewModel(
     private val hostPreferences: HostPreferences,
     private val agentGateway: AgentGateway,
+    private val agentRealtime: AgentRealtime,
     private val executeGridButton: ExecuteGridButtonUseCase,
     private val iconCache: RunningAppIconCache,
 ) : ViewModel() {
@@ -43,9 +47,12 @@ class DeskViewModel(
     private var memoryIcons: Map<String, String> = emptyMap()
 
     private var autoRefreshJob: Job? = null
+    private var realtimeEventsJob: Job? = null
     private var burstJob: Job? = null
     private var audioTick = 0
     private var holdingAudioUntil: TimeMark? = null
+    private var adjustingVolume = false
+    private var adjustingMic = false
     private var pendingHostLoad: Job? = null
     private var audioPollJob: Job? = null
     private var volumeSendJob: Job? = null
@@ -133,12 +140,8 @@ class DeskViewModel(
         }
         viewModelScope.launch {
             try {
-                executeGridButton(button, host)
-                delay(FOCUS_SETTLE_MS)
-                repeat(FOCUS_CONFIRM_POLLS) {
-                    refreshAppsSilent(host)
-                    delay(FOCUS_SETTLE_MS)
-                }
+                val apps = runAppCommand(button, host)
+                applyAgentApps(host, apps)
             } catch (error: Throwable) {
                 clearPinnedFocus()
                 _uiState.update { it.copy(feedback = error.message ?: "Falha ao focar app") }
@@ -146,9 +149,19 @@ class DeskViewModel(
             }
         }
         viewModelScope.launch {
-            delay(COMMAND_FIRST_MS)
             startBurstRefresh()
         }
+    }
+
+    private suspend fun runAppCommand(button: GridButton, host: PairedHost): List<com.controldesk.domain.model.RunningApp> {
+        if (!isRealtimeConnected()) return executeGridButton(button, host)
+        return runCatching {
+            when (button.actionType) {
+                ActionType.REMOTE_LAUNCH -> agentRealtime.launchApp(host, button)
+                ActionType.REMOTE_BROWSER_TAB -> agentRealtime.switchBrowserTab(host, button)
+                else -> executeGridButton(button, host)
+            }
+        }.getOrElse { executeGridButton(button, host) }
     }
 
     fun onAppClose(button: GridButton) {
@@ -182,9 +195,14 @@ class DeskViewModel(
         }
         viewModelScope.launch {
             try {
-                agentGateway.closeApp(host, button)
-                delay(CLOSE_CONFIRM_MS)
-                refreshAppsSilent(host)
+                val apps = if (isRealtimeConnected()) {
+                    runCatching { agentRealtime.closeApp(host, button) }
+                        .getOrElse { agentGateway.closeApp(host, button) }
+                } else {
+                    agentGateway.closeApp(host, button)
+                }
+                applyAgentApps(host, apps)
+                if (apps.isEmpty() && !isRealtimeConnected()) refreshAppsSilent(host)
             } catch (error: Throwable) {
                 closingUntil.remove(key)
                 closingPlaceholders.remove(key)
@@ -201,13 +219,16 @@ class DeskViewModel(
     fun onVolumeLevelChange(level: Int) {
         val host = _uiState.value.selectedHost ?: return
         val clamped = level.coerceIn(0, 100)
-        armAudioHold()
+        adjustingVolume = true
+        armAudioHold(AUDIO_DRAG_HOLD_MS)
         _uiState.update { it.copy(volumeLevel = clamped, volumeMuted = false) }
         enqueueVolume(host, clamped)
     }
 
     fun onVolumeAdjustFinished() {
         val host = _uiState.value.selectedHost ?: return
+        adjustingVolume = false
+        armAudioHold(AUDIO_SETTLE_MS)
         enqueueVolume(host, _uiState.value.volumeLevel)
     }
 
@@ -216,14 +237,14 @@ class DeskViewModel(
         val currentlyMuted = _uiState.value.volumeMuted
         val nextMuted = !currentlyMuted
         val level = _uiState.value.volumeLevel
-        armAudioHold()
+        armAudioHold(AUDIO_SETTLE_MS)
         _uiState.update { it.copy(volumeMuted = nextMuted) }
         viewModelScope.launch {
             runCatching {
                 if (nextMuted) {
-                    agentGateway.setVolume(host, mute = true)
+                    sendVolume(host, mute = true)
                 } else {
-                    agentGateway.setVolume(host, level = level, mute = false)
+                    sendVolume(host, level = level, mute = false)
                 }
             }.onFailure { error ->
                 _uiState.update { it.copy(volumeMuted = currentlyMuted, feedback = error.message ?: "Falha no mute") }
@@ -235,7 +256,7 @@ class DeskViewModel(
         val host = _uiState.value.selectedHost ?: return
         val currentlyMuted = _uiState.value.micMuted
         val nextMuted = !currentlyMuted
-        armAudioHold()
+        armAudioHold(AUDIO_SETTLE_MS)
         if (nextMuted) {
             lastMicLevel = _uiState.value.micLevel.coerceAtLeast(lastMicLevel)
             _uiState.update { it.copy(micMuted = true) }
@@ -246,9 +267,9 @@ class DeskViewModel(
         viewModelScope.launch {
             runCatching {
                 if (nextMuted) {
-                    agentGateway.setMic(host, mute = true, toggle = false)
+                    sendMic(host, mute = true, toggle = false)
                 } else {
-                    agentGateway.setMic(host, mute = false, toggle = false, level = lastMicLevel.coerceIn(25, 100))
+                    sendMic(host, mute = false, toggle = false, level = lastMicLevel.coerceIn(25, 100))
                 }
             }.onFailure { error ->
                 _uiState.update { it.copy(micMuted = currentlyMuted, feedback = error.message ?: "Falha no microfone") }
@@ -259,7 +280,8 @@ class DeskViewModel(
     fun onMicLevelChange(level: Int) {
         val host = _uiState.value.selectedHost ?: return
         val clamped = level.coerceIn(0, 100)
-        armAudioHold()
+        adjustingMic = true
+        armAudioHold(AUDIO_DRAG_HOLD_MS)
         if (clamped > 1) lastMicLevel = clamped
         _uiState.update { it.copy(micLevel = clamped, micMuted = clamped <= 1) }
         enqueueMic(host, clamped)
@@ -267,6 +289,8 @@ class DeskViewModel(
 
     fun onMicAdjustFinished() {
         val host = _uiState.value.selectedHost ?: return
+        adjustingMic = false
+        armAudioHold(AUDIO_SETTLE_MS)
         enqueueMic(host, _uiState.value.micLevel)
     }
 
@@ -277,7 +301,7 @@ class DeskViewModel(
             while (true) {
                 val next = pendingVolume ?: break
                 pendingVolume = null
-                runCatching { agentGateway.setVolume(host, level = next, mute = false) }
+                runCatching { sendVolume(host, level = next, mute = false) }
                     .onFailure { error ->
                         _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar volume") }
                     }
@@ -292,7 +316,7 @@ class DeskViewModel(
             while (true) {
                 val next = pendingMic ?: break
                 pendingMic = null
-                runCatching { agentGateway.setMic(host, level = next) }
+                runCatching { sendMic(host, level = next) }
                     .onFailure { error ->
                         _uiState.update { it.copy(feedback = error.message ?: "Falha ao ajustar mic") }
                     }
@@ -307,6 +331,7 @@ class DeskViewModel(
 
     private fun loadHost(host: PairedHost, showLoading: Boolean) {
         bindActiveTracking(host.id)
+        startRealtime(host)
         pendingHostLoad?.cancel()
         pendingHostLoad = viewModelScope.launch {
             val cached = buttonsCache[host.id]
@@ -315,7 +340,6 @@ class DeskViewModel(
             }
             if (!cached.isNullOrEmpty()) {
                 restoreCache(host)
-                if (!showLoading) delay(HOST_SWITCH_SETTLE_MS)
             }
             val (appsResult, audioResult, accessibility) = coroutineScope {
                 val appsDeferred = async { runCatching { agentGateway.loadRunningApps(host, includeIcons = false) } }
@@ -347,6 +371,7 @@ class DeskViewModel(
                     startAutoRefresh()
                 },
                 onFailure = { error ->
+                    startAutoRefresh()
                     handleLoadFailure(host, error, showLoading)
                 },
             )
@@ -359,6 +384,7 @@ class DeskViewModel(
         ControlDeskLog.app.e(error) { "loadHost failed host=${host.id}: $message" }
         val hasCache = !buttonsCache[host.id].isNullOrEmpty()
         if (hasCache) {
+            startRealtime(host)
             _uiState.update {
                 it.copy(isLoadingApps = false, feedback = if (showLoading) message else it.feedback)
             }
@@ -375,6 +401,72 @@ class DeskViewModel(
                 cachedListHints = listHintCache.toMap(),
             )
         }
+    }
+
+    private var realtimeHostId: String? = null
+
+    private fun startRealtime(host: PairedHost) {
+        if (realtimeHostId == host.id &&
+            agentRealtime.connectionState.value != RealtimeConnectionState.Disconnected
+        ) {
+            return
+        }
+        realtimeHostId = host.id
+        realtimeEventsJob?.cancel()
+        agentRealtime.connect(host, viewModelScope)
+        realtimeEventsJob = viewModelScope.launch {
+            agentRealtime.events.collect { event ->
+                when (event) {
+                    is AgentRealtimeEvent.Apps -> applyAgentApps(host, event.apps)
+                    is AgentRealtimeEvent.Audio -> applyAudio(host, event.state)
+                    is AgentRealtimeEvent.Accessibility -> {
+                        val hint = listHintFor(_uiState.value.buttons, event.enabled)
+                        listHintCache[host.id] = hint
+                        if (_uiState.value.selectedHost?.id == host.id) {
+                            _uiState.update { it.copy(listHint = hint, cachedListHints = listHintCache.toMap()) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopRealtime() {
+        realtimeHostId = null
+        realtimeEventsJob?.cancel()
+        realtimeEventsJob = null
+        agentRealtime.disconnect()
+    }
+
+    private fun isRealtimeConnected(): Boolean =
+        agentRealtime.connectionState.value == RealtimeConnectionState.Connected
+
+    private suspend fun sendVolume(host: PairedHost, level: Int? = null, delta: Int? = null, mute: Boolean? = null) {
+        if (isRealtimeConnected()) {
+            agentRealtime.setVolume(host, level = level, delta = delta, mute = mute)
+        } else {
+            agentGateway.setVolume(host, level = level, delta = delta, mute = mute)
+        }
+    }
+
+    private suspend fun sendMic(
+        host: PairedHost,
+        mute: Boolean? = null,
+        toggle: Boolean = false,
+        level: Int? = null,
+    ) {
+        if (isRealtimeConnected()) {
+            agentRealtime.setMic(host, mute = mute, toggle = toggle, level = level)
+        } else {
+            agentGateway.setMic(host, mute = mute, toggle = toggle, level = level)
+        }
+    }
+
+    private suspend fun applyAgentApps(host: PairedHost, apps: List<com.controldesk.domain.model.RunningApp>) {
+        if (apps.isEmpty()) return
+        val buttons = RunningAppsGridBuilder.build(apps, memoryIcons)
+        publishButtons(host, buttons, preferMerge = false)
+        persistNewIcons(buttons)
     }
 
     private suspend fun refreshAppsSilent(host: PairedHost) {
@@ -637,25 +729,33 @@ class DeskViewModel(
     }
 
     private fun applyAudio(host: PairedHost, audio: AudioState) {
-        if (holdingAudioUntil?.hasPassedNow() == false) return
         if (audio.micLevel > 1) lastMicLevel = audio.micLevel
         audioCache[host.id] = audio
         if (_uiState.value.selectedHost?.id != host.id) return
+        val holdActive = holdingAudioUntil?.hasPassedNow() == false
+        val updateVolume = !adjustingVolume && !holdActive
+        val updateMic = !adjustingMic && !holdActive
+        if (!updateVolume && !updateMic) return
         _uiState.update { current ->
             val nextMic = if (audio.micMuted) {
                 current.micLevel.takeIf { it > 1 } ?: lastMicLevel
             } else {
                 audio.micLevel
             }
-            val muteChanged = current.volumeMuted != audio.volumeMuted || current.micMuted != audio.micMuted
-            val volumeMoved = abs(current.volumeLevel - audio.volumeLevel) > 1
-            val micMoved = !audio.micMuted && abs(current.micLevel - nextMic) > 1
-            if (!muteChanged && !volumeMoved && !micMoved) current
-            else current.copy(
-                volumeLevel = audio.volumeLevel,
-                volumeMuted = audio.volumeMuted,
-                micMuted = audio.micMuted,
-                micLevel = nextMic,
+            current.copy(
+                volumeLevel = when {
+                    !updateVolume -> current.volumeLevel
+                    abs(current.volumeLevel - audio.volumeLevel) <= 1 -> current.volumeLevel
+                    else -> audio.volumeLevel
+                },
+                volumeMuted = if (updateVolume) audio.volumeMuted else current.volumeMuted,
+                micMuted = if (updateMic) audio.micMuted else current.micMuted,
+                micLevel = when {
+                    !updateMic -> current.micLevel
+                    audio.micMuted -> current.micLevel
+                    abs(current.micLevel - nextMic) <= 1 -> current.micLevel
+                    else -> nextMic
+                },
             )
         }
     }
@@ -684,20 +784,28 @@ class DeskViewModel(
         audioTick = 0
         autoRefreshJob = viewModelScope.launch {
             while (true) {
-                delay(AUTO_REFRESH_MS)
-                val host = _uiState.value.selectedHost ?: continue
-                refreshAppsSilent(host)
-                audioTick += 1
-                if (audioTick % MISSING_ICON_CHECK_EVERY == 0) {
-                    refreshMissingIconsIfNeeded(host)
+                val host = _uiState.value.selectedHost ?: break
+                if (!isRealtimeConnected()) {
+                    refreshAppsSilent(host)
+                    audioTick += 1
+                    if (audioTick % MISSING_ICON_CHECK_EVERY == 0) {
+                        refreshMissingIconsIfNeeded(host)
+                    }
+                } else {
+                    audioTick += 1
+                    if (audioTick % MISSING_ICON_CHECK_EVERY == 0) {
+                        refreshMissingIconsIfNeeded(host)
+                    }
                 }
+                delay(if (isRealtimeConnected()) FALLBACK_POLL_MS else AUTO_REFRESH_MS)
             }
         }
         audioPollJob = viewModelScope.launch {
             while (true) {
-                delay(AUDIO_REFRESH_MS)
+                delay(if (isRealtimeConnected()) FALLBACK_AUDIO_POLL_MS else AUDIO_REFRESH_MS)
                 val host = _uiState.value.selectedHost ?: continue
-                if (holdingAudioUntil?.hasPassedNow() == false) continue
+                if (isRealtimeConnected()) continue
+                if (holdingAudioUntil?.hasPassedNow() == false || adjustingVolume || adjustingMic) continue
                 runCatching { agentGateway.fetchAudio(host) }.getOrNull()?.let { applyAudio(host, it) }
             }
         }
@@ -716,6 +824,7 @@ class DeskViewModel(
     }
 
     private fun startBurstRefresh() {
+        if (isRealtimeConnected()) return
         burstJob?.cancel()
         burstJob = viewModelScope.launch {
             val host = _uiState.value.selectedHost ?: return@launch
@@ -733,27 +842,27 @@ class DeskViewModel(
         audioPollJob?.cancel()
         audioPollJob = null
         burstJob?.cancel()
+        stopRealtime()
     }
 
-    private fun armAudioHold() {
-        holdingAudioUntil = TimeSource.Monotonic.markNow() + AUDIO_HOLD_MS.milliseconds
+    private fun armAudioHold(ms: Long = AUDIO_DRAG_HOLD_MS) {
+        holdingAudioUntil = TimeSource.Monotonic.markNow() + ms.milliseconds
     }
 
     private companion object {
-        const val AUTO_REFRESH_MS = 400L
-        const val AUDIO_REFRESH_MS = 400L
-        const val AUDIO_HOLD_MS = 400L
-        const val BURST_REFRESH_MS = 200L
-        const val BURST_REFRESH_COUNT = 5
-        const val PINNED_FOCUS_MAX_MS = 8000L
+        const val AUTO_REFRESH_MS = 150L
+        const val FALLBACK_POLL_MS = 5_000L
+        const val AUDIO_REFRESH_MS = 300L
+        const val FALLBACK_AUDIO_POLL_MS = 8_000L
+        const val AUDIO_DRAG_HOLD_MS = 500L
+        const val AUDIO_SETTLE_MS = 1_200L
+        const val BURST_REFRESH_MS = 80L
+        const val BURST_REFRESH_COUNT = 3
+        const val PINNED_FOCUS_MAX_MS = 1200L
         const val ACTIVE_CONFIRM_POLLS = 1
-        const val FOCUS_SETTLE_MS = 250L
-        const val FOCUS_CONFIRM_POLLS = 3
-        const val HOST_SWITCH_SETTLE_MS = 180L
-        const val MISSING_ICON_CHECK_EVERY = 2
-        const val COMMAND_FIRST_MS = 40L
-        const val CLOSE_HOLD_MS = 4_000L
-        const val CLOSE_CONFIRM_MS = 200L
+        const val HOST_SWITCH_SETTLE_MS = 0L
+        const val MISSING_ICON_CHECK_EVERY = 5
+        const val CLOSE_HOLD_MS = 1_500L
         val BLOCKED_QUIT = setOf(
             "Finder", "Dock", "SystemUIServer", "Window Server", "Control Center",
             "NotificationCenter", "loginwindow", "Wallpaper", "Spotlight",

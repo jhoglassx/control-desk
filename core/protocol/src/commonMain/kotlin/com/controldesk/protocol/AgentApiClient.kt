@@ -29,23 +29,21 @@ class AgentApiClient(
             parameter("icons", if (includeIcons) 1 else 0)
         }.body()
 
-    suspend fun launchApp(baseUrl: String, token: String, request: AppLaunchRequest) {
+    suspend fun launchApp(baseUrl: String, token: String, request: AppLaunchRequest): ActionAck =
         httpClient.post("$baseUrl/apps/launch") {
             timeout { requestTimeoutMillis = COMMAND_TIMEOUT_MS }
             bearerAuth(token)
             contentType(ContentType.Application.Json)
             setBody(request)
-        }
-    }
+        }.body()
 
-    suspend fun closeApp(baseUrl: String, token: String, request: AppCloseRequest) {
+    suspend fun closeApp(baseUrl: String, token: String, request: AppCloseRequest): ActionAck =
         httpClient.post("$baseUrl/apps/close") {
             timeout { requestTimeoutMillis = COMMAND_TIMEOUT_MS }
             bearerAuth(token)
             contentType(ContentType.Application.Json)
             setBody(request)
-        }
-    }
+        }.body()
 
     suspend fun openBrowser(baseUrl: String, token: String, request: BrowserOpenRequest) {
         httpClient.post("$baseUrl/browser/open") {
@@ -65,14 +63,13 @@ class AgentApiClient(
         }
     }
 
-    suspend fun switchBrowserTab(baseUrl: String, token: String, request: BrowserTabSwitchRequest) {
+    suspend fun switchBrowserTab(baseUrl: String, token: String, request: BrowserTabSwitchRequest): ActionAck =
         httpClient.post("$baseUrl/browser/tabs/switch") {
             timeout { requestTimeoutMillis = COMMAND_TIMEOUT_MS }
             bearerAuth(token)
             contentType(ContentType.Application.Json)
             setBody(request)
-        }
-    }
+        }.body()
 
     suspend fun audio(baseUrl: String, token: String): AudioResponse =
         httpClient.get("$baseUrl/system/audio") {

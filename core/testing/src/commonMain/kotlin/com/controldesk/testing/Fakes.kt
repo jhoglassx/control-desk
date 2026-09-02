@@ -48,20 +48,23 @@ class FakeAgentGateway(
 
     override suspend fun fetchHealth(host: PairedHost): Boolean? = result(true)
     override suspend fun fetchAudio(host: PairedHost): AudioState = result(audio)
-    override suspend fun launchApp(host: PairedHost, button: GridButton) {
-        result(Unit)
+    override suspend fun launchApp(host: PairedHost, button: GridButton): List<RunningApp> {
+        result(emptyList())
         launched += button
+        return appsByHost[host.id] ?: apps
     }
-    override suspend fun closeApp(host: PairedHost, button: GridButton) {
-        result(Unit)
+    override suspend fun closeApp(host: PairedHost, button: GridButton): List<RunningApp> {
+        result(emptyList())
         closed += button
-        if (!removeOnClose) return
-        val target = button.payload["target"] ?: return
+        if (!removeOnClose) return appsByHost[host.id] ?: apps
+        val target = button.payload["target"] ?: return appsByHost[host.id] ?: apps
         apps = apps.filterNot { it.appName.equals(target, ignoreCase = true) }
+        return appsByHost[host.id] ?: apps
     }
-    override suspend fun switchBrowserTab(host: PairedHost, button: GridButton) {
-        result(Unit)
+    override suspend fun switchBrowserTab(host: PairedHost, button: GridButton): List<RunningApp> {
+        result(emptyList())
         launched += button
+        return appsByHost[host.id] ?: apps
     }
     override suspend fun openBrowser(host: PairedHost, url: String) { result(Unit) }
     override suspend fun closeBrowser(host: PairedHost) { result(Unit) }

@@ -7,6 +7,7 @@ import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.RunningApp
 import com.controldesk.domain.usecase.ExecuteGridButtonUseCase
 import com.controldesk.testing.FakeAgentGateway
+import com.controldesk.testing.FakeAgentRealtime
 import com.controldesk.testing.FakeHostPreferences
 import com.controldesk.testing.FakeIconCache
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +65,7 @@ class DeskViewModelTest {
         val viewModel = DeskViewModel(
             hostPreferences = FakeHostPreferences(listOf(host)),
             agentGateway = gateway,
+            agentRealtime = FakeAgentRealtime(),
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
         )
@@ -94,6 +96,7 @@ class DeskViewModelTest {
         val viewModel = DeskViewModel(
             hostPreferences = FakeHostPreferences(listOf(host)),
             agentGateway = gateway,
+            agentRealtime = FakeAgentRealtime(),
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
         )
@@ -127,6 +130,7 @@ class DeskViewModelTest {
         val viewModel = DeskViewModel(
             hostPreferences = FakeHostPreferences(listOf(host)),
             agentGateway = gateway,
+            agentRealtime = FakeAgentRealtime(),
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
         )
@@ -166,6 +170,7 @@ class DeskViewModelTest {
         val viewModel = DeskViewModel(
             hostPreferences = FakeHostPreferences(listOf(host)),
             agentGateway = gateway,
+            agentRealtime = FakeAgentRealtime(),
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
         )
@@ -205,6 +210,7 @@ class DeskViewModelTest {
         val viewModel = DeskViewModel(
             hostPreferences = FakeHostPreferences(listOf(pc1, pc2)),
             agentGateway = gateway,
+            agentRealtime = FakeAgentRealtime(),
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
         )
@@ -240,6 +246,7 @@ class DeskViewModelTest {
         val viewModel = DeskViewModel(
             hostPreferences = FakeHostPreferences(listOf(pc1, pc2)),
             agentGateway = gateway,
+            agentRealtime = FakeAgentRealtime(),
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
         )
@@ -264,6 +271,7 @@ class DeskViewModelTest {
         val viewModel = DeskViewModel(
             hostPreferences = FakeHostPreferences(listOf(host)),
             agentGateway = gateway,
+            agentRealtime = FakeAgentRealtime(),
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
         )

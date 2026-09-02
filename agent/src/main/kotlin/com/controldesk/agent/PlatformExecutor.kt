@@ -83,11 +83,23 @@ class NativePlatformExecutor : PlatformExecutor {
         if (isMac) MacWindowLister.list(includeIcons) else fallback.listRunningApps(includeIcons)
 
     override fun launchApp(request: AppLaunchRequest) {
-        if (isMac) MacFocusApp.focus(request) else fallback.launchApp(request)
+        if (isMac) {
+            MacFocusApp.focus(request)
+            MacWindowLister.refreshNow()
+            MacChromeTabs.refreshNow()
+        } else {
+            fallback.launchApp(request)
+        }
     }
 
     override fun closeApp(request: AppCloseRequest) {
-        if (isMac) MacAppQuit.quit(request.target) else fallback.closeApp(request)
+        if (isMac) {
+            MacAppQuit.quit(request.target)
+            MacWindowLister.refreshNow()
+            MacChromeTabs.refreshNow()
+        } else {
+            fallback.closeApp(request)
+        }
     }
 
     override fun openBrowser(url: String, browser: String?) {
@@ -99,7 +111,13 @@ class NativePlatformExecutor : PlatformExecutor {
     }
 
     override fun switchBrowserTab(request: BrowserTabSwitchRequest) {
-        if (isMac) MacChromeTabs.switchTab(request) else fallback.switchBrowserTab(request)
+        if (isMac) {
+            MacChromeTabs.switchTab(request)
+            MacWindowLister.refreshNow()
+            MacChromeTabs.refreshNow()
+        } else {
+            fallback.switchBrowserTab(request)
+        }
     }
 
     override fun audio(): AudioResponse =

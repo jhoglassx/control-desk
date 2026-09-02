@@ -3,6 +3,8 @@ package com.controldesk.app.di
 import com.controldesk.app.viewmodel.DeskViewModel
 import com.controldesk.app.viewmodel.PairHostViewModel
 import com.controldesk.data.AgentGatewayImpl
+import com.controldesk.data.AgentRealtimeClient
+import com.controldesk.domain.repository.AgentRealtime
 import com.controldesk.data.JsonHostPreferences
 import com.controldesk.data.JsonRunningAppIconCache
 import com.controldesk.data.PairHostRemoteImpl
@@ -19,13 +21,14 @@ import org.koin.dsl.module
 
 fun appModule(): Module = module {
     single { AgentApiClient(get()) }
+    single<AgentRealtime> { AgentRealtimeClient(get()) }
     single<HostPreferences> { JsonHostPreferences(get()) }
     single<AgentGateway> { AgentGatewayImpl(get()) }
     single<PairHostRemote> { PairHostRemoteImpl(get()) }
     single<RunningAppIconCache> { JsonRunningAppIconCache(get()) }
     single { ExecuteGridButtonUseCase(get()) }
     single { PairHostUseCase(get(), get()) }
-    viewModel { DeskViewModel(get(), get(), get(), get()) }
+    viewModel { DeskViewModel(get(), get(), get(), get(), get()) }
     viewModel { PairHostViewModel(get(), get()) }
 }
 
