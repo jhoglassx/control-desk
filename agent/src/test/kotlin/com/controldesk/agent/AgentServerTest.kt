@@ -5,6 +5,7 @@ import com.controldesk.protocol.AppLaunchRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.post
@@ -24,11 +25,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AgentServerTest {
-    private lateinit var tmp: File
-    private lateinit var server: AgentServer
-    private lateinit var auth: AgentAuthStore
-    private val client = HttpClient(CIO) {
+    protected lateinit var tmp: File
+    protected lateinit var server: AgentServer
+    protected lateinit var auth: AgentAuthStore
+    protected val client = HttpClient(CIO) {
         install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        install(WebSockets)
     }
 
     @BeforeTest

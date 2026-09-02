@@ -31,7 +31,11 @@ class AgentGatewayImpl(
 
     override suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp> = mapErrors {
         requireToken(host)
-        api.runningApps(host.baseUrl(), host.token, includeIcons).apps.map { info ->
+        mapRunningApps(api.runningApps(host.baseUrl(), host.token, includeIcons).apps)
+    }
+
+    private fun mapRunningApps(apps: List<com.controldesk.protocol.RunningAppInfo>): List<RunningApp> =
+        apps.map { info ->
             RunningApp(
                 name = info.name,
                 appName = info.appName,
@@ -49,7 +53,6 @@ class AgentGatewayImpl(
                 dockIndex = info.dockIndex,
             )
         }
-    }
 
     override suspend fun fetchAudio(host: PairedHost): AudioState = mapErrors {
         requireToken(host)
@@ -62,43 +65,49 @@ class AgentGatewayImpl(
         )
     }
 
-    override suspend fun launchApp(host: PairedHost, button: GridButton) = mapErrors {
+    override suspend fun launchApp(host: PairedHost, button: GridButton): List<RunningApp> = mapErrors {
         requireToken(host)
-        api.launchApp(
-            host.baseUrl(),
-            host.token,
-            AppLaunchRequest(
-                target = button.payload.getValue("target"),
-                targetType = button.payload["targetType"] ?: "appName",
-                windowTitle = button.payload["windowTitle"],
-                windowIndex = button.payload["windowIndex"]?.toIntOrNull(),
-                windowNumber = button.payload["windowNumber"]?.toIntOrNull(),
-            ),
+        mapRunningApps(
+            api.launchApp(
+                host.baseUrl(),
+                host.token,
+                AppLaunchRequest(
+                    target = button.payload.getValue("target"),
+                    targetType = button.payload["targetType"] ?: "appName",
+                    windowTitle = button.payload["windowTitle"],
+                    windowIndex = button.payload["windowIndex"]?.toIntOrNull(),
+                    windowNumber = button.payload["windowNumber"]?.toIntOrNull(),
+                ),
+            ).apps,
         )
     }
 
-    override suspend fun closeApp(host: PairedHost, button: GridButton) = mapErrors {
+    override suspend fun closeApp(host: PairedHost, button: GridButton): List<RunningApp> = mapErrors {
         requireToken(host)
-        api.closeApp(
-            host.baseUrl(),
-            host.token,
-            AppCloseRequest(
-                target = button.payload.getValue("target"),
-                targetType = button.payload["targetType"] ?: "appName",
-            ),
+        mapRunningApps(
+            api.closeApp(
+                host.baseUrl(),
+                host.token,
+                AppCloseRequest(
+                    target = button.payload.getValue("target"),
+                    targetType = button.payload["targetType"] ?: "appName",
+                ),
+            ).apps,
         )
     }
 
-    override suspend fun switchBrowserTab(host: PairedHost, button: GridButton) = mapErrors {
-        api.switchBrowserTab(
-            host.baseUrl(),
-            host.token,
-            BrowserTabSwitchRequest(
-                browser = button.payload["browser"] ?: "chrome",
-                action = button.payload["action"] ?: "select",
-                value = button.payload["value"],
-                windowIndex = button.payload["windowIndex"]?.toIntOrNull(),
-            ),
+    override suspend fun switchBrowserTab(host: PairedHost, button: GridButton): List<RunningApp> = mapErrors {
+        mapRunningApps(
+            api.switchBrowserTab(
+                host.baseUrl(),
+                host.token,
+                BrowserTabSwitchRequest(
+                    browser = button.payload["browser"] ?: "chrome",
+                    action = button.payload["action"] ?: "select",
+                    value = button.payload["value"],
+                    windowIndex = button.payload["windowIndex"]?.toIntOrNull(),
+                ),
+            ).apps,
         )
     }
 

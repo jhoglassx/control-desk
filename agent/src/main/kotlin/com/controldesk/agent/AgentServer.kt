@@ -34,6 +34,10 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.WebSockets
+import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.CloseReason
+import io.ktor.websocket.close
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -45,11 +49,18 @@ class AgentServer(
     private val bind: String = System.getenv("CONTROL_DESK_BIND") ?: "0.0.0.0",
 ) {
     private var engine: EmbeddedServer<*, *>? = null
+    private val wsHub = AgentWsHub(authStore, executor)
 
     fun start() {
+        wsHub.start()
         engine = embeddedServer(CIO, port = port, host = bind) {
             install(ContentNegotiation) {
                 json(AgentJson)
+            }
+            install(WebSockets) {
+                pingPeriodMillis = 15_000
+                timeoutMillis = 30_000
+                maxFrameSize = Long.MAX_VALUE
             }
             install(StatusPages) {
                 exception<Throwable> { call, cause ->
@@ -142,12 +153,12 @@ class AgentServer(
                     post("/apps/launch") {
                         val body = call.receive<AppLaunchRequest>()
                         executor.launchApp(body)
-                        call.respondDto(ActionAck())
+                        call.respondDto(ActionAck(apps = executor.listRunningApps(includeIcons = false)))
                     }
                     post("/apps/close") {
                         val body = call.receive<AppCloseRequest>()
                         executor.closeApp(body)
-                        call.respondDto(ActionAck())
+                        call.respondDto(ActionAck(apps = executor.listRunningApps(includeIcons = false)))
                     }
                     post("/browser/open") {
                         val body = call.receive<BrowserOpenRequest>()
@@ -162,7 +173,7 @@ class AgentServer(
                     post("/browser/tabs/switch") {
                         val body = call.receive<BrowserTabSwitchRequest>()
                         executor.switchBrowserTab(body)
-                        call.respondDto(ActionAck())
+                        call.respondDto(ActionAck(apps = executor.listRunningApps(includeIcons = false)))
                     }
                     get("/system/audio") {
                         call.respondDto(executor.audio())
@@ -178,11 +189,20 @@ class AgentServer(
                         call.respondDto(ActionAck())
                     }
                 }
+                webSocket("/ws") {
+                    val token = call.request.queryParameters["token"].orEmpty()
+                    if (token.isBlank()) {
+                        close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Missing token"))
+                        return@webSocket
+                    }
+                    wsHub.handleSession(this, token)
+                }
             }
         }.start(wait = false)
     }
 
     fun stop() {
+        wsHub.stop()
         engine?.stop(gracePeriodMillis = 200, timeoutMillis = 500)
         engine = null
     }

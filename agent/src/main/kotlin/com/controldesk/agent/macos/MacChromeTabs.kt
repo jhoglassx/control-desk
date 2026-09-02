@@ -11,12 +11,16 @@ object MacChromeTabs {
         Thread({
             while (true) {
                 runCatching { cache.set(listTabs()) }
-                Thread.sleep(1_200)
+                Thread.sleep(150)
             }
         }, "chrome-tabs").apply {
             isDaemon = true
             start()
         }
+    }
+
+    fun refreshNow() {
+        runCatching { cache.set(listTabs()) }
     }
 
     fun mergeTabs(windows: List<RunningAppInfo>): List<RunningAppInfo> {

@@ -4,16 +4,17 @@ import com.controldesk.domain.error.ControlDeskError
 import com.controldesk.domain.model.ActionType
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
+import com.controldesk.domain.model.RunningApp
 import com.controldesk.domain.repository.AgentGateway
 
 class ExecuteGridButtonUseCase(
     private val gateway: AgentGateway,
 ) {
-    suspend operator fun invoke(button: GridButton, host: PairedHost) {
+    suspend operator fun invoke(button: GridButton, host: PairedHost): List<RunningApp> {
         if (host.token.isBlank()) {
             throw ControlDeskError.Unauthorized()
         }
-        when (button.actionType) {
+        return when (button.actionType) {
             ActionType.REMOTE_LAUNCH -> {
                 requirePayload(button, "target")
                 gateway.launchApp(host, button)
@@ -26,8 +27,12 @@ class ExecuteGridButtonUseCase(
             ActionType.REMOTE_BROWSER_OPEN_SITE -> {
                 val url = requirePayload(button, "url")
                 gateway.openBrowser(host, url)
+                emptyList()
             }
-            ActionType.REMOTE_BROWSER_CLOSE_APP -> gateway.closeBrowser(host)
+            ActionType.REMOTE_BROWSER_CLOSE_APP -> {
+                gateway.closeBrowser(host)
+                emptyList()
+            }
             ActionType.REMOTE_VOLUME -> {
                 val mute = button.payload["mute"]?.toBooleanStrictOrNull()
                 val delta = button.payload["delta"]?.toIntOrNull()
@@ -36,11 +41,13 @@ class ExecuteGridButtonUseCase(
                     throw ControlDeskError.Generic("Payload de volume precisa de delta, level ou mute")
                 }
                 gateway.setVolume(host, level = level, delta = delta, mute = mute)
+                emptyList()
             }
             ActionType.REMOTE_MIC_MUTE -> {
                 val mute = button.payload["mute"]?.toBooleanStrictOrNull()
                 val toggle = button.payload["toggle"]?.toBooleanStrictOrNull() ?: true
                 gateway.setMic(host, mute = mute, toggle = mute == null && toggle)
+                emptyList()
             }
             ActionType.OPEN_URL -> throw ControlDeskError.Generic("OPEN_URL é local only")
         }

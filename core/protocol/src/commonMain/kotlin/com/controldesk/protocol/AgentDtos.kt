@@ -85,6 +85,7 @@ data class SetupResponse(
 @Serializable
 data class ActionAck(
     val ok: Boolean = true,
+    val apps: List<RunningAppInfo> = emptyList(),
 )
 
 @Serializable
