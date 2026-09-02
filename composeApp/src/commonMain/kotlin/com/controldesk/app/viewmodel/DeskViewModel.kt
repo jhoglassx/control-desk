@@ -436,19 +436,13 @@ class DeskViewModel(
             streak = incomingActiveStreak
         }
 
-        val result = when {
-            incomingActiveId != null && incomingActiveId == current -> {
-                last = incomingActiveId
-                streak = 0
-                incoming.map { button ->
-                    button.copy(isActive = !button.isDockPlaceholder() && button.id == current)
-                }
-            }
+        val highlightId = when {
+            incomingActiveId != null && incomingActiveId == current -> incomingActiveId
             incomingActiveId == null -> {
                 last = null
                 streak = 0
                 current = null
-                incoming
+                null
             }
             else -> {
                 if (incomingActiveId == last) streak += 1 else {
@@ -457,9 +451,9 @@ class DeskViewModel(
                 }
                 if (streak >= ACTIVE_CONFIRM_POLLS) {
                     current = incomingActiveId
-                    incoming
+                    incomingActiveId
                 } else {
-                    incoming.map { it.copy(isActive = !it.isDockPlaceholder() && it.id == current) }
+                    current
                 }
             }
         }
@@ -472,8 +466,13 @@ class DeskViewModel(
             lastIncomingActiveId = last
             incomingActiveStreak = streak
         }
-        return result
+        return normalizeActiveHighlight(incoming, highlightId)
     }
+
+    private fun normalizeActiveHighlight(buttons: List<GridButton>, activeId: String?): List<GridButton> =
+        buttons.map { button ->
+            button.copy(isActive = activeId != null && !button.isDockPlaceholder() && button.id == activeId)
+        }
 
     private fun bindActiveTracking(hostId: String) {
         if (activeTrackingHostId == hostId) return

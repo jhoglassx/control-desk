@@ -53,7 +53,8 @@ object MacWindowLister {
         val snapshot = cache.get().ifEmpty { query() }.filterNot { isSuppressed(it.appName) }
         val merged = MacChromeTabs.mergeTabs(snapshot)
         val withDock = MacDockApps.merge(merged)
-        return withDock.map { app ->
+        val normalized = ensureSingleActive(withDock)
+        return normalized.map { app ->
             val cached = MacAppIconResolver.iconFor(app.appName)
             when {
                 cached != null -> app.copy(iconBase64 = cached)
@@ -61,6 +62,13 @@ object MacWindowLister {
                 else -> app
             }
         }
+    }
+
+    private fun ensureSingleActive(apps: List<RunningAppInfo>): List<RunningAppInfo> {
+        val activeIndexes = apps.withIndex().filter { it.value.isActive }.map { it.index }
+        if (activeIndexes.size <= 1) return apps
+        val keep = activeIndexes.first()
+        return apps.mapIndexed { index, app -> app.copy(isActive = index == keep) }
     }
 
     private fun query(): List<RunningAppInfo> {
@@ -83,7 +91,7 @@ object MacWindowLister {
             obj.str("bundlePath")?.let { MacAppIconResolver.remember(appName, it) }
             val title = obj.str("windowTitle").orEmpty()
             val minimized = obj.bool("minimized")
-            val visible = obj.bool("visible") && !minimized
+            val visible = obj.bool("visible")
             val label = when {
                 title.isNotBlank() && title != appName -> "$appName · $title"
                 minimized -> "$appName · min"
@@ -183,10 +191,29 @@ object MacWindowLister {
             var isMain = false, isMin = false;
             try { isMin = windows[w].valueOf().attributes.byName('AXMinimized').value(); } catch (e) {}
             try { isMain = windows[w].valueOf().attributes.byName('AXMain').value(); } catch (e) {}
-            if (isMain) return w;
+            if (isMain && !isMin) return w;
             if (fallback < 0 && !isMin) fallback = w;
           }
           return fallback >= 0 ? fallback : 0;
+        }
+        function isFrontProcess(pid, name, frontApp) {
+          if (frontApp.pid !== 0 && pid === frontApp.pid) return true;
+          if (frontApp.name !== '' && name === frontApp.name) return true;
+          return false;
+        }
+        function finalizeActive(rows, frontApp) {
+          for (var i = 0; i < rows.length; i++) rows[i].isActive = false;
+          if (frontApp.pid === 0 && frontApp.name === '') return;
+          var best = -1;
+          for (var i = 0; i < rows.length; i++) {
+            var r = rows[i];
+            var match = (frontApp.pid !== 0 && r.pid === frontApp.pid) ||
+              (frontApp.name !== '' && r.appName === frontApp.name);
+            if (!match || !r.visible) continue;
+            if (!r.minimized) { best = i; break; }
+            if (best < 0) best = i;
+          }
+          if (best >= 0) rows[best].isActive = true;
         }
         function run() {
           var screens = screenRects();
@@ -200,16 +227,29 @@ object MacWindowLister {
             var name = p.name();
             var pid = 0;
             try { pid = p.unixId(); } catch (e) {}
-            var front = (frontApp.pid !== 0 && pid === frontApp.pid) ||
-              (frontApp.name !== '' && name === frontApp.name);
+            var front = isFrontProcess(pid, name, frontApp);
             if (!front) {
               try { front = p.frontmost(); } catch (e) {}
             }
             var path = bundlePath(pid);
             var windows = [];
             try { windows = p.windows(); } catch (e) { windows = []; }
-            if (!windows || windows.length === 0) continue;
-            var activeAt = front ? activeWindowIndex(windows) : -1;
+            if (!windows || windows.length === 0) {
+              rows.push({
+                appName: name,
+                pid: pid,
+                windowTitle: '',
+                isActive: false,
+                visible: true,
+                minimized: false,
+                windowIndex: 0,
+                axWindowIndex: 1,
+                windowNumber: n++,
+                monitorIndex: front ? 1 : 0,
+                bundlePath: path
+              });
+              continue;
+            }
             for (var w = 0; w < windows.length; w++) {
               var title = '';
               var minimized = false;
@@ -222,9 +262,10 @@ object MacWindowLister {
               var pw = Number(size[0] || 0), ph = Number(size[1] || 0);
               rows.push({
                 appName: name,
+                pid: pid,
                 windowTitle: title,
-                isActive: w === activeAt,
-                visible: !minimized,
+                isActive: false,
+                visible: true,
                 minimized: minimized,
                 windowIndex: w,
                 axWindowIndex: w + 1,
@@ -234,6 +275,7 @@ object MacWindowLister {
               });
             }
           }
+          finalizeActive(rows, frontApp);
           return JSON.stringify(rows);
         }
     """.trimIndent()

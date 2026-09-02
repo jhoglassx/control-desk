@@ -250,6 +250,28 @@ class DeskViewModelTest {
         assertEquals(listOf("Chrome", "Notes"), viewModel.uiState.value.buttons.map { it.label })
     }
 
+    @Test
+    fun keepsSingleActiveHighlightWhenAgentReportsMultiple() = runTest(dispatcher) {
+        val host = pairedHost("10.0.0.1:8741", "Mac", 0)
+        val gateway = FakeAgentGateway(
+            appsByHost = mapOf(
+                host.id to listOf(
+                    RunningApp(name = "Chrome", appName = "Chrome", isActive = true, isVisible = true),
+                    RunningApp(name = "Safari", appName = "Safari", isActive = true, isVisible = true),
+                ),
+            ),
+        )
+        val viewModel = DeskViewModel(
+            hostPreferences = FakeHostPreferences(listOf(host)),
+            agentGateway = gateway,
+            executeGridButton = ExecuteGridButtonUseCase(gateway),
+            iconCache = FakeIconCache(),
+        )
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.buttons.count { it.isActive })
+        assertEquals("Chrome", viewModel.uiState.value.buttons.first { it.isActive }.label)
+    }
+
     private fun pairedHost(id: String, name: String, order: Int) = PairedHost(
         id = id,
         name = name,

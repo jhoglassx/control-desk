@@ -46,15 +46,16 @@ fun AppLauncherTile(
     modifier: Modifier = Modifier,
 ) {
     val dockOnly = button.isDockPinned && !button.isVisible && !button.isActive
+    val open = button.isVisible && !button.isActive
+    // Azul = em uso; verde = aberto; cinza = só na Dock / fechado
     val borderColor = when {
         button.isActive -> DeskColors.Accent
-        button.isVisible -> DeskColors.Mint
-        dockOnly -> DeskColors.Idle
+        open -> DeskColors.Mint
         else -> DeskColors.Idle
     }
     val borderWidth = when {
         button.isActive -> 3.dp
-        button.isVisible -> 2.dp
+        open -> 2.dp
         else -> 1.dp
     }
     val label = button.tileLabel()
