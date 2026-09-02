@@ -29,7 +29,11 @@ object DeskColors {
 }
 
 object DeskDesign {
-    const val GridColumns = 4
+    /** Stream Deck MK.2 key size (72×72 px artwork). */
+    const val TileSize = 72
     const val TileGap = 8
     const val HorizontalPad = 16
+    /** Icon area inside a tile (~70% of tile). */
+    const val IconSize = 50
+    const val IconCornerRadius = 10
 }

@@ -17,7 +17,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.min
 import com.controldesk.app.theme.DeskColors
 import com.controldesk.app.theme.DeskDesign
 import com.controldesk.app.ui.desk.components.DeskHeader
@@ -78,11 +77,7 @@ fun DeskScreen(
             }
             BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
                 val landscape = maxWidth > maxHeight
-                val tileSize = (
-                    min(maxWidth, maxHeight) -
-                        DeskDesign.HorizontalPad.dp * 2 -
-                        DeskDesign.TileGap.dp * (DeskDesign.GridColumns - 1)
-                    ) / DeskDesign.GridColumns
+                val tileSize = DeskDesign.TileSize.dp
                 HorizontalPager(
                     state = pagerState,
                     userScrollEnabled = uiState.hosts.size > 1,

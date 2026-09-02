@@ -7,7 +7,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Ícone do app **em execução**: `NSRunningApplication.bundleURL` +
  * `NSWorkspace.iconForFile` (o mesmo ícone do Dock/Finder).
- * PNG 64px em base64 vai no `RunningAppInfo.iconBase64` para o celular.
+ * PNG 72px em base64 vai no `RunningAppInfo.iconBase64` para o celular.
  */
 object MacAppIconResolver {
     private val memory = ConcurrentHashMap<String, String>()
@@ -114,7 +114,7 @@ object MacAppIconResolver {
         val png = File.createTempFile("cd-icon-", ".png")
         Shell.run(
             "/usr/bin/sips",
-            "-z", "64", "64",
+            "-z", "72", "72",
             "-s", "format", "png",
             source.absolutePath,
             "--out", png.absolutePath,
@@ -143,11 +143,11 @@ object MacAppIconResolver {
           for (var i = 0; i < n; i++) {
             var r = reps.objectAtIndex(i);
             var w = Number(r.pixelsWide);
-            if (w >= 64 && w < best) { chosen = r; best = w; }
+            if (w >= 72 && w < best) { chosen = r; best = w; }
           }
           if (!chosen && n > 0) chosen = reps.objectAtIndex(0);
           if (!chosen) return 'noicon';
-          var img = $.NSImage.alloc.initWithSize($.NSMakeSize(64, 64));
+          var img = $.NSImage.alloc.initWithSize($.NSMakeSize(72, 72));
           img.addRepresentation(chosen);
           img.TIFFRepresentation.writeToFileAtomically(argv[1], true);
           return 'ok';

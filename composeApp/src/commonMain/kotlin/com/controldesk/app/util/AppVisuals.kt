@@ -17,22 +17,10 @@ fun GridButton.tileAppName(): String {
     return cleaned.substringBefore(" · ").ifBlank { cleaned }
 }
 
-fun emojiForLabel(label: String): String {
-    val key = label.lowercase()
-    return when {
-        "chrome" in key -> "🌐"
-        "safari" in key -> "🧭"
-        "firefox" in key -> "🦊"
-        "code" in key || "studio" in key || "cursor" in key -> "💻"
-        "term" in key || "iterm" in key -> "⬛"
-        "slack" in key || "teams" in key -> "💬"
-        "mail" in key || "outlook" in key -> "✉️"
-        "note" in key || "obsidian" in key -> "📝"
-        "figma" in key || "sketch" in key -> "🎨"
-        "spot" in key || "music" in key -> "🎵"
-        "finder" in key || "explorer" in key -> "📁"
-        else -> listOf("🚀", "⚙️", "📦", "🧩", "🖥️")[label.hashCode().and(0x7fffffff) % 5]
-    }
+fun monogramForLabel(label: String): String {
+    val name = label.trim().substringBefore(" · ").substringBefore(" - ")
+    val letter = name.firstOrNull { it.isLetterOrDigit() } ?: '?'
+    return letter.uppercaseChar().toString()
 }
 
 fun accentForLabel(label: String): Color {
