@@ -100,6 +100,7 @@ data class AudioResponse(
 data class RunningAppInfo(
     val name: String,
     val appName: String = name,
+    val pid: Int? = null,
     val windowTitle: String? = null,
     val windowIndex: Int? = null,
     val axWindowIndex: Int? = null,

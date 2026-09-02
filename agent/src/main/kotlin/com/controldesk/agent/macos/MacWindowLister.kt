@@ -122,6 +122,7 @@ object MacWindowLister {
             RunningAppInfo(
                 name = label,
                 appName = appName,
+                pid = obj.int("pid"),
                 windowTitle = title.takeIf { it.isNotBlank() },
                 windowIndex = obj.int("windowIndex") ?: index,
                 axWindowIndex = obj.int("axWindowIndex"),
@@ -229,8 +230,10 @@ object MacWindowLister {
           var best = -1;
           for (var i = 0; i < rows.length; i++) {
             var r = rows[i];
-            var match = (frontApp.pid !== 0 && r.pid === frontApp.pid) ||
-              (frontApp.name !== '' && r.appName === frontApp.name);
+            var match = frontApp.pid !== 0 && r.pid === frontApp.pid;
+            if (!match && frontApp.pid === 0 && frontApp.name !== '' && r.appName === frontApp.name) {
+              match = true;
+            }
             if (!match || !r.visible) continue;
             if (!r.minimized) { best = i; break; }
             if (best < 0) best = i;

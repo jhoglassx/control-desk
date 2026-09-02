@@ -103,4 +103,54 @@ class RunningAppsGridBuilderTest {
         assertEquals(1, buttons.first { it.label == "Safari" }.monitorIndex)
         assertEquals(2, buttons.first { it.label == "Studio" }.monitorIndex)
     }
+
+    @Test
+    fun multipleInstancesOfSameAppGetDistinctIds() {
+        val apps = listOf(
+            RunningApp(
+                name = "Android Studio · project-a",
+                appName = "Android Studio",
+                pid = 101,
+                windowTitle = "project-a",
+                axWindowIndex = 1,
+                isActive = true,
+                isVisible = true,
+            ),
+            RunningApp(
+                name = "Android Studio · project-b",
+                appName = "Android Studio",
+                pid = 101,
+                windowTitle = "project-b",
+                axWindowIndex = 2,
+                isActive = false,
+                isVisible = true,
+            ),
+            RunningApp(
+                name = "Google Chrome",
+                appName = "Google Chrome",
+                pid = 202,
+                axWindowIndex = 1,
+                isActive = false,
+                isVisible = true,
+            ),
+            RunningApp(
+                name = "Google Chrome · Docs",
+                appName = "Google Chrome",
+                pid = 202,
+                windowTitle = "Docs",
+                axWindowIndex = 2,
+                isActive = false,
+                isVisible = true,
+            ),
+        )
+        val buttons = RunningAppsGridBuilder.build(apps)
+        assertEquals(4, buttons.size)
+        assertEquals(4, buttons.map { it.id }.toSet().size)
+        assertEquals(
+            listOf("app-Android Studio-pid101-ax1-t${"project-a".hashCode()}", "app-Android Studio-pid101-ax2-t${"project-b".hashCode()}"),
+            buttons.filter { it.appNameFromPayload() == "Android Studio" }.map { it.id },
+        )
+    }
+
+    private fun GridButton.appNameFromPayload(): String = payload.getValue("target")
 }

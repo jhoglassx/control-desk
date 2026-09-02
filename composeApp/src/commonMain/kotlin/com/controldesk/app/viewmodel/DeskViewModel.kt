@@ -128,8 +128,7 @@ class DeskViewModel(
 
     fun onButtonClick(button: GridButton) {
         val host = _uiState.value.selectedHost ?: return
-        val target = button.payload["target"]
-        if (target != null && isClosing(target)) return
+        if (isClosing(button)) return
         armPinnedFocus(button)
         _uiState.update { state ->
             state.copy(
@@ -183,7 +182,7 @@ class DeskViewModel(
                 incomingActiveStreakByHost[id] = 0
             }
         }
-        val key = target.lowercase()
+        val key = button.id
         closingUntil[key] = TimeSource.Monotonic.markNow() + CLOSE_HOLD_MS.milliseconds
         if (button.isDockPinned) {
             closingPlaceholders[key] = dockPlaceholder(button)
@@ -191,7 +190,7 @@ class DeskViewModel(
             closingPlaceholders.remove(key)
         }
         _uiState.update { state ->
-            state.copy(buttons = replaceClosedApp(state.buttons, target))
+            state.copy(buttons = replaceClosedApp(state.buttons, button))
         }
         viewModelScope.launch {
             try {
@@ -596,14 +595,9 @@ class DeskViewModel(
         }
     }
 
-    private fun matchesCloseTarget(button: GridButton, target: String): Boolean {
-        val buttonTarget = button.payload["target"] ?: return false
-        return buttonTarget.equals(target, ignoreCase = true)
-    }
-
-    private fun isClosing(target: String): Boolean {
+    private fun isClosing(button: GridButton): Boolean {
         pruneExpiredCloses()
-        return closingUntil.containsKey(target.lowercase())
+        return closingUntil.containsKey(button.id)
     }
 
     private fun pruneExpiredCloses() {
@@ -617,7 +611,7 @@ class DeskViewModel(
     private fun confirmClosedApps(incoming: List<GridButton>) {
         pruneExpiredCloses()
         closingUntil.keys.toList().forEach { key ->
-            val stillRunning = incoming.any { matchesCloseTarget(it, key) && !it.isDockPlaceholder() }
+            val stillRunning = incoming.any { it.id == key && !it.isDockPlaceholder() }
             if (!stillRunning) {
                 closingUntil.remove(key)
                 closingPlaceholders.remove(key)
@@ -629,24 +623,23 @@ class DeskViewModel(
         pruneExpiredCloses()
         if (closingUntil.isEmpty()) return buttons
         val filtered = buttons.filter { button ->
-            val target = button.payload["target"] ?: return@filter true
-            if (!closingUntil.containsKey(target.lowercase())) return@filter true
+            if (!closingUntil.containsKey(button.id)) return@filter true
             button.isDockPlaceholder()
         }.map { button ->
             if (button.isDockPlaceholder()) button.copy(isActive = false, isVisible = false) else button
         }
         val missing = closingUntil.keys.filter { key ->
-            filtered.none { matchesCloseTarget(it, key) }
+            filtered.none { it.id == key }
         }
         if (missing.isEmpty()) return filtered
         val extras = missing.mapNotNull { closingPlaceholders[it] }
         return filtered + extras
     }
 
-    private fun replaceClosedApp(buttons: List<GridButton>, target: String): List<GridButton> {
-        val index = buttons.indexOfFirst { matchesCloseTarget(it, target) }.takeIf { it >= 0 } ?: buttons.size
-        val without = buttons.filterNot { matchesCloseTarget(it, target) }
-        val placeholder = closingPlaceholders[target.lowercase()] ?: return without
+    private fun replaceClosedApp(buttons: List<GridButton>, closed: GridButton): List<GridButton> {
+        val index = buttons.indexOfFirst { it.id == closed.id }.takeIf { it >= 0 } ?: buttons.size
+        val without = buttons.filterNot { it.id == closed.id }
+        val placeholder = closingPlaceholders[closed.id] ?: return without
         return without.toMutableList().apply { add(index.coerceAtMost(size), placeholder.copy(isActive = false, isVisible = false)) }
     }
 

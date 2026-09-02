@@ -39,6 +39,7 @@ data class AudioState(
 data class RunningApp(
     val name: String,
     val appName: String,
+    val pid: Int? = null,
     val windowTitle: String? = null,
     val windowIndex: Int? = null,
     val axWindowIndex: Int? = null,

@@ -1,6 +1,8 @@
 package com.controldesk.app.ui.desk.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,11 +24,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.controldesk.app.panel.LocalPanelMode
 import com.controldesk.app.theme.DeskColors
 import com.controldesk.app.viewmodel.DeskUiState
 import com.controldesk.domain.error.ControlDeskError
 import com.controldesk.domain.model.PairedHost
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DeskHeader(
     uiState: DeskUiState,
@@ -36,8 +40,10 @@ fun DeskHeader(
     onRefresh: () -> Unit,
     onManageHosts: () -> Unit,
     onPairHost: () -> Unit,
+    onAdminAccessRequest: () -> Unit = onManageHosts,
     modifier: Modifier = Modifier,
 ) {
+    val panelMode = LocalPanelMode.current.enabled
     val (dot, status) = when {
         !isCurrentPage -> {
             val cached = host?.id?.let { uiState.cachedButtons[it] }.orEmpty()
@@ -61,7 +67,14 @@ fun DeskHeader(
         ) {
             Box(Modifier.size(8.dp).background(dot, CircleShape))
             Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = if (panelMode) onAdminAccessRequest else null,
+                    ),
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         host?.name ?: "Control Desk",
@@ -87,8 +100,10 @@ fun DeskHeader(
             TextButton(onClick = onRefresh, enabled = !uiState.isLoadingApps && isCurrentPage) {
                 Text("↻", color = if (uiState.isLoadingApps) DeskColors.TextMuted else DeskColors.TextPrimary, fontSize = 18.sp)
             }
-            TextButton(onClick = onManageHosts) { Text("Hosts", color = DeskColors.TextPrimary, fontSize = 13.sp) }
-            TextButton(onClick = onPairHost) { Text("+", color = DeskColors.Accent, fontSize = 20.sp) }
+            if (!panelMode) {
+                TextButton(onClick = onManageHosts) { Text("Hosts", color = DeskColors.TextPrimary, fontSize = 13.sp) }
+                TextButton(onClick = onPairHost) { Text("+", color = DeskColors.Accent, fontSize = 20.sp) }
+            }
         }
         if (uiState.hosts.size > 1) {
             Spacer(Modifier.height(8.dp))

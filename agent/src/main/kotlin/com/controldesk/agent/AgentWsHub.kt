@@ -210,7 +210,9 @@ class AgentWsHub(
         buildString {
             append(app.appName)
             append(':')
-            append(app.windowNumber ?: -1)
+            append(app.pid ?: -1)
+            append(':')
+            append(app.axWindowIndex ?: app.windowIndex ?: -1)
             append(':')
             append(app.isActive)
             append(':')
