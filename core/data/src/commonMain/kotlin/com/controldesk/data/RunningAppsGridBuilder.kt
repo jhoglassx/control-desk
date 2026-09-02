@@ -31,6 +31,8 @@ object RunningAppsGridBuilder {
                     app.windowTitle?.let { put("windowTitle", it) }
                     app.windowNumber?.let { put("windowNumber", it.toString()) }
                     app.windowIndex?.let { put("windowIndex", it.toString()) }
+                    app.pid?.let { put("pid", it.toString()) }
+                    app.axWindowIndex?.let { put("axWindowIndex", it.toString()) }
                 }
             }
             GridButton(
@@ -79,11 +81,21 @@ object RunningAppsGridBuilder {
 
     private fun stableId(app: RunningApp): String {
         if (app.isDockOnly()) return "app-${app.appName}-dock"
-        val key = app.windowNumber?.let { "wn-$it" }
-            ?: app.axWindowIndex?.let { "ax-$it" }
-            ?: app.windowIndex?.let { "wi-$it" }
-            ?: "title-${(app.windowTitle ?: app.name).hashCode()}"
-        val prefix = if (app.isBrowserTab) "tab" else "app"
-        return "$prefix-${app.appName}-$key"
+        if (app.isBrowserTab) {
+            val window = app.browserWindowIndex ?: 0
+            val tab = app.windowIndex ?: 0
+            val title = app.windowTitle?.hashCode() ?: 0
+            return "tab-${app.appName}-w$window-t$tab-$title"
+        }
+        val pid = app.pid?.takeIf { it > 0 }
+        val ax = app.axWindowIndex ?: app.windowIndex ?: 0
+        val title = app.windowTitle?.takeIf { it.isNotBlank() }?.hashCode() ?: 0
+        val key = if (pid != null) {
+            "pid$pid-ax$ax-t$title"
+        } else {
+            app.windowNumber?.let { "wn-$it" }
+                ?: "ax$ax-t$title"
+        }
+        return "app-${app.appName}-$key"
     }
 }

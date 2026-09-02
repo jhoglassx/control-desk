@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.controldesk.app.panel.LocalPanelMode
 import com.controldesk.app.theme.DeskColors
 import com.controldesk.app.theme.DeskDesign
 import com.controldesk.app.ui.desk.components.DeskHeader
@@ -29,6 +30,7 @@ fun DeskScreen(
     uiState: DeskUiState,
     onPairHost: () -> Unit,
     onManageHosts: () -> Unit,
+    onAdminAccessRequest: () -> Unit = onManageHosts,
     onRefresh: () -> Unit,
     onSelectHost: (Int) -> Unit,
     onAppClick: (GridButton) -> Unit,
@@ -43,6 +45,7 @@ fun DeskScreen(
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    val panelMode = LocalPanelMode.current.enabled
     LaunchedEffect(uiState.feedback) {
         val message = uiState.feedback ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
@@ -57,6 +60,8 @@ fun DeskScreen(
         if (!uiState.hasHosts) {
             EmptyDeskState(
                 onPairHost = onPairHost,
+                onAdminAccessRequest = onAdminAccessRequest,
+                panelMode = panelMode,
                 modifier = Modifier.padding(padding),
             )
         } else {
@@ -99,6 +104,7 @@ fun DeskScreen(
                             onRefresh = onRefresh,
                             onManageHosts = onManageHosts,
                             onPairHost = onPairHost,
+                            onAdminAccessRequest = onAdminAccessRequest,
                         )
                         Spacer(Modifier.height(if (landscape) 8.dp else 12.dp))
                         WorkspacePanel(

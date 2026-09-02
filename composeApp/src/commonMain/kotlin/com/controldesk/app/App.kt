@@ -6,7 +6,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.controldesk.app.panel.LocalPanelMode
+import com.controldesk.app.panel.PanelBackHandler
 import com.controldesk.app.theme.ControlDeskTheme
+import com.controldesk.app.ui.admin.AdminPinDialog
 import com.controldesk.app.ui.desk.DeskScreen
 import com.controldesk.app.ui.pair.PairHostScreen
 import com.controldesk.app.viewmodel.DeskViewModel
@@ -18,17 +21,43 @@ enum class AppScreen { Desk, Pair }
 @Composable
 fun App() {
     ControlDeskTheme {
+        val panelMode = LocalPanelMode.current
         val deskViewModel = koinViewModel<DeskViewModel>()
         val pairViewModel = koinViewModel<PairHostViewModel>()
         val deskState by deskViewModel.uiState.collectAsStateWithLifecycle()
         val pairState by pairViewModel.uiState.collectAsStateWithLifecycle()
         var screen by rememberSaveable { mutableStateOf(AppScreen.Desk) }
+        var showAdminPin by rememberSaveable { mutableStateOf(false) }
+
+        fun openAdminSettings() {
+            if (panelMode.enabled && deskState.hasHosts) {
+                showAdminPin = true
+            } else {
+                screen = AppScreen.Pair
+            }
+        }
+
+        PanelBackHandler(panelMode.enabled && screen == AppScreen.Desk) { }
+        PanelBackHandler(panelMode.enabled && screen == AppScreen.Pair) {
+            screen = AppScreen.Desk
+        }
+
+        if (showAdminPin) {
+            AdminPinDialog(
+                onDismiss = { showAdminPin = false },
+                onSuccess = {
+                    showAdminPin = false
+                    screen = AppScreen.Pair
+                },
+            )
+        }
 
         when (screen) {
             AppScreen.Desk -> DeskScreen(
                 uiState = deskState,
-                onPairHost = { screen = AppScreen.Pair },
-                onManageHosts = { screen = AppScreen.Pair },
+                onPairHost = ::openAdminSettings,
+                onManageHosts = ::openAdminSettings,
+                onAdminAccessRequest = ::openAdminSettings,
                 onRefresh = deskViewModel::refreshRunningApps,
                 onSelectHost = deskViewModel::selectHost,
                 onAppClick = deskViewModel::onButtonClick,
@@ -49,6 +78,7 @@ fun App() {
                 onPortChange = pairViewModel::onPortChange,
                 onPinChange = pairViewModel::onPinChange,
                 onOsTypeChange = pairViewModel::onOsTypeChange,
+                showLauncherHint = panelMode.enabled,
                 onPair = {
                     pairViewModel.pair {
                         deskViewModel.refreshHosts()

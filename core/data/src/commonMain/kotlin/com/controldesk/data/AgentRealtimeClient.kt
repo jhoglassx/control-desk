@@ -192,6 +192,7 @@ class AgentRealtimeClient(
             RunningApp(
                 name = info.name,
                 appName = info.appName,
+                pid = info.pid,
                 windowTitle = info.windowTitle,
                 windowIndex = info.windowIndex,
                 axWindowIndex = info.axWindowIndex,

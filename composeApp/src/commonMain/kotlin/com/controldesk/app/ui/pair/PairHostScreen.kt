@@ -40,6 +40,7 @@ fun PairHostScreen(
     onOsTypeChange: (OsType) -> Unit,
     onPair: () -> Unit,
     onRemoveHost: (String) -> Unit,
+    showLauncherHint: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -95,6 +96,28 @@ fun PairHostScreen(
             Text("Emulador Android no Mac → 10.0.2.2", color = DeskColors.TextMuted, fontSize = 13.sp)
             Text("Celular físico → IP LAN do Mac (janela do agente)", color = DeskColors.TextMuted, fontSize = 13.sp)
             Text("Não use 127.0.0.1 no emulador/celular", color = DeskColors.Warning, fontSize = 13.sp)
+        }
+        if (showLauncherHint) {
+            Spacer(Modifier.height(10.dp))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(DeskColors.Surface, RoundedCornerShape(14.dp))
+                    .padding(12.dp),
+            ) {
+                Text("Modo painel dedicado", color = DeskColors.TextPrimary, fontSize = 14.sp)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Para abrir direto ao ligar o aparelho, defina Control Desk como app inicial em Configurações → Apps padrão → App inicial.",
+                    color = DeskColors.TextMuted,
+                    fontSize = 13.sp,
+                )
+                Text(
+                    "PIN administrativo do painel: 8741",
+                    color = DeskColors.TextMuted,
+                    fontSize = 13.sp,
+                )
+            }
         }
         if (uiState.errorMessage != null) {
             Spacer(Modifier.height(10.dp))
