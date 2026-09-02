@@ -25,11 +25,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.controldesk.app.theme.DeskColors
+import com.controldesk.app.theme.DeskDesign
 import com.controldesk.app.util.accentForLabel
-import com.controldesk.app.util.emojiForLabel
+import com.controldesk.app.util.monogramForLabel
 import com.controldesk.app.util.rememberBase64Image
 import com.controldesk.app.util.tileAppName
 import com.controldesk.app.util.tileLabel
@@ -85,7 +87,8 @@ fun AppLauncherTile(
                 )
             },
     ) {
-        val iconSize = (maxWidth * 0.38f).coerceIn(28.dp, 56.dp)
+        val iconSize = DeskDesign.IconSize.dp
+        val accent = accentForLabel(appName)
         Column(
             Modifier
                 .fillMaxSize()
@@ -94,7 +97,9 @@ fun AppLauncherTile(
             verticalArrangement = Arrangement.Center,
         ) {
             Box(
-                Modifier.size(iconSize).clip(RoundedCornerShape(9.dp)),
+                Modifier
+                    .size(iconSize)
+                    .clip(RoundedCornerShape(DeskDesign.IconCornerRadius.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 if (icon != null) {
@@ -105,7 +110,19 @@ fun AppLauncherTile(
                         contentScale = ContentScale.Fit,
                     )
                 } else {
-                    Text(emojiForLabel(appName), fontSize = if (compact) 20.sp else 24.sp, color = accentForLabel(appName))
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(accent.copy(alpha = 0.22f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            monogramForLabel(appName),
+                            fontSize = if (compact) 22.sp else 26.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = accent,
+                        )
+                    }
                 }
             }
             Text(
