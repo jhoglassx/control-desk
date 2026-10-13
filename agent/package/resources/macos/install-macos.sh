@@ -8,6 +8,7 @@ PLIST_PATH="$HOME/Library/LaunchAgents/${LABEL}.plist"
 LOG_DIR="$HOME/.control-desk"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PORT="${CONTROL_DESK_PORT:-8741}"
+HEALTH_RESPONSE=""
 
 usage() {
     cat <<EOF
@@ -101,8 +102,14 @@ unload_agent() {
     local service
     service="$(agent_service)"
     launchctl bootout "$service" >/dev/null 2>&1 || true
-    launchctl disable "$service" >/dev/null 2>&1 || true
-    sleep 1
+    for _ in $(seq 1 60); do
+        if ! service_loaded && ! port_listening; then
+            return 0
+        fi
+        sleep 0.5
+    done
+    echo "O LaunchAgent anterior ainda está ativo ou usando a porta $PORT; não vou iniciar outra cópia."
+    return 1
 }
 
 write_plist() {
@@ -123,6 +130,8 @@ write_plist() {
     <dict>
         <key>CONTROL_DESK_HEADLESS</key>
         <string>1</string>
+        <key>CONTROL_DESK_PORT</key>
+        <string>${PORT}</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
@@ -143,7 +152,7 @@ kick_agent() {
     local service
     service="$(agent_service)"
     launchctl enable "$service" >/dev/null 2>&1 || true
-    launchctl kickstart -k "$service" >/dev/null 2>&1 || true
+    launchctl kickstart "$service" >/dev/null 2>&1 || true
 }
 
 # Error 5 = já está no launchd. Não é falha se o serviço (ou a porta) estiver no ar.
@@ -152,10 +161,11 @@ load_agent() {
     domain="gui/$(id -u)"
     service="${domain}/${LABEL}"
     err=""
+    launchctl enable "$service" >/dev/null 2>&1 || true
 
     if service_loaded; then
         kick_agent
-        echo "→ LaunchAgent já estava carregado — reiniciado."
+        echo "→ LaunchAgent já estava carregado — iniciado sem forçar outra instância."
         return 0
     fi
 
@@ -181,6 +191,22 @@ load_agent() {
 
     echo "Falha ao registrar LaunchAgent (${service}):"
     echo "${err:-bootstrap falhou}"
+    return 1
+}
+
+verify_agent_health() {
+    local attempt response
+    # Cold JVM launches and launchd retries can take several seconds after a fresh copy.
+    for attempt in $(seq 1 60); do
+        response="$(/usr/bin/curl --silent --show-error --fail --max-time 1 "http://127.0.0.1:${PORT}/health" 2>/dev/null || true)"
+        if [[ "$response" == *'"ok":true'* && "$response" == *'"windowListerVersion":'* ]]; then
+            HEALTH_RESPONSE="$response"
+            return 0
+        fi
+        sleep 0.5
+    done
+    echo "LaunchAgent foi registrado, mas o agente não respondeu em http://127.0.0.1:${PORT}/health."
+    echo "Verifique: ${LOG_DIR}/agent-launchd-error.log e ${LOG_DIR}/agent-launchd.log"
     return 1
 }
 
@@ -228,14 +254,20 @@ fi
 
 write_plist "$BINARY"
 load_agent
+verify_agent_health
+
+if [[ "$HEALTH_RESPONSE" == *'"accessibilityEnabled":false'* ]]; then
+    echo "→ Acessibilidade ainda não autorizada — abrindo Ajustes do Sistema."
+    /usr/bin/open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" >/dev/null 2>&1 || true
+fi
 
 echo
-echo "✓ Control Desk Agent ($TARGET_VER) — instância única em segundo plano."
+echo "✓ Control Desk Agent ($TARGET_VER) — serviço ativo e respondendo em /health."
 echo "  App: $TARGET_APP"
 echo "  Serviço: ${LABEL} (LaunchAgent)"
 echo "  Porta: $PORT"
 echo "  Log: $LOG_DIR/agent.log"
-echo "  PIN: grep pin= $LOG_DIR/agent.log"
+    echo "  PIN: abra Control Desk Agent em Aplicativos ou consulte $LOG_DIR/agent.log"
 echo
 echo "Acessibilidade (obrigatório para apps/janelas):"
 echo "  Ajustes → Privacidade e Segurança → Acessibilidade → ControlDeskAgent"

@@ -25,7 +25,6 @@ import io.ktor.websocket.WebSocketSession
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -36,8 +35,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
-import kotlin.random.Random
 
 class AgentRealtimeClient(
     private val httpClient: HttpClient,
@@ -50,7 +47,7 @@ class AgentRealtimeClient(
 
     private var connectJob: Job? = null
     private var session: WebSocketSession? = null
-    private val pending = mutableMapOf<String, CompletableDeferred<WsServerMessage>>()
+    private val requests = RealtimeRequests()
 
     override fun connect(host: PairedHost, scope: CoroutineScope) {
         if (host.token.isBlank()) return
@@ -70,7 +67,7 @@ class AgentRealtimeClient(
                     ControlDeskLog.gateway.w { "websocket disconnected: ${error.message}" }
                 } finally {
                     session = null
-                    failPending(errorMessage = "disconnected")
+                    requests.failPending("disconnected")
                     _connectionState.value = RealtimeConnectionState.Disconnected
                 }
                 delay(RECONNECT_MS)
@@ -82,7 +79,7 @@ class AgentRealtimeClient(
         connectJob?.cancel()
         connectJob = null
         session = null
-        failPending(errorMessage = "disconnected")
+        requests.failPending("disconnected")
         _connectionState.value = RealtimeConnectionState.Disconnected
     }
 
@@ -139,18 +136,18 @@ class AgentRealtimeClient(
     }
 
     private suspend fun request(message: WsClientMessage): WsServerMessage {
-        val ws = session ?: throw IllegalStateException("WebSocket not connected")
-        val id = "${Random.nextLong()}-${pending.size}"
-        val deferred = CompletableDeferred<WsServerMessage>()
-        pending[id] = deferred
-        ws.send(Frame.Text(AgentJson.encodeToString(message.copy(id = id))))
-        return withTimeout(REQUEST_TIMEOUT_MS) { deferred.await() }
+        val ws = session ?: throw RealtimeUnavailableException()
+        return requests.execute(message, REQUEST_TIMEOUT_MS) { request ->
+            ws.send(Frame.Text(AgentJson.encodeToString(request)))
+        }
     }
 
     private suspend fun handleServerMessage(raw: String) {
         val message = AgentJson.decodeFromString<WsServerMessage>(raw)
-        message.id?.let { id ->
-            pending.remove(id)?.complete(message)
+        requests.complete(message)
+        if (!message.ok || message.type == WsMessageType.ERROR) {
+            ControlDeskLog.gateway.w { "websocket error: ${message.message}" }
+            return
         }
         when (message.type) {
             WsMessageType.APPS -> {
@@ -181,12 +178,6 @@ class AgentRealtimeClient(
         }
     }
 
-    private fun failPending(errorMessage: String) {
-        val error = IllegalStateException(errorMessage)
-        pending.values.forEach { it.completeExceptionally(error) }
-        pending.clear()
-    }
-
     private fun mapRunningApps(apps: List<com.controldesk.protocol.RunningAppInfo>): List<RunningApp> =
         apps.map { info ->
             RunningApp(
@@ -213,3 +204,6 @@ class AgentRealtimeClient(
         const val REQUEST_TIMEOUT_MS = 2_500L
     }
 }
+
+/** The request was not sent, so the caller may safely use the HTTP transport. */
+class RealtimeUnavailableException : Exception("WebSocket is not connected")

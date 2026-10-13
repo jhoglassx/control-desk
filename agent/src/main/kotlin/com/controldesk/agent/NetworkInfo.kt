@@ -18,7 +18,7 @@ object NetworkInfo {
             .flatMap { nic -> nic.inetAddresses.toList() }
             .mapNotNull { addr ->
                 val host = addr.hostAddress ?: return@mapNotNull null
-                if (addr.isLoopbackAddress || host.contains(':')) null else host.substringBefore('%')
+                if (addr.isLoopbackAddress || addr.isLinkLocalAddress || host.contains(':')) null else host.substringBefore('%')
             }
             .distinct()
 }

@@ -85,6 +85,8 @@ fun App() {
                         screen = AppScreen.Desk
                     }
                 },
+                onDiscover = pairViewModel::discoverAgents,
+                onSelectDiscovered = pairViewModel::selectDiscoveredAgent,
                 onRemoveHost = pairViewModel::removeHost,
             )
         }

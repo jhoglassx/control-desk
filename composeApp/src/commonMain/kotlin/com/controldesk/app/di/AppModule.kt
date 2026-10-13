@@ -29,7 +29,7 @@ fun appModule(): Module = module {
     single { ExecuteGridButtonUseCase(get()) }
     single { PairHostUseCase(get(), get()) }
     viewModel { DeskViewModel(get(), get(), get(), get(), get()) }
-    viewModel { PairHostViewModel(get(), get()) }
+    viewModel { PairHostViewModel(get(), get(), get()) }
 }
 
 expect fun platformModule(): Module

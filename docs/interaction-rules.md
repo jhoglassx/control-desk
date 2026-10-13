@@ -26,7 +26,7 @@ Todas as interações do usuário no **app mobile**:
 | Interação | Feedback imediato obrigatório |
 |-----------|------------------------------|
 | Toque em app/janela na grade | Tile clicado → **Em uso** (azul); outros perdem foco visual |
-| Toque longo em app | Tiles daquele app **somem na hora**; HTTP encerra no Mac |
+| Toque longo em app | Janelas daquele app viram atalhos da Dock quando aplicável; HTTP encerra no Mac |
 | Toque em aba Chrome | Mesmo comportamento de foco |
 | Slider de volume | Thumb e % movem **durante** o drag, sem “pular” |
 | Botões − / + volume | Nível na UI muda na hora |
@@ -49,7 +49,7 @@ Todas as interações do usuário no **app mobile**:
 | Situação | Comportamento aceito |
 |----------|------------------------|
 | Lista de apps no PC | Atualização contínua em background (poll) |
-| Ícones faltando | Tile com emoji/fallback primeiro; ícone real chega depois |
+| Ícones faltando | Tile com monograma/fallback primeiro; ícone real chega depois e atualiza pelo cache do agente |
 | Confirmação de foco no SO | Pode levar 200 ms–1 s; UI já mostrou otimista |
 | Primeira carga sem cache | Loading na grade é aceitável **só** na primeira abertura do host |
 | PIN / pareamento | Loading no formulário é aceitável (ação rara) |
@@ -70,7 +70,7 @@ Toque → UI otimista (0 ms)
 ### 4.1 Sucesso
 
 1. UI já refletiu o toque
-2. Burst refresh (~350 ms × N) alinha com o agente
+2. Burst refresh (80 ms × 3, no fallback HTTP) alinha com o agente
 3. Poll periódico mantém sincronizado
 4. **Não** “piscar” tile se o estado já bate com o otimista
 
@@ -82,7 +82,7 @@ Toque → UI otimista (0 ms)
 
 ### 4.3 Falha parcial / lento
 
-- Se o comando demora mas não falhou: manter otimista até timeout (ex.: 8 s pinned focus)
+- Se o comando demora mas não falhou: manter otimista até timeout (ex.: 1,2 s pinned focus)
 - Após timeout: alinhar com poll ou mostrar hint
 
 ---
@@ -95,9 +95,9 @@ Toque → UI otimista (0 ms)
 |-------|---------|
 | Otimista | Tile clicado `isActive=true`, `isVisible=true`; outros `isActive=false` |
 | Posição | O tile **não muda de lugar** na grade; só o destaque muda |
-| Pinned focus | Manter highlight otimista se poll ainda não confirmou (até ~8 s) |
+| Pinned focus | Manter highlight otimista se poll ainda não confirmou (até ~1,2 s) |
 | Debounce de poll | Poll não deve “roubar” foco visual em 1 ciclo; exige confirmação antes de trocar tile ativo |
-| Burst | Após clique, polls rápidos (não esperar o intervalo normal de 1,5 s) |
+| Burst | Após clique, polls rápidos (no modo HTTP, intervalo de 80 ms) |
 | Bloqueio | Outros tiles **continuam clicáveis** (ações paralelas permitidas na spec futura; hoje não travar UI) |
 
 ### 5.1.1 Encerrar app (`POST /apps/close`)
@@ -166,11 +166,11 @@ O mobile é otimista; o agente deve ser **rápido** para a confirmação chegar 
 
 | Constante | Valor hoje | Papel | Regra |
 |-----------|------------|-------|-------|
-| `AUTO_REFRESH_MS` | 400 ms | Sync de apps | **Não** é o feedback do toque |
-| `AUDIO_REFRESH_MS` | 400 ms | Sync de áudio | Poll **independente** da lista de janelas |
-| `BURST_REFRESH_MS` | 350 ms | Confirmação após clique | Obrigatório após ações do usuário |
-| `AUDIO_HOLD_MS` | 400 ms | Evita conflito knob/poll | Só durante o giro |
-| `PINNED_FOCUS_MAX_MS` | 8000 ms | Teto do otimista | Não reverter foco antes disso sem erro |
+| `AUTO_REFRESH_MS` | 150 ms | Sync de apps (fallback HTTP) | **Não** é o feedback do toque |
+| `AUDIO_REFRESH_MS` | 300 ms | Sync de áudio (fallback HTTP) | Poll **independente** da lista de janelas |
+| `BURST_REFRESH_MS` | 80 ms | Confirmação após clique | Obrigatório após ações do usuário |
+| `AUDIO_DRAG_HOLD_MS` | 500 ms | Evita conflito knob/poll | Só durante o giro |
+| `PINNED_FOCUS_MAX_MS` | 1200 ms | Teto do otimista | Não reverter foco antes disso sem erro |
 
 **Alvo futuro (opcional):** reduzir burst a **< 200 ms** e confirmar foco em **< 1 s** total; poll de fundo pode permanecer 1–2 s.
 
@@ -231,3 +231,7 @@ O mobile é otimista; o agente deve ser **rápido** para a confirmação chegar 
 | Cache host | `DeskViewModel.selectHost`, `buttonsCache` |
 
 **Gap conhecido:** código atual tem timers e otimista parcial; reimplementação deve tratar **instantâneo** como requisito, não otimização opcional.
+
+## Transporte atual
+
+O WebSocket é preferencial. Polling de apps/áudio e burst de confirmação são usados quando ele não está conectado. No modo conectado, o loop de apps acorda a cada 5 s para verificar ícones, com checagem a cada cinco ciclos; o loop de áudio aguarda 8 s e pula a leitura HTTP. O hold de áudio após finalizar o ajuste é de 1.200 ms. Metas de latência deste documento são objetivos de UX, não medições. Veja [architecture.md](architecture.md) e [review.md](review.md).

@@ -17,7 +17,7 @@ Documento de referência para reimplementação do zero. Descreve **o que** o pr
 **Princípios v1:**
 
 - Comunicação **HTTP na LAN** (sem nuvem, sem relay).
-- Pareamento **PIN** (válido até gerar outro) → token Bearer persistido.
+- Pareamento **PIN** (expira em 10 minutos) → token Bearer persistido.
 - **Sem SQLDelight** na v1 — JSON em disco é suficiente.
 - Agente **headless por padrão** após instalação; janela de configurações é opcional.
 
@@ -56,7 +56,7 @@ agent            Ktor server + PlatformExecutor por SO
 3. **Atualização:** nova versão no DMG **substitui** a instalada (compara `CFBundleShortVersionString`) e reinicia o serviço.
 4. **Não duplicar:** nunca múltiplos LaunchAgents nem múltiplos apps — `launchctl bootout` antes de `bootstrap`.
 5. **Configurações (opcional):** **Abrir configurações.command** ou `--settings` — janela PIN/IP; **Cmd+Q / Fechar encerra a janela**; o serviço headless continua **sem ícone no Dock**.
-6. `ControlDeskAgent.app` (duplo clique): instala/atualiza e encerra; use o comando de configurações para ver PIN.
+6. `ControlDeskAgent.app` (duplo clique): instala/atualiza o serviço e abre a janela de configurações por padrão.
 7. **Outros Macs:** copiar o **mesmo `.dmg`** (ou `./gradlew :agent:packageDmg`) e instalar em cada máquina. `./gradlew :agent:run` **não** é o instalador.
 
 **Regra:** A janela de configurações **não** roda o servidor; consulta `GET /setup` em `127.0.0.1` no processo headless.
@@ -108,9 +108,9 @@ agent            Ktor server + PlatformExecutor por SO
 | `KeepAlive` | `true` — reinicia se cair |
 | `ProcessType` | `Background` — não aparece como app em primeiro plano |
 | `EnvironmentVariables` | `CONTROL_DESK_HEADLESS=1` |
-| `LSUIElement` (Info.plist do .app) | `true` — sem ícone no Dock |
+| `LSUIElement` (Info.plist do .app) | `false` — app visível no Dock durante configuração; processo LaunchAgent headless seta `apple.awt.UIElement=true` |
 
-**Instalar:** `agent/package/resources/macos/install-macos.sh`  
+**Instalar:** `agent/package/resources/macos/install-macos.sh`
 **Remover:** `agent/package/resources/macos/uninstall-macos.sh` (mantém `~/.control-desk/`)
 
 **Atualização:** script compara versão fonte vs `/Applications`; copia só se fonte é mais nova ou primeira instalação; sempre re-registra LaunchAgent apontando ao binary instalado.
@@ -136,10 +136,10 @@ agent            Ktor server + PlatformExecutor por SO
 ### 3.6 mDNS (agente)
 
 - Tipo: `_controldesk._tcp.local.`
-- Nome: `ControlDesk-{hostname}`
-- TXT: `version=1.0.0`
+- Nome: `ControlDesk-{ComputerName do macOS}` (fallback para hostname)
+- TXT: `version=1.1.1`
 - Falha no mDNS **não** impede o agente de rodar
-- **Mobile ainda não consome mDNS** (roadmap)
+- Android (NSD) e iOS (Bonjour) procuram `_controldesk._tcp` na tela de pareamento; selecionando um resultado, host e porta são preenchidos. A entrada manual continua disponível.
 
 ### 3.7 Warmup macOS (ao iniciar)
 
@@ -159,14 +159,15 @@ Antes do servidor, no Mac:
 | Regra | Detalhe |
 |-------|---------|
 | Formato | 6 dígitos (`100000–999999`) |
-| Geração automática | Se não há PIN nem tokens → gera PIN |
+| Geração automática | Gera PIN na inicialização se não houver PIN vigente |
 | Armazenamento | `~/.control-desk/agent_pin.txt` |
-| Reuso | O mesmo PIN vale para re-parear até “Gerar novo PIN” |
+| Validade | 10 minutos a partir da geração |
+| Tentativas | 5 PINs inválidos por endereço em janela de 5 minutos; sucesso limpa o limite global |
 | Múltiplos dispositivos | Vários tokens permitidos (um por pareamento) |
 
 ### 4.2 Fluxo de pareamento (mobile)
 
-1. Usuário preenche: **nome**, **host**, **porta**, **PIN**
+1. Usuário pode buscar Macs por mDNS/Bonjour e selecionar resultado, ou preencher **nome**, **host** e **porta** manualmente; em ambos os casos informa **PIN**
 2. App valida: nome e host não vazios; porta inteiro; PIN ≥ 4 caracteres (agente usa 6)
 3. `GET /health` — teste de conectividade
 4. `POST /pair` com `{ "pin": "..." }`
@@ -183,11 +184,13 @@ Antes do servidor, no Mac:
 | Rota | Auth |
 |------|------|
 | `GET /health`, `POST /pair` | Públicas |
-| `GET /setup`, `POST /setup/new-pin` | **Somente localhost** (`127.0.0.1`, `localhost`, `[::1]`) |
+| `GET /setup`, `POST /setup/new-pin`, `POST /setup/revoke-tokens` | **Somente localhost** (`127.0.0.1`, `localhost`, `[::1]`) |
 | Todas outras | Bearer token → `401` se inválido |
 
-**PIN inválido:** `401` + `{ ok: false, message: "Invalid PIN" }`  
+**PIN inválido:** `401` + `{ ok: false, message: "Invalid PIN" }`
 **Setup remoto:** `403 Forbidden`
+
+`429 Too Many Requests` indica limite de tentativas; aguarde cinco minutos. O endpoint local `/setup/revoke-tokens` revoga todos os tokens e desconecta as sessões WebSocket ativas.
 
 ### 4.4 Remover host no mobile
 
@@ -200,8 +203,9 @@ Antes do servidor, no Mac:
 |---------|------------|
 | Transporte | HTTP (sem TLS) |
 | Alcance | Bind `0.0.0.0` — acessível na LAN |
-| PIN | Reutilizável até “Gerar novo PIN” |
-| Revogação de token | Não implementada |
+| PIN | Expira 10 minutos após geração |
+| Limite de pareamento | 5 falhas por endereço em 5 minutos |
+| Revogação de token | Global via endpoint de localhost e botão na configuração do agente; revogação individual não implementada |
 | Android cleartext | `usesCleartextTraffic=true` |
 | iOS ATS | `NSAllowsArbitraryLoads=true` |
 
@@ -216,7 +220,7 @@ Antes do servidor, no Mac:
 
 ## 5. API do agente (protocolo v1)
 
-**Versão health:** `1.1.0`  
+**Versão health:** `1.1.1`
 **windowListerVersion:** `20`
 
 ### 5.1 Endpoints implementados
@@ -324,8 +328,7 @@ Ver `core/protocol/.../AgentDtos.kt`.
 
 ### 6.6 Windows / Linux (parcial)
 
-- **Windows:** PowerShell para processos com `MainWindowTitle`; `cmd /c start`; `taskkill`
-- **Linux:** `wmctrl`, `xdg-open`, `pkill` — volume/mic usa stub
+- **Windows/Linux:** `NativePlatformExecutor` delega ao `LoggingPlatformExecutor`, com apps e áudio simulados. Não há controle nativo implementado nessas plataformas.
 
 ---
 
@@ -341,9 +344,9 @@ Resumo:
 | **Desk vazio** | CTA "Parear computador" |
 | **Desk ativo** | Topbar + grade de tiles (Volume, Mic, apps) |
 | **Pair** | Nome, IP, porta, PIN; defaults `10.0.2.2` / `8741` |
-| **Polling** | Apps 1,5 s; áudio 2,5 s; burst após clique |
+| **Sincronização** | WebSocket preferencial; fallback HTTP apps 150 ms / áudio 300 ms; burst 80 ms |
 | **Clique app** | Foco otimista + `REMOTE_LAUNCH` ou `REMOTE_BROWSER_TAB` |
-| **Toque longo no app** | Encerra o app (`POST /apps/close`); tiles somem na hora |
+| **Toque longo no app** | Encerra o app (`POST /apps/close`); janelas viram atalhos da Dock quando aplicável |
 | **Mixer** | Knobs Volume/Mic: giro 0–100, toque mute |
 | **Persistência** | `control_desk_hosts.json` (Android/iOS); token no JSON |
 | **Remover host** | Só local; não revoga token no agente |
@@ -365,13 +368,12 @@ Documento completo: **[interaction-rules.md](interaction-rules.md)**.
 |------------|---------|-----------|
 | Android | `control_desk_hosts.json` | `filesDir` |
 | iOS | `control_desk_hosts.json` | Documents |
-| JVM/desktop | `hosts.json` | `~/.control-desk/` |
 
 **Conteúdo por host:** `id`, `name`, `host`, `port`, `osType`, `sortOrder`, **token**, `buttons[]`
 
 ### 8.2 Cache de ícones
 
-`control_desk_icon_cache.json` (mesmos diretórios por plataforma).
+`control_desk_icon_cache_v2.json` (mesmos diretórios por plataforma).
 
 ### 8.3 Tokens do agente
 
@@ -392,7 +394,7 @@ Documento completo: **[interaction-rules.md](interaction-rules.md)**.
 ./gradlew :composeApp:assembleDebug    # APK Android
 ```
 
-DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.0.2.dmg`
+DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.1.dmg`
 
 ### 9.2 Fluxo do usuário (produção)
 
@@ -437,8 +439,8 @@ DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.0.2.dmg`
 | Domain | `core/domain/src/commonTest/` |
 | Protocol | `core/protocol/src/commonTest/` |
 | Android UI | `composeApp/src/androidInstrumentedTest/` |
-| E2E Maestro | `e2e/maestro/` |
-| CI | `.github/workflows/ci.yml` |
+| E2E Maestro | Não presente neste checkout |
+| CI | Não presente neste checkout |
 
 **Contrato mínimo (testes):** health ok; pair funciona; rotas protegidas 401 sem token, 200 com token.
 
@@ -459,10 +461,10 @@ DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.0.2.dmg`
 
 | Item | Problema |
 |------|----------|
-| `DeskViewModel.kt` | Corrupção em `resolveIcon` / `refreshMissingIconsIfNeeded` |
-| README vs código | README diz `control_desk_hosts.json` no desktop; JVM usa `hosts.json` |
+| Testes | Bloqueios de compilação corrigidos; quatro suítes JVM passaram; ver [review.md](review.md) |
+| WebSocket | Propagação de erros e limpeza de requisições corrigidas e testadas; ver [review.md](review.md) |
 | Revogação de token | Não implementada |
-| mDNS no mobile | Agente anuncia; app não descobre |
+| mDNS no mobile | Android NSD e iOS Bonjour descobrem agentes e preenchem dados de conexão; requer validação em rede/dispositivos reais |
 | Tray/menu bar | Só janela Compose; sem ícone na bandeja |
 
 ---
@@ -477,3 +479,7 @@ DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.0.2.dmg`
 | [ios-setup.md](ios-setup.md) | Build iOS |
 | [roadmap.md](roadmap.md) | Backlog e fases |
 | [README.md](README.md) | Índice central da documentação |
+
+## 14. Canal em tempo real
+
+`/ws?token=…` autentica pelo token de pareamento, envia snapshots de apps e áudio e aceita comandos com `id` para correlação. Veja o contrato e os intervalos atuais em [architecture.md](architecture.md). `/health` e o anúncio mDNS expõem a versão do agente (`1.1.1`).

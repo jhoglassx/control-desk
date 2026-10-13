@@ -10,8 +10,8 @@ Especificação completa: **[README.md](README.md)** (índice) e **[spec.md](spe
 
 | Ação | Resultado |
 |------|-----------|
-| **ControlDeskAgent.app** (duplo clique ou arrastar para Aplicativos) | Instala/atualiza em background e abre janela de PIN/IP |
-| Fechar janela de configurações / Cmd+Q | UI some (sai do Dock). Serviço headless **continua** |
+| **ControlDeskAgent.app** (abrir em Aplicativos) | Instala/atualiza o serviço e mantém a janela visível no Dock |
+| **Concluir** / fechar janela de configuração | Fecha a janela; LaunchAgent continua ativo em segundo plano |
 | Ctrl+C em `./gradlew :agent:run` | Processo do Gradle encerra; agente **respawna** headless (use `CONTROL_DESK_NO_RESPAWN=1` para parar) |
 | Nova versão no DMG | Substitui app em `/Applications` e reinicia serviço |
 | Reinstalar mesma versão | Mantém app; garante LaunchAgent ativo |
@@ -30,17 +30,24 @@ Especificação completa: **[README.md](README.md)** (índice) e **[spec.md](spe
 
 O `.dmg` sai em:
 
-`agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.0.3.dmg`
+`agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.1.dmg`
+
+O agente compilado é compatível com o runtime Java 17 incluído neste pacote; o usuário não precisa instalar Java.
 
 Conteúdo: **ControlDeskAgent.app**, atalho **Applications** e **LEIA-ME.txt**.
 
+Os alvos `:agent:installMacos` e `:agent:packageDmg` assinam o app se `CONTROL_DESK_CODESIGN_IDENTITY` apontar para uma identidade confiável disponível no Acesso às Chaves. `CONTROL_DESK_SIGNING_KEYCHAIN` é opcional e seleciona o keychain quando a identidade não está no keychain padrão. O build verifica a assinatura e mostra a identidade designada. Sem certificado configurado, ele avisa e usa a assinatura ad hoc padrão; essa assinatura não mantém a autorização do macOS entre recompilações.
+
+Para builds que precisam preservar Acessibilidade, configure uma identidade confiável e persistente. Para distribuição pública, use um certificado **Developer ID Application**, configure `CONTROL_DESK_CODESIGN_IDENTITY` com o nome da identidade e `CONTROL_DESK_SIGNING_KEYCHAIN` com o keychain correspondente antes do build. Uma assinatura autoassinada local não substitui Developer ID nem notarização.
+
 ### 2. Instalar (usuário)
 
-1. Abra o DMG
-2. Arraste **ControlDeskAgent.app** para **Aplicativos** (ou dê duplo clique no app)
-3. Leia **LEIA-ME.txt** se precisar
-4. Na janela: copie PIN/IP e habilite **Acessibilidade**
-5. Feche a janela — o serviço continua em segundo plano na porta 8741
+1. Abra o DMG e arraste **ControlDeskAgent.app** para **Aplicativos**.
+2. Abra o app em Aplicativos. Na primeira execução, ele se instala como serviço de usuário, inicia junto com o login e abre a tela de configuração. Se faltar Acessibilidade, o agente abre automaticamente o painel correto dos Ajustes do Sistema.
+3. Deixe esta janela aberta enquanto conecta o celular; use o PIN temporário exibido nela.
+4. No app mobile, toque em **Buscar Mac na mesma rede**, selecione o Mac e informe o PIN.
+5. Nos Ajustes abertos pelo agente, ative **ControlDeskAgent** em **Acessibilidade**. O macOS exige esta confirmação manual; o instalador não pode concedê-la em silêncio.
+6. Toque em **Concluir**. O agente continua no fundo mesmo com a janela fechada.
 
 ### 3. Acessibilidade (obrigatório)
 
@@ -48,11 +55,16 @@ Conteúdo: **ControlDeskAgent.app**, atalho **Applications** e **LEIA-ME.txt**.
 
 Sem isso, a lista de apps/janelas fica vazia no celular.
 
+Na instalação e ao abrir a janela do agente, o app abre **Privacidade e Segurança → Acessibilidade** e solicita a autorização ao macOS. O sistema exige que a pessoa confirme a chave: se **ControlDeskAgent** já estiver na lista, ligue-a; se não estiver, use `+` e escolha **ControlDeskAgent** em Aplicativos. Volte à janela do agente para confirmar o status. O app deve estar instalado em **Aplicativos**, não iniciado da Lixeira ou diretamente do DMG.
+
+Sem identidade de assinatura persistente, cada build pode aparecer ao macOS como uma cópia diferente. Nesse caso, o status pode continuar desativado mesmo com uma entrada antiga marcada; remova essa entrada antiga com `−` e adicione a cópia atual instalada em `/Applications/ControlDeskAgent.app`. Para builds seguintes manterem a autorização, configure uma identidade persistente conforme descrito acima.
+
 ### 4. Parear no celular (uma vez)
 
-1. Na janela do agente: copie PIN e IP (ou `grep pin= ~/.control-desk/agent.log`)
-2. No app: **Parear PC** → nome, IP, porta **8741**, PIN
-3. Token salvo no celular; **não precisa parear de novo** após reiniciar o Mac
+1. Abra **Control Desk Agent** no Mac e deixe a janela mostrar o PIN atual.
+2. No app: **Parear computador** → **Buscar Mac na mesma rede** → escolha este Mac e informe o PIN.
+3. Se não aparecer, expanda “Problemas para encontrar?” na janela do agente para consultar endereços; no formulário do celular escolha configuração manual e use a porta **8741**.
+4. O token fica salvo no celular; não é necessário parear novamente após reiniciar o Mac.
 
 | Contexto | IP no formulário |
 |----------|------------------|
@@ -77,7 +89,7 @@ bash agent/package/resources/macos/install-macos.sh
 Equivalente ao script dentro do app:
 
 ```bash
-bash /Applications/ControlDeskAgent.app/Contents/app/resources/install-macos.sh
+bash /Applications/ControlDeskAgent.app/Contents/app/resources/macos/install-macos.sh
 ```
 
 ---
@@ -180,9 +192,11 @@ CONTROL_DESK_SKIP_INSTALL=1 ./gradlew :agent:runDistributable
 
 | Sintoma | O que fazer |
 |---------|-------------|
-| `Instalar` / app não sobe | `cat ~/.control-desk/install.log` — botão direito → **Abrir** se o Gatekeeper bloquear |
-| Duplo clique no .app não faz nada | App é background (sem Dock). Deve aparecer notificação; senão `cat ~/.control-desk/install.log` |
+| App não abre | Botão direito em Aplicativos → **Abrir** na primeira execução se o Gatekeeper bloquear |
+| Duplo clique no .app não faz nada | Abra por Aplicativos e procure o aviso de erro. Veja `cat ~/.control-desk/install.log` e `cat ~/.control-desk/agent-launchd-error.log` |
 | Gatekeeper bloqueia | Botão direito → **Abrir** na primeira vez |
+| Instalação termina, mas o serviço não responde | Consulte `cat ~/.control-desk/agent-launchd-error.log`; a instalação agora valida `/health` antes de confirmar sucesso |
+| `UnsupportedClassVersionError` nos logs | Está usando um pacote anterior ao `1.0.5`; substitua o app de Aplicativos pelo app do DMG novo e abra novamente |
 | Porta 8741 vazia | `launchctl print gui/$(id -u)/com.controldesk.agent` e `cat ~/.control-desk/agent-launchd-error.log` |
 | PIN mostra "—" na janela | Aguarde ou `grep pin= ~/.control-desk/agent.log` |
 | Lista vazia no celular | Verificar Acessibilidade |
@@ -192,6 +206,4 @@ CONTROL_DESK_SKIP_INSTALL=1 ./gradlew :agent:runDistributable
 
 ## Windows / Linux (futuro)
 
-- Windows: `./gradlew :agent:packageMsi`
-- Linux: `./gradlew :agent:packageDistributionForCurrentOS` → `.deb` / AppImage
-- Auto-start: Agendador de Tarefas (Windows), systemd user (Linux)
+O build configura apenas `TargetFormat.Dmg`. Não há MSI, DEB ou AppImage configurados; `NativePlatformExecutor` usa um executor simulado fora do macOS. Instaladores, controle nativo e auto-start dessas plataformas são backlog.

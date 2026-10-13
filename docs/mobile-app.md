@@ -1,3 +1,5 @@
+> Atualização de 13/10/2026: o transporte preferencial é WebSocket. Para constantes atuais e limitações, consulte [architecture.md](architecture.md) e [review.md](review.md).
+
 # Control Desk — App mobile (Android / iOS)
 
 Regras de negócio e comportamentos esperados do **composeApp**.  
@@ -17,11 +19,13 @@ O app mobile é o **painel remoto**: pareia com o agente desktop na LAN e contro
 | DI | Koin (`AppModule`) |
 | HTTP | Ktor client via `AgentApiClient` / `AgentGatewayImpl` |
 
-**Fora de escopo v1:** descoberta mDNS, QR, editor drag-and-drop, sub-páginas, sync na nuvem.
+**Fora de escopo v1:** pareamento por QR, editor drag-and-drop, sub-páginas, sync na nuvem.
 
 ---
 
 ## 2. Navegação e telas
+
+Na tela Pair, “Buscar Macs na rede” executa descoberta mDNS (NSD no Android, Bonjour no iOS) por até oito segundos. Selecionar um agente preenche nome, host e porta; o usuário ainda informa o PIN. A entrada manual continua disponível.
 
 Definida em `App.kt` — enum `AppScreen { Desk, Pair }`.
 
@@ -92,7 +96,7 @@ Topbar de uma linha (sem card grande):
 
 **Seção:** "Apps no Mac" (subtitle dinâmico).
 
-**Layout:** `LazyVerticalGrid` com `FixedSize` calculado para **4 colunas no portrait**; na rotação o card **não cresce**, só cabem mais colunas. Tiles quadrados (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**.
+**Layout:** `LazyColumn` de linhas; cada linha usa células com peso igual para preencher simetricamente a largura útil. A última linha preserva as mesmas colunas vazias para manter os cards alinhados. Tiles quadrados (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**. O ícone usa até 58% da largura do card (máximo 52 dp), e o texto usa até duas linhas.
 
 **Subtitle:** `{N} apps · {focused} em uso · M1: n · M2: n · {dock} na Dock · {hidden} ocultos`
 
@@ -107,7 +111,7 @@ Topbar de uma linha (sem card grande):
 
 **Monitor:** `M1` / `M2` é badge suspenso no canto superior direito, **dentro** do card (overlay, fora da pilha de conteúdo). Apps só da Dock (`monitorIndex=0`) não mostram badge.
 
-**Texto:** título da janela (não o nome do app). Se a janela não tem título, cai no nome do app. O ícone do `.app` já identifica o programa.
+**Texto:** título da janela; se não houver título, usa o nome do app. Assim duas janelas do Android Studio, por exemplo `projeto-a` e `projeto-b`, aparecem como cards distintos. O ícone do `.app` identifica o programa; ao tocar, o comando ainda usa o nome do app e os dados da janela para focar a instância correta.
 
 Landscape (`compact`): ícone, título da janela e badge M{n}.
 
@@ -139,7 +143,7 @@ Knobs rotativos na mesma grade dos apps, **sem card nem título** — só o disc
 
 **Otimista:** mute volume/mic atualiza UI antes da resposta; **reverte** em falha.
 
-**`armAudioHold()`:** bloqueia poll de áudio por 2 s após interação do usuário.
+**`armAudioHold()`:** bloqueia poll de áudio por 500 ms durante ajuste e 1.200 ms após finalizar após interação do usuário.
 
 ---
 
@@ -191,7 +195,7 @@ Resumo:
 - Toque longo no tile → app some da grade na hora; `POST /apps/close` em paralelo
 - Mixer → slider/mute/mic mudam na hora; poll de áudio pausado durante uso
 - Troca de host → cache imediato, sem grade vazia
-- Poll (1,5 s / 2,5 s) só sincroniza fundo; **nunca** é o primeiro feedback do toque
+- Poll HTTP (apps 150 ms / áudio 300 ms, sem WebSocket) só sincroniza fundo; **nunca** é o primeiro feedback do toque
 - Erro → snackbar + revert do otimista; sucesso não exige modal
 
 ---
@@ -221,10 +225,10 @@ Resumo:
 ### 5.3 `loadHost()` — sequência
 
 1. Se sem cache e `showLoading` → `isLoadingApps = true`
-2. Se tem cache → delay `HOST_SWITCH_SETTLE_MS` (180 ms) antes de atualizar
+2. Se tem cache → delay `HOST_SWITCH_SETTLE_MS` (0 ms) antes de atualizar
 3. **Paralelo:** `loadRunningApps(includeIcons=false)` + `fetchAudio()`
 4. Publica apps rápidos → `isLoadingApps = false`
-5. Se faltam ícones → segunda carga `includeIcons=true` com `preferMerge=true`
+5. Se faltam ícones → segunda carga `includeIcons=true` com `preferMerge=true`; ícones que chegam depois também invalidam a assinatura do WebSocket para atualizar a grade conectada.
 6. `startAutoRefresh()` — polling contínuo
 
 ### 5.4 Cache por host
@@ -242,23 +246,22 @@ Resumo:
 
 | Constante | Valor | Uso |
 |-----------|-------|-----|
-| `AUTO_REFRESH_MS` | 400 ms | Poll apps (ícones do cache do agente) |
-| `AUDIO_REFRESH_MS` | 400 ms | Poll áudio (job separado da lista de janelas) |
-| `AUDIO_HOLD_MS` | 400 ms | Bloqueia fetch áudio após ajuste do usuário |
-| `BURST_REFRESH_MS` | 350 ms | Intervalo burst após clique |
+| `AUTO_REFRESH_MS` | 150 ms | Poll apps (ícones do cache do agente) |
+| `AUDIO_REFRESH_MS` | 300 ms | Poll áudio (job separado da lista de janelas) |
+| `AUDIO_DRAG_HOLD_MS` | 500 ms | Bloqueia fetch áudio após ajuste do usuário |
+| `BURST_REFRESH_MS` | 80 ms | Intervalo burst HTTP após clique quando o WebSocket está desconectado |
 | `BURST_REFRESH_COUNT` | 4 | Repetições do burst |
-| `PINNED_FOCUS_MAX_MS` | 8000 ms | Timeout highlight otimista |
+| `PINNED_FOCUS_MAX_MS` | 1200 ms | Timeout highlight otimista |
 | `ACTIVE_CONFIRM_POLLS` | 1 | Aceita o app ativo no primeiro poll |
-| `FOCUS_SETTLE_MS` | 400 ms | Entre polls de confirmação |
 | `FOCUS_CONFIRM_POLLS` | 3 | Polls após foco bem-sucedido |
-| `HOST_SWITCH_SETTLE_MS` | 180 ms | Após trocar host |
-| `MISSING_ICON_CHECK_EVERY` | 6 ticks | Check ícones faltando (6 × 2,5 s ≈ 15 s) |
+| `HOST_SWITCH_SETTLE_MS` | 0 ms | Após trocar host |
+| `MISSING_ICON_CHECK_EVERY` | 5 ticks | Check ícones faltando; loop 150 ms sem WS / 5 s com WS |
 
 ### 5.6 Clique em botão (`onButtonClick`)
 
 1. `armPinnedFocus(button)` — guarda buttonId, windowNumber, appName+title
 2. UI otimista: clicado `isActive=true`, outros `false`
-3. `startBurstRefresh()` — 1 + 4 polls rápidos
+3. `startBurstRefresh()` — 1 + 3 polls rápidos
 4. `executeGridButton(button, host)`
 5. **Sucesso:** delay `FOCUS_SETTLE_MS` + 3× refresh com `FOCUS_SETTLE_MS`
 6. **Falha:** `clearPinnedFocus()`, snackbar com erro
@@ -369,7 +372,7 @@ Sem token → `ControlDeskError.Unauthorized`.
 
 ### 8.2 Cache de ícones
 
-`control_desk_icon_cache.json` — mapa `buttonId → base64`.
+`control_desk_icon_cache_v2.json` — mapa `buttonId → base64`; o cache anterior é descartado para remover imagens corrompidas. No agente Mac, primeiro se extrai o ícone do bundle `.icns`, depois se tenta `NSWorkspace`; ícones pendentes são resolvidos num worker separado da consulta de janelas. Quando chegam, a grade conectada é atualizada pelo WebSocket e a imagem nova substitui uma entrada antiga no cache mobile.
 
 `putIfAbsent` ao receber ícone novo; persistido em disco.
 

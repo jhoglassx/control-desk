@@ -28,6 +28,9 @@ class PairHostRemoteImpl(
             if (error.response.status == HttpStatusCode.Unauthorized) {
                 throw ControlDeskError.Unauthorized("PIN inválido")
             }
+            if (error.response.status == HttpStatusCode.TooManyRequests) {
+                throw ControlDeskError.Unauthorized("Muitas tentativas. Aguarde 5 minutos antes de tentar novamente.")
+            }
             throw ControlDeskError.Generic(error.message ?: "Falha no pareamento")
         } catch (error: Throwable) {
             val offline = error is HttpRequestTimeoutException ||

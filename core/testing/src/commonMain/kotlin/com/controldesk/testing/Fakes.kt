@@ -49,12 +49,12 @@ class FakeAgentGateway(
     override suspend fun fetchHealth(host: PairedHost): Boolean? = result(true)
     override suspend fun fetchAudio(host: PairedHost): AudioState = result(audio)
     override suspend fun launchApp(host: PairedHost, button: GridButton): List<RunningApp> {
-        result(emptyList())
+        result(Unit)
         launched += button
         return appsByHost[host.id] ?: apps
     }
     override suspend fun closeApp(host: PairedHost, button: GridButton): List<RunningApp> {
-        result(emptyList())
+        result(Unit)
         closed += button
         if (!removeOnClose) return appsByHost[host.id] ?: apps
         val target = button.payload["target"] ?: return appsByHost[host.id] ?: apps
@@ -62,7 +62,7 @@ class FakeAgentGateway(
         return appsByHost[host.id] ?: apps
     }
     override suspend fun switchBrowserTab(host: PairedHost, button: GridButton): List<RunningApp> {
-        result(emptyList())
+        result(Unit)
         launched += button
         return appsByHost[host.id] ?: apps
     }
@@ -92,7 +92,10 @@ class FakeIconCache : RunningAppIconCache {
     private val icons = mutableMapOf<String, String>()
     override suspend fun load(): Map<String, String> = icons.toMap()
     override suspend fun putIfAbsent(buttonId: String, base64: String) {
-        icons.putIfAbsent(buttonId, base64)
+        if (buttonId !in icons) icons[buttonId] = base64
+    }
+    override suspend fun replace(buttonId: String, base64: String) {
+        icons[buttonId] = base64
     }
     override fun peek(buttonId: String): String? = icons[buttonId]
 }

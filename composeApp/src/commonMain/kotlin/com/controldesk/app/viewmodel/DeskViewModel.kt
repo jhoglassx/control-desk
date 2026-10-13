@@ -3,6 +3,7 @@ package com.controldesk.app.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.controldesk.data.RunningAppsGridBuilder
+import com.controldesk.data.RealtimeUnavailableException
 import com.controldesk.domain.error.ControlDeskError
 import com.controldesk.domain.model.ActionType
 import com.controldesk.domain.model.AgentRealtimeEvent
@@ -154,13 +155,19 @@ class DeskViewModel(
 
     private suspend fun runAppCommand(button: GridButton, host: PairedHost): List<com.controldesk.domain.model.RunningApp> {
         if (!isRealtimeConnected()) return executeGridButton(button, host)
-        return runCatching {
-            when (button.actionType) {
-                ActionType.REMOTE_LAUNCH -> agentRealtime.launchApp(host, button)
-                ActionType.REMOTE_BROWSER_TAB -> agentRealtime.switchBrowserTab(host, button)
-                else -> executeGridButton(button, host)
+        return when (button.actionType) {
+            ActionType.REMOTE_LAUNCH -> try {
+                agentRealtime.launchApp(host, button)
+            } catch (_: RealtimeUnavailableException) {
+                executeGridButton(button, host)
             }
-        }.getOrElse { executeGridButton(button, host) }
+            ActionType.REMOTE_BROWSER_TAB -> try {
+                agentRealtime.switchBrowserTab(host, button)
+            } catch (_: RealtimeUnavailableException) {
+                executeGridButton(button, host)
+            }
+            else -> executeGridButton(button, host)
+        }
     }
 
     fun onAppClose(button: GridButton) {
@@ -195,8 +202,11 @@ class DeskViewModel(
         viewModelScope.launch {
             try {
                 val apps = if (isRealtimeConnected()) {
-                    runCatching { agentRealtime.closeApp(host, button) }
-                        .getOrElse { agentGateway.closeApp(host, button) }
+                    try {
+                        agentRealtime.closeApp(host, button)
+                    } catch (_: RealtimeUnavailableException) {
+                        agentGateway.closeApp(host, button)
+                    }
                 } else {
                     agentGateway.closeApp(host, button)
                 }
@@ -763,8 +773,8 @@ class DeskViewModel(
         viewModelScope.launch {
             buttons.forEach { button ->
                 val icon = button.iconBase64
-                if (!icon.isNullOrBlank() && iconCache.peek(button.id) == null) {
-                    iconCache.putIfAbsent(button.id, icon)
+                if (!icon.isNullOrBlank() && iconCache.peek(button.id) != icon) {
+                    iconCache.replace(button.id, icon)
                 }
             }
             memoryIcons = iconCache.load()

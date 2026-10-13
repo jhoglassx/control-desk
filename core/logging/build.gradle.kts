@@ -1,16 +1,20 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(17)
     androidTarget {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
         }
     }
-    jvm()
+    jvm {
+        compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+    }
     iosX64()
     iosArm64()
     iosSimulatorArm64()

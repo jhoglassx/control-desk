@@ -1,4 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+val agentVersion = "1.1.1"
 
 plugins {
     alias(libs.plugins.kotlinJvm)
@@ -8,7 +11,11 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(17)
+    compilerOptions {
+        // The packaged app currently uses the JDK that launches Gradle (Java 17 here).
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
 }
 
 dependencies {
@@ -24,11 +31,13 @@ dependencies {
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.jmdns)
+    implementation(libs.jna)
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.ktor.client.core)
+    testImplementation(libs.ktor.client.content.negotiation)
     testImplementation(libs.ktor.client.cio)
     testImplementation(libs.ktor.client.websockets)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -37,13 +46,14 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.controldesk.agent.AgentMainKt"
+        javaHome = System.getProperty("java.home")
         jvmArgs += listOf(
             "-Dapple.awt.application.name=Control Desk Agent",
         )
         nativeDistributions {
             targetFormats(TargetFormat.Dmg)
             packageName = "ControlDeskAgent"
-            packageVersion = "1.0.4"
+            packageVersion = agentVersion
             description = "Control Desk Agent"
             copyright = "Control Desk"
             macOS {
@@ -51,7 +61,7 @@ compose.desktop {
                 infoPlist {
                     extraKeysRawXml = """
                         <key>LSUIElement</key>
-                        <string>true</string>
+                        <false/>
                     """.trimIndent()
                 }
             }
@@ -60,22 +70,32 @@ compose.desktop {
     }
 }
 
+val signAgentMacApp = tasks.register<Exec>("signAgentMacApp") {
+    group = "distribution"
+    description = "Assina e valida o app quando uma identidade persistente está configurada"
+    dependsOn("packageDistributionForCurrentOS")
+    onlyIf { System.getProperty("os.name").orEmpty().lowercase().contains("mac") }
+    val appDir = layout.buildDirectory.dir("compose/binaries/main/app/ControlDeskAgent.app")
+    commandLine("bash", file("package/resources/macos/sign-macos-app.sh").absolutePath, appDir.get().asFile.absolutePath)
+}
+
 tasks.register<Exec>("installMacos") {
     group = "distribution"
     description = "Gera o .app e instala o LaunchAgent (serviço em segundo plano neste Mac)"
-    dependsOn("packageDistributionForCurrentOS")
+    dependsOn(signAgentMacApp)
     onlyIf { System.getProperty("os.name").orEmpty().lowercase().contains("mac") }
-    commandLine("bash", file("package/resources/macos/install-macos.sh").absolutePath)
+    val appDir = layout.buildDirectory.dir("compose/binaries/main/app/ControlDeskAgent.app")
+    commandLine("bash", file("package/resources/macos/install-macos.sh").absolutePath, appDir.get().asFile.absolutePath)
 }
 
 tasks.register<Exec>("packageInstallerDmg") {
     group = "distribution"
     description = "DMG com o .app, atalho para Aplicativos e LEIA-ME"
-    dependsOn("packageDistributionForCurrentOS")
+    dependsOn(signAgentMacApp)
     onlyIf { System.getProperty("os.name").orEmpty().lowercase().contains("mac") }
     val appDir = layout.buildDirectory.dir("compose/binaries/main/app/ControlDeskAgent.app")
     val stageDir = layout.buildDirectory.dir("installer-stage")
-    val outFile = layout.buildDirectory.file("compose/binaries/main/dmg/ControlDeskAgent-1.0.4.dmg")
+    val outFile = layout.buildDirectory.file("compose/binaries/main/dmg/ControlDeskAgent-$agentVersion.dmg")
     inputs.dir(file("package/dmg"))
     outputs.file(outFile)
     commandLine("bash", file("package/dmg/build-dmg.sh").absolutePath)

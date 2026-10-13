@@ -82,7 +82,11 @@ fun DeskScreen(
             }
             BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
                 val landscape = maxWidth > maxHeight
-                val tileSize = DeskDesign.TileSize.dp
+                val horizontalInset = if (landscape) 24.dp else 32.dp
+                val availableWidth = (maxWidth - horizontalInset).coerceAtLeast(0.dp)
+                val columns = appGridColumnCount(
+                    availableWidthDp = availableWidth.value,
+                )
                 HorizontalPager(
                     state = pagerState,
                     userScrollEnabled = uiState.hosts.size > 1,
@@ -123,7 +127,7 @@ fun DeskScreen(
                             onMicChangeFinished = { if (current) onMicChangeFinished() },
                             onMicClick = { if (current) onMicClick() },
                             compact = landscape,
-                            tileSize = tileSize,
+                            columns = columns,
                             modifier = Modifier.weight(1f),
                         )
                     }

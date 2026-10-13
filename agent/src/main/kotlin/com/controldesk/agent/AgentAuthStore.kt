@@ -10,13 +10,14 @@ class AgentAuthStore {
     private val random = SecureRandom()
 
     init {
-        if (currentPin() == null && tokens().isEmpty()) {
+        if (currentPin() == null) {
             activatePin()
         }
     }
 
     fun currentPin(): String? = lock.withLock {
-        AgentPaths.pin.takeIf { it.isFile }?.readText()?.trim()?.takeIf { it.isNotEmpty() }
+        AgentPaths.pin.takeIf { it.isFile && !isPinExpired() }
+            ?.readText()?.trim()?.takeIf { it.isNotEmpty() }
     }
 
     fun activatePin(): String = lock.withLock {
@@ -36,10 +37,25 @@ class AgentAuthStore {
     }
 
     fun pair(pin: String): String? = lock.withLock {
-        val active = AgentPaths.pin.takeIf { it.isFile }?.readText()?.trim()
+        val active = currentPin()
         if (active.isNullOrEmpty() || active != pin.trim()) return@withLock null
         val token = UUID.randomUUID().toString().replace("-", "")
         AgentPaths.tokens.appendText("$token\n")
         token
+    }
+
+    fun revokeAllTokens(): Int = lock.withLock {
+        val count = tokens().size
+        AgentPaths.tokens.writeText("")
+        count
+    }
+
+    private fun isPinExpired(): Boolean {
+        val ageMillis = System.currentTimeMillis() - AgentPaths.pin.lastModified()
+        return ageMillis < 0 || ageMillis >= PIN_TTL_MS
+    }
+
+    companion object {
+        const val PIN_TTL_MS = 10 * 60 * 1000L
     }
 }

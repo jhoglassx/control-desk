@@ -6,6 +6,12 @@ import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.RunningApp
 import kotlinx.coroutines.flow.Flow
 
+data class DiscoveredAgent(val name: String, val host: String, val port: Int)
+
+interface AgentDiscovery {
+    fun start(onChanged: (List<DiscoveredAgent>) -> Unit): AutoCloseable
+}
+
 interface HostPreferences {
     fun observeHosts(): Flow<List<PairedHost>>
     suspend fun getHosts(): List<PairedHost>
@@ -33,5 +39,6 @@ interface PairHostRemote {
 interface RunningAppIconCache {
     suspend fun load(): Map<String, String>
     suspend fun putIfAbsent(buttonId: String, base64: String)
+    suspend fun replace(buttonId: String, base64: String) = putIfAbsent(buttonId, base64)
     fun peek(buttonId: String): String?
 }

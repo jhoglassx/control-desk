@@ -13,12 +13,15 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicBoolean
 
 object MacWindowLister {
     private val cache = AtomicReference<List<RunningAppInfo>>(emptyList())
     private val lastError = AtomicReference<String?>(null)
     private val suppressedUntil = ConcurrentHashMap<String, Long>()
     private val cacheListeners = CopyOnWriteArrayList<() -> Unit>()
+    private val started = AtomicBoolean(false)
+    private val resolvingIcons = AtomicBoolean(false)
     private val ignored = setOf(
         "ControlDeskAgent", "AutoFill", "coreauthd", "loginwindow", "Wallpaper",
         "Window Server", "SystemUIServer", "Dock", "Control Center", "NotificationCenter",
@@ -30,18 +33,35 @@ object MacWindowLister {
     }
 
     fun warmUp() {
+        if (!started.compareAndSet(false, true)) return
         Thread({
             while (true) {
                 runCatching {
                     if (!MacAccessibility.isTrusted()) {
                         lastError.set("accessibility_disabled")
+                        val dockApps = MacDockApps.merge(emptyList())
+                        if (dockApps != cache.get()) {
+                            cache.set(dockApps)
+                            notifyCacheListeners()
+                        }
+                        Thread.sleep(WINDOW_REFRESH_MS)
+                        return@runCatching
                     }
                     val windows = query().filterNot { isSuppressed(it.appName) }
                     cache.set(windows)
                     notifyCacheListeners()
-                    MacAppIconResolver.resolveMissing(windows.map { it.appName }, limit = 3)
+                    if (resolvingIcons.compareAndSet(false, true)) {
+                        Thread {
+                            try {
+                                MacAppIconResolver.resolveMissing(windows.map { it.appName }, limit = 24)
+                                cacheListeners.forEach { listener -> runCatching { listener() } }
+                            } finally {
+                                resolvingIcons.set(false)
+                            }
+                        }.apply { isDaemon = true; name = "app-icon-resolver"; start() }
+                    }
                 }
-                Thread.sleep(80)
+                Thread.sleep(WINDOW_REFRESH_MS)
             }
         }, "window-lister").apply {
             isDaemon = true
@@ -144,6 +164,8 @@ object MacWindowLister {
         noteError("window_lister_blank")
         return ""
     }
+
+    private const val WINDOW_REFRESH_MS = 1_000L
 
     private fun noteError(message: String) {
         if (lastError.get() == message) return

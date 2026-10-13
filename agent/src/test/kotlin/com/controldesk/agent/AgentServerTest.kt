@@ -24,7 +24,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class AgentServerTest {
+open class AgentServerTest {
     protected lateinit var tmp: File
     protected lateinit var server: AgentServer
     protected lateinit var auth: AgentAuthStore
@@ -55,6 +55,15 @@ class AgentServerTest {
         runBlocking {
             val text = client.get("http://127.0.0.1:18741/health").bodyAsText()
             assertTrue(text.contains("\"ok\":true"))
+        }
+    }
+
+    @Test
+    fun localSetupHealthReturnsCurrentPin() {
+        runBlocking {
+            val response = client.get("http://127.0.0.1:18741/setup/health")
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.bodyAsText().contains(auth.currentPin()!!))
         }
     }
 

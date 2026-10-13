@@ -51,6 +51,7 @@ ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.re
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
 ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
 jmdns = { module = "org.jmdns:jmdns", version = "3.6.1" }
+jna = { module = "net.java.dev.jna:jna", version = "5.14.0" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

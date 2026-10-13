@@ -88,12 +88,12 @@ fun AppLauncherTile(
                 )
             },
     ) {
-        val iconSize = DeskDesign.IconSize.dp
+        val iconSize = (maxWidth * 0.58f).coerceIn(34.dp, 52.dp)
         val accent = accentForLabel(appName)
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 10.dp),
+                .padding(horizontal = 4.dp, vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -129,26 +129,25 @@ fun AppLauncherTile(
             Text(
                 label,
                 color = DeskColors.TextPrimary,
-                fontSize = 12.sp,
+                fontSize = 9.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
-                lineHeight = 14.sp,
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
             )
         }
         if (button.monitorIndex > 0) {
             Text(
                 "M${button.monitorIndex}",
                 color = monitorTint,
-                fontSize = 9.sp,
+                fontSize = 8.sp,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(6.dp)
+                    .padding(4.dp)
                     .shadow(4.dp, RoundedCornerShape(8.dp))
                     .background(DeskColors.Surface, RoundedCornerShape(8.dp))
                     .border(1.dp, monitorTint, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                    .padding(horizontal = 4.dp, vertical = 1.dp),
             )
         }
     }

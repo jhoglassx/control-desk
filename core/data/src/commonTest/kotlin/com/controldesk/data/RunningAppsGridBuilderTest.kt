@@ -147,6 +147,10 @@ class RunningAppsGridBuilderTest {
         assertEquals(4, buttons.size)
         assertEquals(4, buttons.map { it.id }.toSet().size)
         assertEquals(
+            listOf("Android Studio · project-a", "Android Studio · project-b"),
+            buttons.filter { it.appNameFromPayload() == "Android Studio" }.map { it.label },
+        )
+        assertEquals(
             listOf("app-Android Studio-pid101-ax1-t${"project-a".hashCode()}", "app-Android Studio-pid101-ax2-t${"project-b".hashCode()}"),
             buttons.filter { it.appNameFromPayload() == "Android Studio" }.map { it.id },
         )

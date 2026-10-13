@@ -1,9 +1,10 @@
 Control Desk Agent
 
-1. Arraste ControlDeskAgent.app para Aplicativos (ou dê duplo clique no app)
-2. A janela abre com PIN e IP — use no celular em Parear PC (porta 8741)
-3. Clique em "Abrir Ajustes de Acessibilidade" e ative ControlDeskAgent
-4. Feche a janela — o agente continua em segundo plano (sem ícone no Dock)
+1. Arraste ControlDeskAgent.app para Aplicativos e abra-o de lá.
+2. O agente instala o serviço para iniciar com seu login e mostra um PIN temporário.
+3. No celular, escolha "Buscar Mac na mesma rede", selecione este Mac e informe o PIN.
+4. Ative ControlDeskAgent em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade para controlar janelas.
+5. Clique em Concluir. O agente continua em segundo plano mesmo quando a janela fecha.
 
 Para ver o PIN de novo: abra Control Desk Agent em Aplicativos.
 
