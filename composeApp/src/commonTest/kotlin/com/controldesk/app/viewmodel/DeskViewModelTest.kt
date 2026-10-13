@@ -13,7 +13,7 @@ import com.controldesk.testing.FakeIconCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -47,33 +47,28 @@ class DeskViewModelTest {
             sortOrder = 0,
             token = "tok",
         )
-        val safari = GridButton(
-            id = "app-Safari",
-            label = "Safari",
-            actionType = ActionType.REMOTE_LAUNCH,
-            payload = mapOf("target" to "Safari"),
-            isActive = false,
-            isVisible = true,
-        )
-        val chrome = safari.copy(id = "app-Chrome", label = "Chrome", payload = mapOf("target" to "Chrome"), isActive = true)
         val gateway = FakeAgentGateway(
             apps = listOf(
                 RunningApp(name = "Safari", appName = "Safari", isActive = false, isVisible = true),
                 RunningApp(name = "Chrome", appName = "Chrome", isActive = true, isVisible = true),
             ),
         )
+        val realtime = FakeAgentRealtime(apps = gateway.apps)
         val viewModel = DeskViewModel(
             hostPreferences = FakeHostPreferences(listOf(host)),
             agentGateway = gateway,
-            agentRealtime = FakeAgentRealtime(),
+            agentRealtime = realtime,
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
+            coroutineScope = backgroundScope,
         )
-        advanceUntilIdle()
+        runCurrent()
+        assertEquals(listOf("Chrome", "Safari"), viewModel.uiState.value.buttons.map { it.label })
+        val safari = viewModel.uiState.value.buttons.first { it.label == "Safari" }
         viewModel.onButtonClick(safari)
         assertEquals(listOf("Safari"), viewModel.uiState.value.buttons.filter { it.isActive }.map { it.label })
-        advanceUntilIdle()
-        assertEquals("Safari", gateway.launched.last().label)
+        runCurrent()
+        assertEquals("Safari", realtime.launched.last().label)
     }
 
     @Test
@@ -93,19 +88,21 @@ class DeskViewModelTest {
                 RunningApp(name = "Notes", appName = "Notes", isActive = false, isVisible = true),
             ),
         )
+        val realtime = FakeAgentRealtime(apps = gateway.apps)
         val viewModel = DeskViewModel(
             hostPreferences = FakeHostPreferences(listOf(host)),
             agentGateway = gateway,
-            agentRealtime = FakeAgentRealtime(),
+            agentRealtime = realtime,
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
+            coroutineScope = backgroundScope,
         )
-        advanceUntilIdle()
+        runCurrent()
         val safari = viewModel.uiState.value.buttons.first { it.label == "Safari" }
         viewModel.onAppClose(safari)
         assertEquals(listOf("Notes"), viewModel.uiState.value.buttons.map { it.label })
-        advanceUntilIdle()
-        assertEquals("Safari", gateway.closed.single().payload["target"])
+        runCurrent()
+        assertEquals("Safari", realtime.closed.single().payload["target"])
         assertEquals(listOf("Notes"), viewModel.uiState.value.buttons.map { it.label })
     }
 
@@ -127,18 +124,20 @@ class DeskViewModelTest {
             ),
             removeOnClose = false,
         )
+        val realtime = FakeAgentRealtime(apps = gateway.apps)
         val viewModel = DeskViewModel(
             hostPreferences = FakeHostPreferences(listOf(host)),
             agentGateway = gateway,
-            agentRealtime = FakeAgentRealtime(),
+            agentRealtime = realtime,
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
+            coroutineScope = backgroundScope,
         )
-        advanceUntilIdle()
+        runCurrent()
         val safari = viewModel.uiState.value.buttons.first { it.label == "Safari" }
         viewModel.onAppClose(safari)
-        advanceUntilIdle()
-        assertEquals("Safari", gateway.closed.single().payload["target"])
+        runCurrent()
+        assertEquals("Safari", realtime.closed.single().payload["target"])
         assertEquals(listOf("Notes"), viewModel.uiState.value.buttons.map { it.label })
     }
 
@@ -167,14 +166,16 @@ class DeskViewModelTest {
             ),
             removeOnClose = false,
         )
+        val realtime = FakeAgentRealtime(apps = gateway.apps)
         val viewModel = DeskViewModel(
             hostPreferences = FakeHostPreferences(listOf(host)),
             agentGateway = gateway,
-            agentRealtime = FakeAgentRealtime(),
+            agentRealtime = realtime,
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
+            coroutineScope = backgroundScope,
         )
-        advanceUntilIdle()
+        runCurrent()
         val safari = viewModel.uiState.value.buttons.first { it.label == "Safari" }
         viewModel.onAppClose(safari)
         val after = viewModel.uiState.value.buttons
@@ -184,7 +185,7 @@ class DeskViewModelTest {
         assertEquals(false, placeholder.isActive)
         assertEquals(false, placeholder.isVisible)
         assertEquals(true, placeholder.isDockPinned)
-        advanceUntilIdle()
+        runCurrent()
         val polled = viewModel.uiState.value.buttons.first { it.payload["target"] == "Safari" }
         assertEquals("app-Safari-dock", polled.id)
         assertEquals(false, polled.isActive)
@@ -213,18 +214,19 @@ class DeskViewModelTest {
             agentRealtime = FakeAgentRealtime(),
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
+            coroutineScope = backgroundScope,
         )
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(listOf("Chrome"), viewModel.uiState.value.buttons.filter { it.isActive }.map { it.label })
 
         viewModel.selectHost(1)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals("Laptop", viewModel.uiState.value.selectedHost?.name)
         assertEquals(listOf("Notes"), viewModel.uiState.value.buttons.filter { it.isActive }.map { it.label })
         assertEquals(listOf("Mail", "Notes"), viewModel.uiState.value.buttons.map { it.label })
 
         viewModel.selectHost(0)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(listOf("Chrome"), viewModel.uiState.value.buttons.filter { it.isActive }.map { it.label })
     }
 
@@ -249,10 +251,11 @@ class DeskViewModelTest {
             agentRealtime = FakeAgentRealtime(),
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
+            coroutineScope = backgroundScope,
         )
-        advanceUntilIdle()
+        runCurrent()
         viewModel.selectHost(1)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(emptyList(), viewModel.uiState.value.buttons.filter { it.isActive }.map { it.label })
         assertEquals(listOf("Chrome", "Notes"), viewModel.uiState.value.buttons.map { it.label })
     }
@@ -274,8 +277,9 @@ class DeskViewModelTest {
             agentRealtime = FakeAgentRealtime(),
             executeGridButton = ExecuteGridButtonUseCase(gateway),
             iconCache = FakeIconCache(),
+            coroutineScope = backgroundScope,
         )
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(1, viewModel.uiState.value.buttons.count { it.isActive })
         assertEquals("Chrome", viewModel.uiState.value.buttons.first { it.isActive }.label)
     }

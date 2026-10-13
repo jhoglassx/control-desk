@@ -1,7 +1,7 @@
 # Revisão geral do Control Desk
 
 **Revisado em:** 13/10/2026
-**Escopo:** inventário funcional, arquitetura, protocolo, app, agente, persistência, empacotamento, testes e documentação. Nesta atualização, os testes JVM e os builds Android/iOS passaram; a suíte completa do ViewModel exige correção no controle do relógio virtual. A assinatura estável do agente continua pendente porque não há certificado confiável configurado neste Mac.
+**Escopo:** inventário funcional, arquitetura, protocolo, app, agente, persistência, empacotamento, testes e documentação. Nesta atualização, as suítes JVM e Android e os builds Android/iOS passaram. A assinatura estável do agente continua pendente porque não há certificado confiável configurado neste Mac.
 
 O Control Desk já tem o fluxo funcional principal para controlar um Mac pela rede local: parear o telefone, listar janelas/apps e atalhos do Dock, focar ou encerrar apps, controlar abas do Chrome e ajustar volume/microfone. O app usa Compose Multiplatform; o agente macOS é um serviço JVM com API HTTP e WebSocket.
 
@@ -95,7 +95,7 @@ O pacote, `/health` e o TXT mDNS agora usam a versão `1.1.1`. A descoberta mDNS
 
 O macOS podia entregar ao extrator uma representação transparente inválida (reproduzido com ChatGPT), e os caches permanentes no agente/mobile preservavam essa imagem. O agente agora prioriza o `.icns` dentro do app, usa um diretório de cache novo e a persistência mobile aceita substituir ícones antigos. O agente envia o título de cada janela e mantém IDs distintas para várias janelas do mesmo processo; os cards mostram esse título (por exemplo, o nome do projeto no Android Studio), com o nome do app como fallback. A grade cria linhas com células do mesmo peso para usar simetricamente a largura disponível. Ícones maiores e conteúdo centralizado reduzem o espaço ocioso nos cards; o título pode usar duas linhas.
 
-**Validação:** endpoint local respondeu com agente `1.1.1`, Acessibilidade ativa e PNGs reais 72×72 para ChatGPT, Finder, Chrome e demais apps. `JsonRunningAppIconCacheTest`, testes de grade/títulos, suíte do agente, build Android e compilação do target iOS foram executados. A suíte Android completa não terminou: `DeskViewModelTest` fica presa porque `runTest` tenta drenar jobs periódicos de `viewModelScope`; precisa de uma abordagem de teste que controle o ciclo de vida e scheduler. Instalação e inspeção visual no telefone físico continuam pendentes.
+**Validação:** endpoint local respondeu com agente `1.1.1`, Acessibilidade ativa e PNGs reais 72×72 para ChatGPT, Finder, Chrome e demais apps. `JsonRunningAppIconCacheTest`, testes de grade/títulos, suíte do agente, suíte Android completa, build Android e compilação do target iOS passaram. Os testes do ViewModel usam o `backgroundScope` do `runTest` para controlar o relógio e cancelar o polling contínuo ao fim do teste. Instalação e inspeção visual no telefone físico continuam pendentes.
 
 ### P1 — Acessibilidade não sobrevive a builds ad hoc
 
@@ -117,12 +117,12 @@ Validação executada durante esta revisão:
 
 ```bash
 ./gradlew :core:domain:jvmTest :core:protocol:jvmTest :core:data:jvmTest :agent:test
-./gradlew :composeApp:testDebugUnitTest --tests 'com.controldesk.app.util.AppVisualsTest'
+./gradlew :composeApp:testDebugUnitTest
 ./gradlew :composeApp:assembleDebug :composeApp:compileKotlinIosSimulatorArm64
 ./gradlew :agent:packageDmg
 ```
 
-As suítes JVM de domínio, protocolo, dados e agente passaram; o teste unitário Android de `AppVisualsTest` passou. A suíte Android completa não concluiu porque os testes `DeskViewModelTest` deixam o scheduler virtual avançar continuamente devido ao polling periódico. O APK debug e o target Kotlin iOS compilaram. O DMG `1.1.1` foi gerado e instalado neste Mac; `/health` respondeu `1.1.1` com Acessibilidade ativa. Os ícones ChatGPT, Finder e Chrome foram verificados como PNGs válidos de 72×72, e a imagem ChatGPT conferida visualmente. Não foi possível validar instalação em telefone físico porque nenhum dispositivo estava conectado. A assinatura continua ad hoc, pois não há certificado confiável configurado.
+As suítes JVM de domínio, protocolo, dados e agente e a suíte Android completa passaram. Os testes de `DeskViewModel` injetam o `backgroundScope` do runner e usam `runCurrent()` nos pontos de sincronização, evitando avanço infinito do scheduler mantendo cobertura do comportamento com polling. O APK debug e o target Kotlin iOS compilaram. O DMG `1.1.1` foi gerado e instalado neste Mac; `/health` respondeu `1.1.1` com Acessibilidade ativa. Os ícones ChatGPT, Finder e Chrome foram verificados como PNGs válidos de 72×72, e a imagem ChatGPT conferida visualmente. Não foi possível validar instalação em telefone físico porque nenhum dispositivo estava conectado. A assinatura continua ad hoc, pois não há certificado confiável configurado.
 
 ## Próximos passos sugeridos
 

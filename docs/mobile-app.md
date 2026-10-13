@@ -215,14 +215,18 @@ Resumo:
 | `listHint` | Hint quando lista vazia ou erro |
 | `feedback` | Snackbar (erro de ação) |
 
-### 5.2 Inicialização
+### 5.2 Escopo dos jobs
+
+Todos os jobs da tela usam o escopo padrão `viewModelScope`, cancelado quando o ViewModel sai do ciclo de vida. O construtor aceita um escopo opcional apenas para permitir que testes forneçam `runTest.backgroundScope`; assim o relógio virtual controla o polling sem esperar que um job periódico termine. Os testes drenam apenas o trabalho pronto com `runCurrent()` e o runner cancela o escopo de background ao final.
+
+### 5.3 Inicialização
 
 1. Carrega `iconCache` de `RunningAppIconCache`
 2. Observa `hostPreferences.observeHosts()`
 3. Se hosts vazios → limpa estado, para polling
 4. Se há hosts → `loadHost()` para índice selecionado
 
-### 5.3 `loadHost()` — sequência
+### 5.4 `loadHost()` — sequência
 
 1. Se sem cache e `showLoading` → `isLoadingApps = true`
 2. Se tem cache → delay `HOST_SWITCH_SETTLE_MS` (0 ms) antes de atualizar
@@ -231,7 +235,7 @@ Resumo:
 5. Se faltam ícones → segunda carga `includeIcons=true` com `preferMerge=true`; ícones que chegam depois também invalidam a assinatura do WebSocket para atualizar a grade conectada.
 6. `startAutoRefresh()` — polling contínuo
 
-### 5.4 Cache por host
+### 5.5 Cache por host
 
 | Cache | Conteúdo |
 |-------|----------|
@@ -242,7 +246,7 @@ Resumo:
 
 **Troca de host:** restaura cache imediatamente; recarrega em background se necessário.
 
-### 5.5 Timers
+### 5.6 Timers
 
 | Constante | Valor | Uso |
 |-----------|-------|-----|
@@ -257,7 +261,7 @@ Resumo:
 | `HOST_SWITCH_SETTLE_MS` | 0 ms | Após trocar host |
 | `MISSING_ICON_CHECK_EVERY` | 5 ticks | Check ícones faltando; loop 150 ms sem WS / 5 s com WS |
 
-### 5.6 Clique em botão (`onButtonClick`)
+### 5.7 Clique em botão (`onButtonClick`)
 
 1. `armPinnedFocus(button)` — guarda buttonId, windowNumber, appName+title
 2. UI otimista: clicado `isActive=true`, outros `false`
@@ -266,7 +270,7 @@ Resumo:
 5. **Sucesso:** delay `FOCUS_SETTLE_MS` + 3× refresh com `FOCUS_SETTLE_MS`
 6. **Falha:** `clearPinnedFocus()`, snackbar com erro
 
-### 5.6.1 Encerrar app (`onAppClose`)
+### 5.7.1 Encerrar app (`onAppClose`)
 
 1. Lê `payload.target`; Finder/sistema → snackbar, sem HTTP
 2. Tile só da Dock (já fechado) → no-op

@@ -17,6 +17,7 @@ import com.controldesk.domain.repository.HostPreferences
 import com.controldesk.domain.repository.RunningAppIconCache
 import com.controldesk.domain.usecase.ExecuteGridButtonUseCase
 import com.controldesk.logging.ControlDeskLog
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -37,8 +38,10 @@ class DeskViewModel(
     private val agentRealtime: AgentRealtime,
     private val executeGridButton: ExecuteGridButtonUseCase,
     private val iconCache: RunningAppIconCache,
+    coroutineScope: CoroutineScope? = null,
 ) : ViewModel() {
 
+    private val jobsScope = coroutineScope ?: viewModelScope
     private val _uiState = MutableStateFlow(DeskUiState())
     val uiState: StateFlow<DeskUiState> = _uiState.asStateFlow()
 
@@ -77,10 +80,10 @@ class DeskViewModel(
     private var activeTrackingHostId: String? = null
 
     init {
-        viewModelScope.launch {
+        jobsScope.launch {
             memoryIcons = iconCache.load()
         }
-        viewModelScope.launch {
+        jobsScope.launch {
             hostPreferences.observeHosts().collect { hosts ->
                 val sorted = hosts.sortedBy { it.sortOrder }
                 if (sorted.isEmpty()) {
@@ -97,7 +100,7 @@ class DeskViewModel(
     }
 
     fun refreshHosts() {
-        viewModelScope.launch {
+        jobsScope.launch {
             val hosts = hostPreferences.getHosts().sortedBy { it.sortOrder }
             _uiState.update { state ->
                 val index = hosts.indexOfFirst { it.id == state.selectedHost?.id }.takeIf { it >= 0 } ?: 0
@@ -138,7 +141,7 @@ class DeskViewModel(
                 },
             )
         }
-        viewModelScope.launch {
+        jobsScope.launch {
             try {
                 val apps = runAppCommand(button, host)
                 applyAgentApps(host, apps)
@@ -148,7 +151,7 @@ class DeskViewModel(
                 refreshAppsSilent(host)
             }
         }
-        viewModelScope.launch {
+        jobsScope.launch {
             startBurstRefresh()
         }
     }
@@ -199,7 +202,7 @@ class DeskViewModel(
         _uiState.update { state ->
             state.copy(buttons = replaceClosedApp(state.buttons, button))
         }
-        viewModelScope.launch {
+        jobsScope.launch {
             try {
                 val apps = if (isRealtimeConnected()) {
                     try {
@@ -248,7 +251,7 @@ class DeskViewModel(
         val level = _uiState.value.volumeLevel
         armAudioHold(AUDIO_SETTLE_MS)
         _uiState.update { it.copy(volumeMuted = nextMuted) }
-        viewModelScope.launch {
+        jobsScope.launch {
             runCatching {
                 if (nextMuted) {
                     sendVolume(host, mute = true)
@@ -273,7 +276,7 @@ class DeskViewModel(
             val restored = lastMicLevel.coerceIn(25, 100)
             _uiState.update { it.copy(micMuted = false, micLevel = restored) }
         }
-        viewModelScope.launch {
+        jobsScope.launch {
             runCatching {
                 if (nextMuted) {
                     sendMic(host, mute = true, toggle = false)
@@ -306,7 +309,7 @@ class DeskViewModel(
     private fun enqueueVolume(host: PairedHost, level: Int) {
         pendingVolume = level
         if (volumeSendJob?.isActive == true) return
-        volumeSendJob = viewModelScope.launch {
+        volumeSendJob = jobsScope.launch {
             while (true) {
                 val next = pendingVolume ?: break
                 pendingVolume = null
@@ -321,7 +324,7 @@ class DeskViewModel(
     private fun enqueueMic(host: PairedHost, level: Int) {
         pendingMic = level
         if (micSendJob?.isActive == true) return
-        micSendJob = viewModelScope.launch {
+        micSendJob = jobsScope.launch {
             while (true) {
                 val next = pendingMic ?: break
                 pendingMic = null
@@ -342,7 +345,7 @@ class DeskViewModel(
         bindActiveTracking(host.id)
         startRealtime(host)
         pendingHostLoad?.cancel()
-        pendingHostLoad = viewModelScope.launch {
+        pendingHostLoad = jobsScope.launch {
             val cached = buttonsCache[host.id]
             if (showLoading) {
                 _uiState.update { it.copy(isLoadingApps = true) }
@@ -422,8 +425,8 @@ class DeskViewModel(
         }
         realtimeHostId = host.id
         realtimeEventsJob?.cancel()
-        agentRealtime.connect(host, viewModelScope)
-        realtimeEventsJob = viewModelScope.launch {
+        agentRealtime.connect(host, jobsScope)
+        realtimeEventsJob = jobsScope.launch {
             agentRealtime.events.collect { event ->
                 when (event) {
                     is AgentRealtimeEvent.Apps -> applyAgentApps(host, event.apps)
@@ -770,7 +773,7 @@ class DeskViewModel(
     }
 
     private fun persistNewIcons(buttons: List<GridButton>) {
-        viewModelScope.launch {
+        jobsScope.launch {
             buttons.forEach { button ->
                 val icon = button.iconBase64
                 if (!icon.isNullOrBlank() && iconCache.peek(button.id) != icon) {
@@ -785,7 +788,7 @@ class DeskViewModel(
         autoRefreshJob?.cancel()
         audioPollJob?.cancel()
         audioTick = 0
-        autoRefreshJob = viewModelScope.launch {
+        autoRefreshJob = jobsScope.launch {
             while (true) {
                 val host = _uiState.value.selectedHost ?: break
                 if (!isRealtimeConnected()) {
@@ -803,7 +806,7 @@ class DeskViewModel(
                 delay(if (isRealtimeConnected()) FALLBACK_POLL_MS else AUTO_REFRESH_MS)
             }
         }
-        audioPollJob = viewModelScope.launch {
+        audioPollJob = jobsScope.launch {
             while (true) {
                 delay(if (isRealtimeConnected()) FALLBACK_AUDIO_POLL_MS else AUDIO_REFRESH_MS)
                 val host = _uiState.value.selectedHost ?: continue
@@ -829,7 +832,7 @@ class DeskViewModel(
     private fun startBurstRefresh() {
         if (isRealtimeConnected()) return
         burstJob?.cancel()
-        burstJob = viewModelScope.launch {
+        burstJob = jobsScope.launch {
             val host = _uiState.value.selectedHost ?: return@launch
             refreshAppsSilent(host)
             repeat(BURST_REFRESH_COUNT) {
