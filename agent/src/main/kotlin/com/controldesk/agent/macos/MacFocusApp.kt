@@ -16,7 +16,7 @@ object MacFocusApp {
         if (app.isEmpty() && bundlePath.isEmpty()) return
         val pid = request.pid?.takeIf { it > 0 }
         val axIndex = request.axWindowIndex?.takeIf { it > 0 }
-        if (pid != null && axIndex != null && bundlePath.isEmpty()) {
+        if (shouldFocusExistingWindow(request)) {
             Shell.osascript(
                 """
                 tell application "System Events"
@@ -68,4 +68,7 @@ object MacFocusApp {
         }
         Shell.spawn("/usr/bin/open", "-a", app)
     }
+
+    internal fun shouldFocusExistingWindow(request: AppLaunchRequest): Boolean =
+        request.pid?.let { it > 0 } == true && request.axWindowIndex?.let { it > 0 } == true
 }
