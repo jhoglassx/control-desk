@@ -36,7 +36,12 @@ fun AdminPinDialog(
         text = {
             Column {
                 Text(
-                    "Digite o PIN para abrir as configurações de pareamento.",
+                    "Este PIN protege as configurações do Control Desk neste aparelho. O PIN inicial é 8741.",
+                    color = DeskColors.TextMuted,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Ele não é o PIN de conexão do Mac. Para parear, use o PIN temporário de 6 dígitos exibido na janela Control Desk Agent.",
                     color = DeskColors.TextMuted,
                 )
                 Spacer(Modifier.height(12.dp))

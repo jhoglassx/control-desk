@@ -130,6 +130,91 @@ class DeskViewModel(
         _uiState.update { it.copy(feedback = null) }
     }
 
+    fun onIntent(intent: DeskIntent) {
+        when (intent) {
+            is DeskIntent.SetReorganizingApps -> _uiState.update {
+                it.copy(
+                    isReorganizingApps = intent.enabled,
+                    selectedAppIdForReorder = if (intent.enabled) it.selectedAppIdForReorder else null,
+                    selectedAppDragOffsetX = 0f,
+                    selectedAppDragOffsetY = 0f,
+                    selectedAppDragStartIndex = null,
+                    selectedAppDragCellWidth = 0f,
+                    selectedAppDragCellHeight = 0f,
+                )
+            }
+            is DeskIntent.SelectAppForReorder -> _uiState.update { state ->
+                if (state.isReorganizingApps) state.copy(
+                    selectedAppIdForReorder = intent.appId,
+                    selectedAppDragOffsetX = 0f,
+                    selectedAppDragOffsetY = 0f,
+                    selectedAppDragStartIndex = state.buttons.indexOfFirst { button -> button.id == intent.appId }.takeIf { index -> index >= 0 },
+                    selectedAppDragCellWidth = intent.cellWidth,
+                    selectedAppDragCellHeight = intent.cellHeight,
+                ) else state
+            }
+            is DeskIntent.MoveSelectedAppBy -> _uiState.update { state ->
+                if (state.isReorganizingApps && state.selectedAppIdForReorder != null) {
+                    state.copy(
+                        selectedAppDragOffsetX = state.selectedAppDragOffsetX + intent.deltaX,
+                        selectedAppDragOffsetY = state.selectedAppDragOffsetY + intent.deltaY,
+                    )
+                } else state
+            }
+            DeskIntent.FinishAppReorderDrag -> _uiState.update {
+                it.copy(
+                    selectedAppIdForReorder = null,
+                    selectedAppDragOffsetX = 0f,
+                    selectedAppDragOffsetY = 0f,
+                    selectedAppDragStartIndex = null,
+                    selectedAppDragCellWidth = 0f,
+                    selectedAppDragCellHeight = 0f,
+                )
+            }
+            is DeskIntent.PreviewReorderApp -> previewReorderApp(intent.appId, intent.targetIndex)
+            is DeskIntent.ReorderApps -> reorderApps(intent.orderedIds)
+        }
+    }
+
+    private fun reorderApps(orderedIds: List<String>) {
+        val host = _uiState.value.selectedHost ?: return
+        val currentIds = _uiState.value.buttons.map { it.id }
+        val visibleOrder = orderedIds.filter { it in currentIds }.distinct()
+        if (visibleOrder.size < 2 || visibleOrder.toSet() != currentIds.toSet()) return
+
+        val persistedOrder = visibleOrder + host.appOrder.filterNot { it in visibleOrder }
+        val updatedHost = host.copy(appOrder = persistedOrder)
+        val reorderedButtons = reorderButtons(_uiState.value.buttons, persistedOrder)
+        buttonsCache[host.id] = reorderedButtons
+        _uiState.update { state ->
+            state.copy(
+                buttons = if (state.selectedHost?.id == host.id) reorderedButtons else state.buttons,
+                cachedButtons = state.cachedButtons + (host.id to reorderedButtons),
+                hosts = state.hosts.map { if (it.id == host.id) updatedHost else it },
+            )
+        }
+        jobsScope.launch { hostPreferences.saveHost(updatedHost) }
+    }
+
+    private fun previewReorderApp(appId: String, targetIndex: Int) {
+        val state = _uiState.value
+        if (!state.isReorganizingApps || state.selectedAppIdForReorder != appId) return
+        val hostId = state.selectedHost?.id ?: return
+        val currentIndex = state.buttons.indexOfFirst { it.id == appId }
+        if (currentIndex < 0 || targetIndex !in state.buttons.indices || currentIndex == targetIndex) return
+        val reorderedButtons = state.buttons.toMutableList().apply {
+            add(targetIndex, removeAt(currentIndex))
+        }
+        buttonsCache[hostId] = reorderedButtons
+        _uiState.update { current ->
+            if (!current.isReorganizingApps || current.selectedAppIdForReorder != appId) current
+            else current.copy(
+                buttons = reorderedButtons,
+                cachedButtons = current.cachedButtons + (hostId to reorderedButtons),
+            )
+        }
+    }
+
     fun onButtonClick(button: GridButton) {
         val host = _uiState.value.selectedHost ?: return
         if (isClosing(button)) return
@@ -180,7 +265,9 @@ class DeskViewModel(
             _uiState.update { it.copy(feedback = "Não é possível fechar $target") }
             return
         }
-        if (button.isDockPinned && !button.isVisible && !button.isActive) return
+        val favoriteShortcutIsIdle = button.isFavoriteShortcut && !button.isVisible && !button.isActive
+        val dockShortcutIsIdle = !button.isFavoriteShortcut && button.isDockPinned && !button.isVisible && !button.isActive
+        if (favoriteShortcutIsIdle || dockShortcutIsIdle) return
         clearPinnedFocus()
         if (currentActiveId == button.id || button.isActive) {
             currentActiveId = null
@@ -345,11 +432,11 @@ class DeskViewModel(
         bindActiveTracking(host.id)
         startRealtime(host)
         pendingHostLoad?.cancel()
+        if (showLoading) {
+            _uiState.update { it.copy(isLoadingApps = true) }
+        }
         pendingHostLoad = jobsScope.launch {
             val cached = buttonsCache[host.id]
-            if (showLoading) {
-                _uiState.update { it.copy(isLoadingApps = true) }
-            }
             if (!cached.isNullOrEmpty()) {
                 restoreCache(host)
             }
@@ -495,9 +582,36 @@ class DeskViewModel(
     }
 
     private fun publishButtons(host: PairedHost, incoming: List<GridButton>, preferMerge: Boolean) {
-        confirmClosedApps(incoming)
-        val stabilized = stabilizeActiveState(host.id, incoming)
-        val withPin = applyPinnedFocus(stabilized)
+        // Realtime collectors can outlive the host snapshot they were created with.
+        // Always merge incoming window data with the latest user-owned layout settings.
+        val currentHost = _uiState.value.hosts.firstOrNull { it.id == host.id } ?: host
+        val favorites = currentHost.pinnedApps.sortedBy { it.order }.mapIndexed { index, app ->
+            GridButton(
+                id = "favorite-${app.id.hashCode()}",
+                label = app.name,
+                actionType = ActionType.REMOTE_LAUNCH,
+                payload = buildMap {
+                    put("target", app.name)
+                    put("targetType", "appName")
+                    put("bundlePath", app.bundlePath)
+                    put("pinnedAppId", app.id)
+                    app.projectPath?.takeIf { it.isNotBlank() }?.let { put("projectPath", it) }
+                },
+                row = index / 4,
+                col = index % 4,
+                iconBase64 = app.iconBase64,
+                isDockPinned = true,
+                isFavoriteShortcut = true,
+            )
+        }
+        val appButtons = incoming.filterNot { it.id.startsWith("favorite-") }
+        val discoveredApps = favorites + appButtons
+        val stableHost = updateAppOrder(currentHost, discoveredApps, buttonsCache[host.id].orEmpty())
+        val withFavorites = reorderButtons(discoveredApps, stableHost.appOrder)
+        confirmClosedApps(withFavorites)
+        val stabilized = stabilizeActiveState(host.id, withFavorites)
+        val withoutDuplicateShortcuts = mergePinnedShortcuts(stabilized)
+        val withPin = applyPinnedFocus(withoutDuplicateShortcuts)
         val hiddenWhileClosing = applyClosingFilter(withPin)
         buttonsCache[host.id] = hiddenWhileClosing
         val activeId = hiddenWhileClosing.firstOrNull { it.isActive }?.id
@@ -522,11 +636,114 @@ class DeskViewModel(
             }
             it.copy(
                 buttons = if (forSelected) hiddenWhileClosing else it.buttons,
+                hosts = it.hosts.map { savedHost -> if (savedHost.id == host.id) stableHost else savedHost },
                 listHint = if (forSelected) hint else it.listHint,
                 cachedButtons = buttonsCache.toMap(),
                 cachedListHints = listHintCache.toMap(),
             )
         }
+    }
+
+    private fun mergePinnedShortcuts(buttons: List<GridButton>): List<GridButton> {
+        val matchedRunningIds = mutableSetOf<String>()
+        val shortcuts = buttons.filter(GridButton::isFavoriteShortcut)
+        val matchingInstances = mutableMapOf<String, GridButton>()
+        shortcuts.forEach { shortcut ->
+            val shortcutTarget = shortcut.payload["target"].orEmpty()
+            val running = buttons
+                .asSequence()
+                .filterNot(GridButton::isFavoriteShortcut)
+                .filterNot { it.id in matchedRunningIds }
+                .filter { it.payload["target"].equals(shortcutTarget, ignoreCase = true) }
+                .maxByOrNull { candidate ->
+                    (if (candidate.isActive) 2 else 0) +
+                        (if (candidate.isVisible) 1 else 0) +
+                        (if (!candidate.isDockPlaceholder()) 1 else 0)
+                }
+            if (running != null) {
+                matchingInstances[shortcut.id] = running
+                matchedRunningIds += running.id
+            }
+        }
+        return buttons
+            .filterNot { it.id in matchedRunningIds }
+            .map { button ->
+                val running = matchingInstances[button.id] ?: return@map button
+                val windowPayload = running.payload.filterKeys { it in RUNNING_WINDOW_PAYLOAD_KEYS }
+                button.copy(
+                    label = running.label,
+                    payload = button.payload + windowPayload,
+                    iconBase64 = button.iconBase64 ?: running.iconBase64,
+                    isActive = running.isActive,
+                    isVisible = running.isVisible,
+                    monitorIndex = running.monitorIndex,
+                    isDockPinned = running.isDockPinned,
+                )
+            }
+    }
+
+    private fun updateAppOrder(
+        host: PairedHost,
+        incoming: List<GridButton>,
+        previousButtons: List<GridButton>,
+    ): PairedHost {
+        val incomingById = incoming.associateBy(GridButton::id)
+        val previousById = previousButtons.associateBy(GridButton::id)
+        val claimedIds = mutableSetOf<String>()
+        val reconciledOrder = host.appOrder.map { savedId ->
+            if (savedId in incomingById) {
+                claimedIds += savedId
+                savedId
+            } else {
+                val previous = previousById[savedId]
+                val replacement = previous?.takeUnless(GridButton::isFavoriteShortcut)
+                    ?.let { oldButton -> findReplacementOrderId(oldButton, incoming, claimedIds) }
+                if (replacement != null) {
+                    claimedIds += replacement
+                    replacement
+                } else savedId
+            }
+        }.distinct()
+        val updatedOrder = reconciledOrder + incoming.map(GridButton::id).filterNot { it in reconciledOrder }
+        if (updatedOrder == host.appOrder) return host
+        return host.copy(appOrder = updatedOrder).also { updatedHost ->
+            jobsScope.launch { hostPreferences.saveHost(updatedHost) }
+        }
+    }
+
+    private fun findReplacementOrderId(
+        previous: GridButton,
+        incoming: List<GridButton>,
+        claimedIds: Set<String>,
+    ): String? {
+        val previousTarget = previous.payload["target"]?.takeIf(String::isNotBlank) ?: return null
+        val candidates = incoming.filter { candidate ->
+            !candidate.isFavoriteShortcut &&
+                candidate.id !in claimedIds &&
+                candidate.payload["target"].equals(previousTarget, ignoreCase = true) &&
+                candidate.payload["browser"] == previous.payload["browser"]
+        }
+        if (candidates.isEmpty()) return null
+        val previousWindowTitle = previous.payload["windowTitle"] ?: previous.payload["value"]
+        val previousPid = previous.payload["pid"]
+        val previousBrowserWindow = previous.payload["browserWindowIndex"]
+        val previousWindowIndex = previous.payload["windowIndex"]
+        return candidates.maxByOrNull { candidate ->
+            var score = if (candidate.isActive) 1 else 0
+            if (previousWindowTitle != null && previousWindowTitle == (candidate.payload["windowTitle"] ?: candidate.payload["value"])) score += 16
+            if (previousPid != null && previousPid == candidate.payload["pid"]) score += 8
+            if (previousBrowserWindow != null && previousBrowserWindow == candidate.payload["browserWindowIndex"]) score += 4
+            if (previousWindowIndex != null && previousWindowIndex == candidate.payload["windowIndex"]) score += 2
+            score
+        }?.id
+    }
+
+    private fun reorderButtons(buttons: List<GridButton>, persistedOrder: List<String>): List<GridButton> {
+        if (persistedOrder.isEmpty()) return buttons
+        val orderById = persistedOrder.withIndex().associate { it.value to it.index }
+        return buttons.withIndex()
+            .sortedWith(compareBy<IndexedValue<GridButton>> { orderById[it.value.id] ?: Int.MAX_VALUE }.thenBy { it.index })
+            .map { it.value }
     }
 
     private fun stabilizeActiveState(hostId: String, incoming: List<GridButton>): List<GridButton> {
@@ -856,6 +1073,13 @@ class DeskViewModel(
     }
 
     private companion object {
+        val RUNNING_WINDOW_PAYLOAD_KEYS = setOf(
+            "windowTitle",
+            "windowNumber",
+            "windowIndex",
+            "axWindowIndex",
+            "pid",
+        )
         const val AUTO_REFRESH_MS = 150L
         const val FALLBACK_POLL_MS = 5_000L
         const val AUDIO_REFRESH_MS = 300L

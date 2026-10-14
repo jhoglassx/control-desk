@@ -3,6 +3,7 @@ package com.controldesk.data
 import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.repository.HostPreferences
 import com.controldesk.data.storage.FileStore
+import com.controldesk.logging.ControlDeskLog
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,16 +46,38 @@ class JsonHostPreferences(
     }
 
     private fun persist(next: List<PairedHost>) {
+        val previous = fileStore.readText(fileName)
+        if (previous != null && decodeHosts(previous) != null) {
+            fileStore.writeText(backupFileName(), previous)
+        }
         fileStore.writeText(fileName, json.encodeToString(HostsFile(next)))
         hosts.value = next
     }
 
     private fun readFromDisk(): List<PairedHost> {
-        val raw = fileStore.readText(fileName) ?: return emptyList()
-        return runCatching { json.decodeFromString<HostsFile>(raw).hosts }
-            .getOrElse { emptyList() }
-            .sortedBy { it.sortOrder }
+        val raw = fileStore.readText(fileName)
+        if (raw != null) {
+            decodeHosts(raw)?.let { return it.sortedBy { host -> host.sortOrder } }
+        }
+
+        val backup = fileStore.readText(backupFileName())
+        val recovered = backup?.let(::decodeHosts)
+        if (recovered != null) {
+            ControlDeskLog.gateway.w { "Hosts JSON was missing or invalid; restored paired devices from backup." }
+            runCatching { fileStore.writeText(fileName, backup) }
+            return recovered.sortedBy { it.sortOrder }
+        }
+
+        if (raw == null && backup == null) return emptyList()
+
+        ControlDeskLog.gateway.e { "Hosts JSON is invalid and no valid backup exists; preserving the file for recovery." }
+        return emptyList()
     }
+
+    private fun backupFileName() = "$fileName.bak"
+
+    private fun decodeHosts(raw: String): List<PairedHost>? =
+        runCatching { json.decodeFromString<HostsFile>(raw).hosts }.getOrNull()
 
     companion object {
         const val HOSTS_FILE = "control_desk_hosts.json"

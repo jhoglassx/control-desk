@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -14,13 +15,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
@@ -28,6 +38,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import kotlin.math.roundToInt
 import com.controldesk.app.theme.DeskColors
 import com.controldesk.app.theme.DeskDesign
 import com.controldesk.app.util.accentForLabel
@@ -42,10 +56,18 @@ fun AppLauncherTile(
     button: GridButton,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onCommitReorder: (() -> Unit)? = null,
+    onPreviewReorder: (appId: String, rowDelta: Int, columnDelta: Int) -> Unit = { _, _, _ -> },
     compact: Boolean,
+    isSelectedForReorder: Boolean = false,
+    onSelectForReorder: (String, Float, Float) -> Unit = { _, _, _ -> },
+    selectedDragOffsetX: Float = 0f,
+    selectedDragOffsetY: Float = 0f,
+    onDragBy: (Float, Float) -> Unit = { _, _ -> },
+    onFinishReorderDrag: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val dockOnly = button.isDockPinned && !button.isVisible && !button.isActive
+    val dockOnly = !button.isFavoriteShortcut && button.isDockPinned && !button.isVisible && !button.isActive
     val open = button.isVisible && !button.isActive
     // Azul = em uso; verde = aberto; cinza = só na Dock / fechado
     val borderColor = when {
@@ -63,30 +85,115 @@ fun AppLauncherTile(
     val icon = rememberBase64Image(button.iconBase64)
     val monitorTint = if (button.monitorIndex == 2) DeskColors.Mint else DeskColors.Accent
     val tileAlpha = when {
-        button.isActive || button.isVisible -> 1f
+        button.isFavoriteShortcut || button.isActive || button.isVisible -> 1f
         dockOnly -> 0.7f
         else -> 0.45f
     }
 
     val cardShape = RoundedCornerShape(16.dp)
+    val reorderMode = onCommitReorder != null
+    val shakeTransition = rememberInfiniteTransition(label = "app-tile-reorder-${button.id}")
+    val shakeAngle = if (reorderMode && !isSelectedForReorder) {
+        shakeTransition.animateFloat(
+            initialValue = -0.8f,
+            targetValue = 0.8f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 135, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "app-tile-shake-${button.id}",
+        ).value
+    } else 0f
+    val tileDescription = buildString {
+        append(label)
+        if (button.isActive) append(", aplicativo ativo")
+        if (button.monitorIndex > 0) append(", monitor ${button.monitorIndex}")
+        if (reorderMode) {
+            append(if (isSelectedForReorder) ", selecionado para mover" else ", segure e arraste qualquer parte para mover")
+        }
+    }
+    val currentButtonId by rememberUpdatedState(button.id)
+    val currentSelectForReorder by rememberUpdatedState(onSelectForReorder)
+    val currentPreviewReorder by rememberUpdatedState(onPreviewReorder)
+    val currentDragBy by rememberUpdatedState(onDragBy)
+    val currentFinishDrag by rememberUpdatedState(onFinishReorderDrag)
+    val currentCommitReorder by rememberUpdatedState(onCommitReorder)
+    val reorderGestureModifier = if (!reorderMode) Modifier else Modifier.pointerInput(reorderMode) {
+        var dragDistance = androidx.compose.ui.geometry.Offset.Zero
+        var draggedAppId: String? = null
+        var previousRowDelta = 0
+        var previousColumnDelta = 0
+        val gapPx = DeskDesign.TileGap.dp.toPx()
+        detectDragGesturesAfterLongPress(
+            onDragStart = {
+                dragDistance = androidx.compose.ui.geometry.Offset.Zero
+                previousRowDelta = 0
+                previousColumnDelta = 0
+                draggedAppId = currentButtonId
+                currentSelectForReorder(currentButtonId, size.width.toFloat(), size.height.toFloat())
+            },
+            onDrag = { change, amount ->
+                change.consume()
+                dragDistance += amount
+                currentDragBy(amount.x, amount.y)
+                val rowDelta = (dragDistance.y / (size.height + gapPx)).roundToInt()
+                val columnDelta = (dragDistance.x / (size.width + gapPx)).roundToInt()
+                if (rowDelta != previousRowDelta || columnDelta != previousColumnDelta) {
+                    draggedAppId?.let { currentPreviewReorder(it, rowDelta, columnDelta) }
+                    previousRowDelta = rowDelta
+                    previousColumnDelta = columnDelta
+                }
+            },
+            onDragEnd = {
+                currentCommitReorder?.invoke()
+                currentFinishDrag()
+                draggedAppId = null
+            },
+            onDragCancel = currentFinishDrag,
+        )
+    }
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .alpha(tileAlpha)
             .then(
-                if (button.isActive) Modifier.shadow(12.dp, cardShape, ambientColor = DeskColors.Accent)
+                if (reorderMode && isSelectedForReorder) {
+                    Modifier.shadow(18.dp, cardShape, ambientColor = DeskColors.Accent)
+                } else if (button.isActive) Modifier.shadow(12.dp, cardShape, ambientColor = DeskColors.Accent)
                 else Modifier,
             )
+            .then(
+                if (reorderMode) Modifier.graphicsLayer {
+                    if (isSelectedForReorder) {
+                        translationX = selectedDragOffsetX
+                        translationY = selectedDragOffsetY
+                        rotationZ = 0f
+                    } else {
+                        translationX = 0f
+                        translationY = 0f
+                        rotationZ = shakeAngle
+                    }
+                } else Modifier,
+            )
+            // Lift the dragged tile above its row siblings; WorkspacePanel lifts
+            // the containing row above other grid rows as well.
+            .zIndex(if (reorderMode && isSelectedForReorder) 100f else 0f)
             .clip(cardShape)
             .background(DeskColors.SurfaceRaised)
-            .border(borderWidth, borderColor, cardShape)
-            .pointerInput(button.id) {
-                detectTapGestures(
-                    onLongPress = { onLongClick() },
-                    onTap = { onClick() },
-                )
-            },
+            .border(
+                width = if (reorderMode && isSelectedForReorder) 3.dp else borderWidth,
+                color = if (reorderMode && isSelectedForReorder) DeskColors.Accent else borderColor,
+                shape = cardShape,
+            )
+            .semantics {
+                contentDescription = tileDescription
+            }
+            .then(
+                if (!reorderMode) Modifier.pointerInput(button.id) {
+                    detectTapGestures(onLongPress = { onLongClick() }, onTap = { onClick() })
+                } else reorderGestureModifier,
+            ),
     ) {
         val iconSize = (maxWidth * 0.58f).coerceIn(34.dp, 52.dp)
         val accent = accentForLabel(appName)
@@ -134,6 +241,25 @@ fun AppLauncherTile(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+            )
+        }
+        if (reorderMode && isSelectedForReorder) {
+            Text(
+                "Selecionado",
+                color = DeskColors.Accent,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp),
+            )
+        }
+        if (button.isActive) {
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(7.dp)
+                    .size(8.dp)
+                    .background(DeskColors.Accent, RoundedCornerShape(50))
+                    .semantics { contentDescription = "Aplicativo ativo" },
             )
         }
         if (button.monitorIndex > 0) {

@@ -175,6 +175,12 @@ fun PairHostScreen(
             Spacer(Modifier.height(12.dp))
             PairStepCard(number = "i", title = "Modo painel") {
                 Text("Para abrir o Control Desk ao ligar o aparelho, defina-o como app inicial nas configurações do Android.", color = DeskColors.TextMuted, fontSize = 13.sp)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Na primeira configuração, o PIN administrativo inicial é 8741. Depois de parear o primeiro Mac, ele será pedido para adicionar ou remover computadores. É diferente do PIN temporário de conexão exibido no Mac.",
+                    color = DeskColors.TextMuted,
+                    fontSize = 13.sp,
+                )
             }
         }
 

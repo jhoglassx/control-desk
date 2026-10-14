@@ -18,4 +18,13 @@ class AppGridLayoutTest {
         assertEquals(1, appGridRowCount(appCount = 0, columns = 4))
         assertEquals(16, appGridRowCount(appCount = 14, columns = 0))
     }
+
+    @Test
+    fun movingAnyAppUsesItsGridPositionAndKeepsAllAppsInRange() {
+        assertEquals(1, appDropTarget(sourceTileIndex = 2, rowDelta = 0, columnDelta = 1, columns = 4, appCount = 4))
+        assertEquals(3, appDropTarget(sourceTileIndex = 2, rowDelta = 1, columnDelta = 0, columns = 4, appCount = 4))
+        assertEquals(0, appDropTarget(sourceTileIndex = 3, rowDelta = 0, columnDelta = -1, columns = 4, appCount = 4))
+        assertEquals(2, appDropTarget(sourceTileIndex = 5, rowDelta = 0, columnDelta = -1, columns = 4, appCount = 4))
+        assertEquals(null, appDropTarget(sourceTileIndex = 2, rowDelta = 0, columnDelta = 0, columns = 4, appCount = 1))
+    }
 }

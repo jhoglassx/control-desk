@@ -1,6 +1,6 @@
 # Control Desk — Roadmap
 
-Estado revisto em 13/10/2026. Código existente descrito em [architecture.md](architecture.md); evidências dos problemas em [review.md](review.md).
+Estado revisto em 14/10/2026. Código existente descrito em [architecture.md](architecture.md); evidências dos problemas em [review.md](review.md).
 
 Para o inventário feature a feature, consulte [feature-status.md](feature-status.md).
 
@@ -10,6 +10,7 @@ Para o inventário feature a feature, consulte [feature-status.md](feature-statu
 - Controle macOS de apps/janelas, Dock, Chrome, volume e microfone.
 - LaunchAgent, janela de configurações e empacotamento DMG.
 - UI Compose, pareamento, múltiplos hosts, mixer, cache de ícones e ações otimistas.
+- Apps fixos locais por computador: catálogo macOS, ordenação de atalhos e caminho opcional de projeto/documento/pasta ao iniciar.
 - Polling HTTP quando o WebSocket não está conectado.
 - Anúncio mDNS pelo agente.
 - Descoberta mDNS no app Android/iOS, com seleção do agente e preenchimento de host/porta.
@@ -28,7 +29,7 @@ Para o inventário feature a feature, consulte [feature-status.md](feature-statu
 
 Concluído: corrigidos os bloqueios de compilação em `core/testing` e nos testes do agente. A última execução registrada passou nas suítes JVM de domínio, protocolo, dados e agente. Também foram corrigidas a propagação de erros WebSocket, a limpeza de pendências e o retorno de falhas correlacionadas do executor.
 
-Próxima feature de produto recomendada: editor visual para personalizar botões e layouts. A descoberta mDNS já está implementada no app; falta exercitá-la em rede e dispositivos reais. Os controles básicos de pareamento também foram adicionados, mas o uso ainda deve ser tratado como LAN confiável enquanto não houver TLS e armazenamento protegido.
+Próxima feature de produto recomendada: permitir vários atalhos do mesmo app para abrir projetos diferentes, com nomes personalizados e confirmação visual do lançamento. O navegador de arquivos e a seleção de apps instalados já estão implementados; a descoberta mDNS ainda precisa ser validada em rede e dispositivos reais. O uso deve ser tratado como LAN confiável enquanto não houver TLS e armazenamento protegido.
 
 ## Próximas entregas
 
@@ -36,6 +37,7 @@ Próxima feature de produto recomendada: editor visual para personalizar botões
 - Testes E2E de pareamento, foco e mixer; testes instrumentados em CI.
 - Pareamento por QR.
 - Menu nativo macOS e gestão de dispositivos pareados.
+- Múltiplos atalhos do mesmo app para projetos diferentes, com nomes personalizados.
 - Editor de botões/layouts e novos comandos de browser/hotkeys.
 - Controle nativo Windows/Linux e respectivos instaladores/auto-start.
 - TLS na LAN e armazenamento protegido dos tokens.

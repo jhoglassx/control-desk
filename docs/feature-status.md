@@ -1,6 +1,6 @@
 # Features do Control Desk
 
-Inventário conferido no código em 13/10/2026. “Implementada” significa que há implementação no repositório; não significa que a feature foi validada em dispositivo ou com permissões de sistema reais. A análise e os riscos estão em [review.md](review.md).
+Inventário conferido no código em 14/10/2026. “Implementada” significa que há implementação no repositório; não significa que a feature foi validada em dispositivo ou com permissões de sistema reais. A análise e os riscos estão em [review.md](review.md).
 
 ## Prontas no código
 
@@ -17,6 +17,7 @@ Inventário conferido no código em 13/10/2026. “Implementada” significa que
 | Fallback | Rotas HTTP protegidas e sincronização HTTP quando não conectado em tempo real | Mobile ↔ agente |
 | Cache e grade | Ícones persistidos/substituíveis em JSON; células de largura igual; título da janela em até duas linhas com nome do app como fallback | Android/iOS |
 | Configuração do agente | Janela com dados locais, PIN/IP, modo headless e keep-alive | Desktop macOS |
+| Apps fixos e projetos | Tela dedicada com ícones reais, busca, fixar/remover/ordenar, navegador de pastas e associação de projeto/documento/arquivo | Android ↔ agente macOS; navegação autenticada limitada à pasta do usuário |
 | Distribuição | LaunchAgent, scripts de instalação/remoção e DMG | macOS |
 | Painel dedicado | Activity apta a HOME/launcher e PIN local para abrir configuração | Android |
 | Diagnóstico | Kermit, Crashlytics Android configurado no código e envio de logs JVM ao Firestore | Conforme Firebase e conectividade configurados |
@@ -26,7 +27,7 @@ Inventário conferido no código em 13/10/2026. “Implementada” significa que
 - **iOS:** fontes comuns, target iOS e controller existem; falta projeto Xcode dentro do repositório e validação de build/execução.
 - **Windows/Linux:** seletor de SO está na UI e há caminho de execução JVM; o executor de apps e áudio usa comportamento simulado.
 - **mDNS:** agente anuncia `_controldesk._tcp`; Android (NSD) e iOS (Bonjour) localizam Macs na LAN e preenchem host/porta; entrada manual continua disponível.
-- **Grade:** é montada com apps/janelas atuais e templates default (VOL+ e MIC); usuário não pode editar, reordenar ou salvar layouts customizados na UI.
+- **Grade:** cards fixos e janelas abertas podem ser reorganizados juntos; a lista de janelas e seus estados continuam vindo do agente.
 - **Testes:** suites JVM e testes comuns/instrumentados estão no código; a validação Android/iOS e os workflows CI/E2E ainda faltam.
 
 ## Não implementadas
@@ -40,10 +41,10 @@ Inventário conferido no código em 13/10/2026. “Implementada” significa que
 
 ## Próxima sequência recomendada
 
-1. Criar editor para personalizar botões e layouts.
-2. Testar o ciclo completo de conexão/reconexão do WebSocket.
-3. Preparar projeto Xcode versionado e validar discovery/pareamento iOS em dispositivo real.
-4. Centralizar versões do agente e configurar CI/E2E.
-5. Completar segurança: revogação individual, TLS na LAN e armazenamento protegido.
+1. Testar o ciclo completo de conexão/reconexão do WebSocket.
+2. Preparar projeto Xcode versionado e validar discovery/pareamento iOS em dispositivo real.
+3. Centralizar versões do agente e configurar CI/E2E.
+4. Completar segurança: revogação individual, TLS na LAN e armazenamento protegido.
+5. Permitir vários atalhos do mesmo app para abrir projetos diferentes e mostrar confirmação do lançamento.
 
 Confira o [roadmap](roadmap.md) para prioridades, a [arquitetura](architecture.md) para os módulos e o [guia de instalação](agent-install.md) para operar o agente macOS.

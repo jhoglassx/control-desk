@@ -25,18 +25,20 @@ O app mobile é o **painel remoto**: pareia com o agente desktop na LAN e contro
 
 ## 2. Navegação e telas
 
-Na tela Pair, “Buscar Macs na rede” executa descoberta mDNS (NSD no Android, Bonjour no iOS) por até oito segundos. Selecionar um agente preenche nome, host e porta; o usuário ainda informa o PIN. A entrada manual continua disponível.
+Na tela Pair, “Buscar Macs na rede” executa descoberta mDNS (NSD no Android, Bonjour no iOS) por até oito segundos. Selecionar um agente preenche nome, host e porta; o usuário ainda informa o PIN de conexão temporário exibido pelo agente no Mac. No modo painel, o cartão de primeira configuração informa que o PIN administrativo inicial do app é `8741`, explica quando será pedido e diferencia os dois PINs. A entrada manual continua disponível.
 
-Definida em `App.kt` — enum `AppScreen { Desk, Pair }`.
+Definida em `App.kt` — enum `AppScreen { Desk, Pair, PinnedApps }`.
 
 | Tela | Composable | Entrada |
 |------|------------|---------|
 | **Desk** | `DeskScreen` | Padrão ao abrir o app |
-| **Pair** | `PairHostScreen` | Botões `+`, `Hosts`, ou CTA no estado vazio |
+| **Pair** | `PairHostScreen` | Ação de configurações/hosts ou CTA no estado vazio |
+| **PinnedApps** | `PinnedAppsScreen` | Botão **+** na Desk |
 
 **Transições:**
 
 - Desk → Pair: `onPairHost` / `onManageHosts`
+- Desk → PinnedApps: `onManagePinnedApps`
 - Pair → Desk: `← Voltar` ou após pareamento bem-sucedido
 - Após parear: `deskViewModel.refreshHosts()` + volta ao Desk
 
@@ -60,28 +62,28 @@ Componente: `EmptyDeskState`
 
 ### 3.2 Com hosts pareados
 
-Layout estilo Steam Deck (topbar + grade de tiles quadrados). Deitado (`maxWidth > maxHeight`) usa tiles maiores e omite o título da seção.
+Layout estilo Steam Deck, com tiles quadrados. Deitado (`maxWidth > maxHeight`) usa tiles maiores e omite o título da seção.
 
-1. **DeskHeader** — topbar compacta (host, status, ações)
-2. **WorkspacePanel** — grade: tiles **Volume** e **Mic**, depois os apps (`weight(1f)`)
+- **WorkspacePanel** ocupa a área principal com Volume, Mic e os apps.
+- **DeskHeader** é um conjunto flutuante e transparente no canto inferior direito, com o nome/status do host e os controles próximos, sem reservar uma faixa do layout.
+- A grade mantém espaço rolável ao final para o controle flutuante não esconder o último card.
 
-Com **mais de um PC pareado**, a home inteira é um pager horizontal: deslizar para o lado troca de computador (header + grade).
+Com **mais de um PC pareado**, um gesto horizontal no conteúdo seleciona outro host, mantendo o painel de host no canto inferior direito.
 
 **Snackbar:** exibe `uiState.feedback` (erros de ação ou carga); `clearFeedback()` após mostrar.
 
 ### 3.3 DeskHeader
 
-Topbar de uma linha (sem card grande):
+Conjunto flutuante no canto inferior direito, sem fundo opaco:
 
 | Elemento | Comportamento |
 |----------|---------------|
 | Dot + nome do host | Status (Online / Sincronizando / Re-parear) |
 | IP:porta | Linha menor, monospace |
-| **↻** | `refreshRunningApps()` |
-| **Hosts** | Abre Pair |
-| **+** | Abre Pair |
+| **Configurações** | Abre Pair para gerenciar hosts |
+| **+** | Abre a tela dedicada de apps fixos |
 
-**Chips de host:** removidos. Com `hosts.size > 1`, **deslizar a home inteira** (HorizontalPager) troca de PC. Pontos abaixo do header indicam a página.
+**Chips de host:** removidos. Com `hosts.size > 1`, um gesto horizontal no conteúdo seleciona outro host; os pontos abaixo das ações indicam a página.
 
 | Condição | Dot | Label |
 |----------|-----|-------|
@@ -96,7 +98,7 @@ Topbar de uma linha (sem card grande):
 
 **Seção:** "Apps no Mac" (subtitle dinâmico).
 
-**Layout:** `LazyColumn` de linhas; cada linha usa células com peso igual para preencher simetricamente a largura útil. A última linha preserva as mesmas colunas vazias para manter os cards alinhados. Tiles quadrados (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**. O ícone usa até 58% da largura do card (máximo 52 dp), e o texto usa até duas linhas.
+**Layout:** grade adaptativa (`LazyVerticalGrid`) com cards de dimensões iguais e espaçamento uniforme. Tiles quadrados (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**. O ícone acompanha o tamanho do card; o texto pode ocupar até duas linhas. Pull-to-refresh atualiza apps sem deixar um indicador preso na tela.
 
 **Subtitle:** `{N} apps · {focused} em uso · M1: n · M2: n · {dock} na Dock · {hidden} ocultos`
 
@@ -370,7 +372,11 @@ Sem token → `ControlDeskError.Unauthorized`.
 | iOS | `control_desk_hosts.json` | Documents |
 | JVM | `hosts.json` | `~/.control-desk/` |
 
-**Por host:** `id`, `name`, `host`, `port`, `osType`, `sortOrder`, **token**, `buttons[]`.
+**Por host:** `id`, `name`, `host`, `port`, `osType`, `sortOrder`, **token**, `buttons[]`, `pinnedApps[]`.
+
+No Android, o arquivo é substituído atomicamente e a última cópia válida fica em `control_desk_hosts.json.bak` para recuperação se uma gravação for interrompida. Reparear o mesmo IP/porta atualiza o token sem descartar botões ou apps fixos. Atualizar o APK pelo mesmo `applicationId` e assinatura conserva os dados privados; desinstalar o app ou instalar como outro pacote limpa/isolada essa persistência.
+
+O identificador Android mudou de `com.controldesk.app` para `js.controldesk` em 01/09/2026. Uma instalação antiga com o identificador anterior tem um diretório privado separado e não transfere automaticamente seus pareamentos para o app novo. Mantenha `applicationId` estável nas versões publicadas.
 
 **Ao parear:** se host novo, `DefaultButtonTemplates` cria VOL+ e MIC nos `buttons` (salvos mas **não exibidos** na grade dinâmica v1).
 

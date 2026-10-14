@@ -30,7 +30,7 @@ Especificação completa: **[README.md](README.md)** (índice) e **[spec.md](spe
 
 O `.dmg` sai em:
 
-`agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.1.dmg`
+`agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.4.dmg`
 
 O agente compilado é compatível com o runtime Java 17 incluído neste pacote; o usuário não precisa instalar Java.
 
