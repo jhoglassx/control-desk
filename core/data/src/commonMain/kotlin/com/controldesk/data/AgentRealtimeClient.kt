@@ -205,6 +205,7 @@ class AgentRealtimeClient(
                 monitorIndex = info.monitorIndex,
                 isDockPinned = info.isDockPinned,
                 dockIndex = info.dockIndex,
+                bundlePath = info.bundlePath,
             )
         }
 

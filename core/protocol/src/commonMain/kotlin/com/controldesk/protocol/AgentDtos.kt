@@ -146,6 +146,7 @@ data class RunningAppInfo(
     val monitorIndex: Int = 0,
     val isDockPinned: Boolean = false,
     val dockIndex: Int = -1,
+    val bundlePath: String? = null,
 )
 
 @Serializable

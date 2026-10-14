@@ -3,24 +3,56 @@ package com.controldesk.agent
 import com.controldesk.protocol.AppCloseRequest
 import kotlin.test.Test
 import kotlin.test.assertFalse
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class MacAppQuitTest {
     @Test
     fun closesOnlySelectedWindowWhenProcessHasMultipleWindows() {
-        assertTrue(
-            MacAppQuit.shouldCloseWindowOnly(
+        assertEquals(
+            MacAppQuit.CloseAction.CLOSE_WINDOW,
+            MacAppQuit.closeAction(
                 AppCloseRequest(target = "Android Studio", pid = 120, axWindowIndex = 2, windowCount = 2),
+                matchingProcessCount = 1,
             ),
         )
-        assertFalse(
-            MacAppQuit.shouldCloseWindowOnly(
+        assertEquals(
+            MacAppQuit.CloseAction.TERMINATE_PROCESS,
+            MacAppQuit.closeAction(
                 AppCloseRequest(target = "Android Studio", pid = 120, axWindowIndex = 2, windowCount = 1),
+                matchingProcessCount = 1,
             ),
         )
-        assertFalse(
-            MacAppQuit.shouldCloseWindowOnly(
-                AppCloseRequest(target = "Android Studio", windowCount = 2),
+    }
+
+    @Test
+    fun doesNotCloseEveryProcessWhenRequestHasNoInstanceIdentity() {
+        assertEquals(
+            MacAppQuit.CloseAction.IGNORE,
+            MacAppQuit.closeAction(
+                AppCloseRequest(target = "Android Studio"),
+                matchingProcessCount = 2,
+            ),
+        )
+        assertEquals(
+            MacAppQuit.CloseAction.IGNORE,
+            MacAppQuit.closeAction(
+                AppCloseRequest(target = "Android Studio", pid = 120, windowCount = 2),
+                matchingProcessCount = 1,
+            ),
+        )
+        assertEquals(
+            MacAppQuit.CloseAction.IGNORE,
+            MacAppQuit.closeAction(
+                AppCloseRequest(target = "Android Studio", pid = 120),
+                matchingProcessCount = 1,
+            ),
+        )
+        assertEquals(
+            MacAppQuit.CloseAction.IGNORE,
+            MacAppQuit.closeAction(
+                AppCloseRequest(target = "Android Studio", pid = 0, windowCount = 1),
+                matchingProcessCount = 2,
             ),
         )
     }

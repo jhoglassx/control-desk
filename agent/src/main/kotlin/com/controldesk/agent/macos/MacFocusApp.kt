@@ -16,15 +16,22 @@ object MacFocusApp {
         if (app.isEmpty() && bundlePath.isEmpty()) return
         val pid = request.pid?.takeIf { it > 0 }
         val axIndex = request.axWindowIndex?.takeIf { it > 0 }
-        if (shouldFocusExistingWindow(request)) {
+        val windowTitle = request.windowTitle?.takeIf { it.isNotBlank() }
+        if (shouldFocusExistingProcess(request)) {
+            val windowSelector = when {
+                axIndex != null -> "window $axIndex"
+                windowTitle != null -> "first window whose name is \"${Shell.escape(windowTitle)}\""
+                else -> null
+            }
+            val raiseWindow = windowSelector?.let { selector ->
+                "try\n    perform action \"AXRaise\" of $selector\nend try"
+            }.orEmpty()
             Shell.osascript(
                 """
                 tell application "System Events"
                     tell (first application process whose unix id is $pid)
                         set frontmost to true
-                        try
-                            perform action "AXRaise" of window $axIndex
-                        end try
+                        $raiseWindow
                     end tell
                 end tell
                 """.trimIndent(),
@@ -69,6 +76,6 @@ object MacFocusApp {
         Shell.spawn("/usr/bin/open", "-a", app)
     }
 
-    internal fun shouldFocusExistingWindow(request: AppLaunchRequest): Boolean =
-        request.pid?.let { it > 0 } == true && request.axWindowIndex?.let { it > 0 } == true
+    internal fun shouldFocusExistingProcess(request: AppLaunchRequest): Boolean =
+        request.pid?.let { it > 0 } == true
 }

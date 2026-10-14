@@ -7,17 +7,16 @@ import kotlin.test.assertTrue
 
 class MacFocusAppTest {
     @Test
-    fun existingWindowTakesPrecedenceOverConfiguredProjectPath() {
+    fun existingProcessTakesPrecedenceOverConfiguredProjectPathEvenWithoutAxIndex() {
         val request = AppLaunchRequest(
             target = "Android Studio",
             windowTitle = "sample-android-app",
             bundlePath = "/Applications/Android Studio.app",
             projectPath = "/Users/test/Projects/sample-android-app",
             pid = 120,
-            axWindowIndex = 2,
         )
 
-        assertTrue(MacFocusApp.shouldFocusExistingWindow(request))
+        assertTrue(MacFocusApp.shouldFocusExistingProcess(request))
     }
 
     @Test
@@ -28,6 +27,6 @@ class MacFocusAppTest {
             projectPath = "/Users/test/Projects/sample-android-app",
         )
 
-        assertFalse(MacFocusApp.shouldFocusExistingWindow(request))
+        assertFalse(MacFocusApp.shouldFocusExistingProcess(request))
     }
 }

@@ -302,7 +302,7 @@ Quando janela ativa muda no poll do **mesmo** PC:
 - Se o agente não marcar ninguém (`incomingActiveId == null`) e o id anterior **não está** nesta lista, limpa o destaque (não força o ativo do outro PC)
 - Se o id anterior ainda está na lista, mantém o highlight até o próximo poll com flag
 
-No agente macOS (`windowListerVersion` 21), `isActive` usa o app da frente do `NSWorkspace` e a janela `AXMain` visível — não só `windows[0]` do System Events. Cada card também recebe o PID, índice AX e total de janelas da instância: fechar um app com múltiplas janelas fecha somente a janela selecionada; apps em processos separados são encerrados pelo PID correspondente.
+No agente macOS (`windowListerVersion` 22), `isActive` usa o app da frente do `NSWorkspace` e a janela `AXMain` visível — não só `windows[0]` do System Events. Cada card também recebe o PID, índice AX e total de janelas da instância: fechar um app com múltiplas janelas fecha somente a janela selecionada; apps em processos separados são encerrados pelo PID correspondente.
 
 ### 5.9 Merge de botões (`preferMerge=true`)
 

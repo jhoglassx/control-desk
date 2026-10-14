@@ -10,7 +10,6 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicBoolean
@@ -18,7 +17,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 object MacWindowLister {
     private val cache = AtomicReference<List<RunningAppInfo>>(emptyList())
     private val lastError = AtomicReference<String?>(null)
-    private val suppressedUntil = ConcurrentHashMap<String, Long>()
     private val cacheListeners = CopyOnWriteArrayList<() -> Unit>()
     private val started = AtomicBoolean(false)
     private val resolvingIcons = AtomicBoolean(false)
@@ -47,7 +45,7 @@ object MacWindowLister {
                         Thread.sleep(WINDOW_REFRESH_MS)
                         return@runCatching
                     }
-                    val windows = query().filterNot { isSuppressed(it.appName) }
+                    val windows = query()
                     cache.set(windows)
                     notifyCacheListeners()
                     if (resolvingIcons.compareAndSet(false, true)) {
@@ -69,26 +67,16 @@ object MacWindowLister {
         }
     }
 
-    fun suppress(appName: String, ms: Long = 3_000L) {
-        val key = appName.trim().lowercase()
-        if (key.isEmpty()) return
-        suppressedUntil[key] = System.currentTimeMillis() + ms
-        cache.updateAndGet { windows -> windows.filterNot { it.appName.equals(appName, ignoreCase = true) } }
-    }
-
     fun refreshNow() {
         if (!MacAccessibility.isTrusted()) return
         runCatching {
-            val windows = query().filterNot { isSuppressed(it.appName) }
-            if (windows.isNotEmpty()) {
-                cache.set(windows)
-                notifyCacheListeners()
-            }
+            cache.set(query())
+            notifyCacheListeners()
         }
     }
 
     fun list(includeIcons: Boolean): List<RunningAppInfo> {
-        val snapshot = cache.get().ifEmpty { query() }.filterNot { isSuppressed(it.appName) }
+        val snapshot = cache.get().ifEmpty { query() }
         val merged = MacChromeTabs.mergeTabs(snapshot)
         val withDock = MacDockApps.merge(merged)
         val normalized = ensureSingleActive(withDock)
@@ -151,6 +139,7 @@ object MacWindowLister {
                 isActive = obj.bool("isActive"),
                 isVisible = visible,
                 monitorIndex = obj.int("monitorIndex")?.coerceAtLeast(1) ?: 1,
+                bundlePath = obj.str("bundlePath")?.takeIf { it.isNotBlank() },
             )
         }
         return windows
@@ -172,16 +161,6 @@ object MacWindowLister {
         if (lastError.get() == message) return
         lastError.set(message)
         ControlDeskLog.agent.w { "[window-lister] $message" }
-    }
-
-    private fun isSuppressed(appName: String): Boolean {
-        val key = appName.lowercase()
-        val until = suppressedUntil[key] ?: return false
-        if (System.currentTimeMillis() >= until) {
-            suppressedUntil.remove(key)
-            return false
-        }
-        return true
     }
 
     private fun JsonObject.str(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull

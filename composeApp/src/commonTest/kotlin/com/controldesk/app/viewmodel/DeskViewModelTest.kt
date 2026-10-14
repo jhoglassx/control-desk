@@ -282,6 +282,47 @@ class DeskViewModelTest {
     }
 
     @Test
+    fun pinnedShortcutMatchesRunningAppByBundleWhenProcessNamesDiffer() = runTest(dispatcher) {
+        val shortcut = PinnedAppShortcut(
+            id = "android-studio",
+            name = "Android Studio",
+            bundlePath = "/Applications/Android Studio.app",
+            projectPath = "/Users/test/Projects/sample-android-app",
+        )
+        val host = pairedHost("10.0.2.2:8741", "Mac", 0).copy(pinnedApps = listOf(shortcut))
+        val running = RunningApp(
+            name = "studio · sample-android-app",
+            appName = "studio",
+            pid = 321,
+            windowTitle = "sample-android-app",
+            axWindowIndex = 2,
+            isActive = true,
+            isVisible = true,
+            bundlePath = shortcut.bundlePath,
+        )
+        val gateway = FakeAgentGateway(apps = listOf(running))
+        val viewModel = DeskViewModel(
+            hostPreferences = FakeHostPreferences(listOf(host)),
+            agentGateway = gateway,
+            agentRealtime = FakeAgentRealtime(apps = gateway.apps),
+            executeGridButton = ExecuteGridButtonUseCase(gateway),
+            iconCache = FakeIconCache(),
+            coroutineScope = backgroundScope,
+        )
+
+        runCurrent()
+
+        val studioCards = viewModel.uiState.value.buttons.filter {
+            it.payload["bundlePath"] == shortcut.bundlePath
+        }
+        assertEquals(1, studioCards.size)
+        assertTrue(studioCards.single().isFavoriteShortcut)
+        assertEquals("321", studioCards.single().payload["pid"])
+        assertEquals("2", studioCards.single().payload["axWindowIndex"])
+        assertEquals(shortcut.projectPath, studioCards.single().payload["projectPath"])
+    }
+
+    @Test
     fun reorderingWholeGridPersistsEveryAppAndRefreshKeepsTheirOrder() = runTest(dispatcher) {
         val host = pairedHost("10.0.2.2:8741", "Mac", 0)
         val gateway = FakeAgentGateway(

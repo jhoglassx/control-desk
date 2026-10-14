@@ -35,6 +35,7 @@ object RunningAppsGridBuilder {
                     app.pid?.let { put("pid", it.toString()) }
                     app.axWindowIndex?.let { put("axWindowIndex", it.toString()) }
                     app.windowCount?.let { put("windowCount", it.toString()) }
+                    app.bundlePath?.let { put("bundlePath", it) }
                 }
             }
             GridButton(

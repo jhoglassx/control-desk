@@ -657,7 +657,13 @@ class DeskViewModel(
                 .asSequence()
                 .filterNot(GridButton::isFavoriteShortcut)
                 .filterNot { it.id in matchedRunningIds }
-                .filter { it.payload["target"].equals(shortcutTarget, ignoreCase = true) }
+                .filter { candidate ->
+                    val sameBundle = candidate.payload["bundlePath"]?.equals(
+                        shortcut.payload["bundlePath"],
+                        ignoreCase = true,
+                    ) == true
+                    sameBundle || candidate.payload["target"].equals(shortcutTarget, ignoreCase = true)
+                }
                 .toList()
             val unboundInstances = candidates.filterNot { candidate ->
                 candidate.payload["pid"]?.let { it in boundShortcutPids } == true

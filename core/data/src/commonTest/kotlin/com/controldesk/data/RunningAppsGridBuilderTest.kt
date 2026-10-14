@@ -168,6 +168,7 @@ class RunningAppsGridBuilderTest {
                     windowIndex = 0,
                     axWindowIndex = 1,
                     windowCount = 2,
+                    bundlePath = "/Applications/Android Studio.app",
                     isVisible = true,
                 ),
             ),
@@ -177,6 +178,7 @@ class RunningAppsGridBuilderTest {
         assertEquals("project-a", button.payload["windowTitle"])
         assertEquals("1", button.payload["axWindowIndex"])
         assertEquals("2", button.payload["windowCount"])
+        assertEquals("/Applications/Android Studio.app", button.payload["bundlePath"])
     }
 
     @Test

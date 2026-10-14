@@ -4,6 +4,8 @@ import com.controldesk.protocol.AppCloseRequest
 import java.io.File
 
 object MacAppQuit {
+    internal enum class CloseAction { CLOSE_WINDOW, TERMINATE_PROCESS, IGNORE }
+
     private val blocked = setOf(
         "Finder", "Dock", "SystemUIServer", "Window Server", "Control Center",
         "NotificationCenter", "loginwindow", "Wallpaper", "Spotlight",
@@ -23,24 +25,18 @@ object MacAppQuit {
                 else isMainProcess(handle, app, bundle, exe)
             }.toList()
         }
-        if (matchingProcesses.isEmpty()) return
-
-        if (shouldCloseWindowOnly(request) && pid != null) {
+        val action = closeAction(request, matchingProcesses.size)
+        if (action == CloseAction.IGNORE) return
+        if (action == CloseAction.CLOSE_WINDOW) {
             closeWindow(request)
             MacWindowLister.refreshNow()
             return
         }
 
-        MacWindowLister.suppress(app, ms = 2_000L)
         val self = ProcessHandle.current().pid()
         val targetProcesses = matchingProcesses.filter { it.pid() != self }
         targetProcesses.forEach { it.destroy() }
-        if (targetProcesses.isEmpty() && pid == null) {
-            Shell.spawn("/usr/bin/killall", "-TERM", app)
-            if (exe != null && !exe.equals(app, ignoreCase = true)) {
-                Shell.spawn("/usr/bin/killall", "-TERM", exe)
-            }
-        }
+        MacWindowLister.refreshNow()
     }
 
     private fun isMainProcess(handle: ProcessHandle, app: String, bundle: String?, exe: String?): Boolean {
@@ -83,10 +79,27 @@ object MacAppQuit {
             (exe != null && leaf.equals(exe, ignoreCase = true))
     }
 
-    internal fun shouldCloseWindowOnly(request: AppCloseRequest): Boolean {
-        val windowCount = request.windowCount ?: return false
-        return request.pid != null && windowCount > 1 &&
-            (request.axWindowIndex != null || !request.windowTitle.isNullOrBlank())
+    internal fun closeAction(request: AppCloseRequest, matchingProcessCount: Int): CloseAction {
+        if (matchingProcessCount <= 0) return CloseAction.IGNORE
+        val hasWindowIdentity = request.axWindowIndex?.let { it > 0 } == true ||
+            !request.windowTitle.isNullOrBlank()
+        val windowCount = request.windowCount
+
+        if (request.pid?.let { it > 0 } == true) {
+            return when {
+                windowCount != null && windowCount > 1 ->
+                    if (hasWindowIdentity) CloseAction.CLOSE_WINDOW else CloseAction.IGNORE
+                windowCount == 1 -> CloseAction.TERMINATE_PROCESS
+                windowCount == null && hasWindowIdentity -> CloseAction.CLOSE_WINDOW
+                else -> CloseAction.IGNORE
+            }
+        }
+
+        return if (matchingProcessCount == 1 && windowCount == 1) {
+            CloseAction.TERMINATE_PROCESS
+        } else {
+            CloseAction.IGNORE
+        }
     }
 
     private fun mainExecutable(bundlePath: String): String? {
