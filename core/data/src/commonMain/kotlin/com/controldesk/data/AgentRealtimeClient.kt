@@ -94,6 +94,8 @@ class AgentRealtimeClient(
                         windowTitle = button.payload["windowTitle"],
                         windowIndex = button.payload["windowIndex"]?.toIntOrNull(),
                         windowNumber = button.payload["windowNumber"]?.toIntOrNull(),
+                        bundlePath = button.payload["bundlePath"],
+                        projectPath = button.payload["projectPath"],
                     ),
                 ),
             ).apps,

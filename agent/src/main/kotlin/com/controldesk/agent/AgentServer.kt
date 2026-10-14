@@ -13,6 +13,8 @@ import com.controldesk.protocol.MicRequest
 import com.controldesk.protocol.PairRequest
 import com.controldesk.protocol.PairResponse
 import com.controldesk.protocol.RunningAppsResponse
+import com.controldesk.protocol.InstalledAppsResponse
+import com.controldesk.protocol.BrowseFilesRequest
 import com.controldesk.protocol.SetupResponse
 import com.controldesk.protocol.VolumeRequest
 import io.ktor.http.ContentType
@@ -164,6 +166,13 @@ class AgentServer(
                     )
                 }
                 authenticate("paired") {
+                    get("/apps/installed") {
+                        call.respondDto(InstalledAppsResponse(apps = executor.listInstalledApps()))
+                    }
+                    post("/files/browse") {
+                        val body = call.receive<BrowseFilesRequest>()
+                        call.respondDto(executor.browseFiles(body.path))
+                    }
                     get("/apps/running") {
                         val icons = call.request.queryParameters["icons"] == "1"
                         call.respondDto(RunningAppsResponse(apps = executor.listRunningApps(includeIcons = icons)))
@@ -236,6 +245,7 @@ class AgentServer(
         pin = pin,
         backgroundService = true,
         accessibilityEnabled = macAccessibilityEnabled(),
+        agentVersion = AgentVersion.VALUE,
     )
 
     private fun macAccessibilityEnabled(): Boolean? {

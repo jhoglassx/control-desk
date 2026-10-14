@@ -4,6 +4,8 @@ import com.controldesk.domain.model.AudioState
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.RunningApp
+import com.controldesk.domain.model.PinnedAppShortcut
+import com.controldesk.domain.model.MacFileListing
 import kotlinx.coroutines.flow.Flow
 
 data class DiscoveredAgent(val name: String, val host: String, val port: Int)
@@ -22,6 +24,8 @@ interface HostPreferences {
 interface AgentGateway {
     suspend fun fetchHealth(host: PairedHost): Boolean?
     suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp>
+    suspend fun loadInstalledApps(host: PairedHost): List<PinnedAppShortcut>
+    suspend fun browseMacFiles(host: PairedHost, path: String? = null): MacFileListing
     suspend fun fetchAudio(host: PairedHost): AudioState
     suspend fun launchApp(host: PairedHost, button: GridButton): List<RunningApp>
     suspend fun closeApp(host: PairedHost, button: GridButton): List<RunningApp>

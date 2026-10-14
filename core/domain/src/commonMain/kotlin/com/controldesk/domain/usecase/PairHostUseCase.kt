@@ -45,6 +45,8 @@ class PairHostUseCase(
                 sortOrder = existing?.sortOrder ?: hosts.size,
                 token = token,
                 buttons = existing?.buttons ?: DefaultButtonTemplates.forNewHost(),
+                pinnedApps = existing?.pinnedApps.orEmpty(),
+                appOrder = existing?.appOrder.orEmpty(),
             )
             preferences.saveHost(paired)
             paired

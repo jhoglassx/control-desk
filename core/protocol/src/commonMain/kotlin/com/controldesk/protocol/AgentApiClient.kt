@@ -29,6 +29,17 @@ class AgentApiClient(
             parameter("icons", if (includeIcons) 1 else 0)
         }.body()
 
+    suspend fun installedApps(baseUrl: String, token: String): InstalledAppsResponse =
+        httpClient.get("$baseUrl/apps/installed") { bearerAuth(token) }.body()
+
+    suspend fun browseFiles(baseUrl: String, token: String, request: BrowseFilesRequest): BrowseFilesResponse =
+        httpClient.post("$baseUrl/files/browse") {
+            timeout { requestTimeoutMillis = COMMAND_TIMEOUT_MS }
+            bearerAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.body()
+
     suspend fun launchApp(baseUrl: String, token: String, request: AppLaunchRequest): ActionAck =
         httpClient.post("$baseUrl/apps/launch") {
             timeout { requestTimeoutMillis = COMMAND_TIMEOUT_MS }

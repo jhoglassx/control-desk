@@ -15,6 +15,7 @@ data class GridButton(
     val isVisible: Boolean = true,
     val monitorIndex: Int = 0,
     val isDockPinned: Boolean = false,
+    val isFavoriteShortcut: Boolean = false,
 )
 
 @Serializable
@@ -27,6 +28,30 @@ data class PairedHost(
     val sortOrder: Int,
     val token: String,
     val buttons: List<GridButton> = emptyList(),
+    val pinnedApps: List<PinnedAppShortcut> = emptyList(),
+    val appOrder: List<String> = emptyList(),
+)
+
+@Serializable
+data class PinnedAppShortcut(
+    val id: String,
+    val name: String,
+    val bundlePath: String,
+    val iconBase64: String? = null,
+    val projectPath: String? = null,
+    val order: Int = 0,
+)
+
+data class MacFileEntry(
+    val name: String,
+    val path: String,
+    val isDirectory: Boolean,
+)
+
+data class MacFileListing(
+    val path: String,
+    val parentPath: String? = null,
+    val entries: List<MacFileEntry> = emptyList(),
 )
 
 data class AudioState(

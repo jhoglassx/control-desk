@@ -93,6 +93,12 @@ fun launchAgentSettings(port: Int, exitProcessOnClose: Boolean = true) {
                                 Spacer(Modifier.width(8.dp))
                                 Text(status, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
                             }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Versão do serviço: ${setup?.agentVersion ?: "consultando…"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray,
+                            )
                             Spacer(Modifier.height(14.dp))
                             Text("PIN DE CONEXÃO", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
                             Text(setup?.pin ?: "—", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)

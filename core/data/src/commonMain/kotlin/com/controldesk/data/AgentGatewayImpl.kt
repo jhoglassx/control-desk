@@ -5,10 +5,14 @@ import com.controldesk.domain.model.AudioState
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.RunningApp
+import com.controldesk.domain.model.PinnedAppShortcut
+import com.controldesk.domain.model.MacFileEntry
+import com.controldesk.domain.model.MacFileListing
 import com.controldesk.domain.repository.AgentGateway
 import com.controldesk.logging.ControlDeskLog
 import com.controldesk.protocol.AgentApiClient
 import com.controldesk.protocol.AppCloseRequest
+import com.controldesk.protocol.BrowseFilesRequest
 import com.controldesk.protocol.AppLaunchRequest
 import com.controldesk.protocol.BrowserCloseRequest
 import com.controldesk.protocol.BrowserOpenRequest
@@ -32,6 +36,35 @@ class AgentGatewayImpl(
     override suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp> = mapErrors {
         requireToken(host)
         mapRunningApps(api.runningApps(host.baseUrl(), host.token, includeIcons).apps)
+    }
+
+    override suspend fun loadInstalledApps(host: PairedHost): List<PinnedAppShortcut> = try {
+        mapErrors {
+            requireToken(host)
+            api.installedApps(host.baseUrl(), host.token).apps.map { app ->
+                PinnedAppShortcut(
+                    id = app.bundlePath,
+                    name = app.name,
+                    bundlePath = app.bundlePath,
+                    iconBase64 = app.iconBase64,
+                )
+            }
+        }
+    } catch (error: ControlDeskError.Generic) {
+        if (error.message?.contains("(404)") == true) {
+            throw ControlDeskError.Generic("Agente do Mac desatualizado. Atualize o Control Desk Agent no Mac para carregar os apps fixos.")
+        }
+        throw error
+    }
+
+    override suspend fun browseMacFiles(host: PairedHost, path: String?): MacFileListing = mapErrors {
+        requireToken(host)
+        val result = api.browseFiles(host.baseUrl(), host.token, BrowseFilesRequest(path))
+        MacFileListing(
+            path = result.path,
+            parentPath = result.parentPath,
+            entries = result.entries.map { MacFileEntry(it.name, it.path, it.isDirectory) },
+        )
     }
 
     private fun mapRunningApps(apps: List<com.controldesk.protocol.RunningAppInfo>): List<RunningApp> =
@@ -78,6 +111,8 @@ class AgentGatewayImpl(
                     windowTitle = button.payload["windowTitle"],
                     windowIndex = button.payload["windowIndex"]?.toIntOrNull(),
                     windowNumber = button.payload["windowNumber"]?.toIntOrNull(),
+                    bundlePath = button.payload["bundlePath"],
+                    projectPath = button.payload["projectPath"],
                 ),
             ).apps,
         )

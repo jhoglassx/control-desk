@@ -22,6 +22,11 @@ object MacAppIconResolver {
         paths[appName] = bundlePath
     }
 
+    fun resolveForBundle(appName: String, bundlePath: String): String? {
+        remember(appName, bundlePath)
+        return iconFor(appName) ?: resolveNow(appName)
+    }
+
     fun pathFor(appName: String): String? = paths[appName]
 
     fun iconFor(appName: String): String? {

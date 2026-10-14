@@ -2,6 +2,7 @@ package com.controldesk.agent
 
 import com.controldesk.protocol.AppCloseRequest
 import com.controldesk.protocol.AppLaunchRequest
+import com.controldesk.protocol.BrowseFilesRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -63,7 +64,9 @@ open class AgentServerTest {
         runBlocking {
             val response = client.get("http://127.0.0.1:18741/setup/health")
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains(auth.currentPin()!!))
+            val body = response.bodyAsText()
+            assertTrue(body.contains(auth.currentPin()!!))
+            assertTrue(body.contains("\"agentVersion\":\"${AgentVersion.VALUE}\""))
         }
     }
 
@@ -85,6 +88,11 @@ open class AgentServerTest {
         runBlocking {
             val unauthorized = client.get("http://127.0.0.1:18741/apps/running")
             assertEquals(HttpStatusCode.Unauthorized, unauthorized.status)
+            val browseUnauthorized = client.post("http://127.0.0.1:18741/files/browse") {
+                contentType(ContentType.Application.Json)
+                setBody(BrowseFilesRequest())
+            }
+            assertEquals(HttpStatusCode.Unauthorized, browseUnauthorized.status)
             val pin = auth.currentPin() ?: auth.activatePin()
             val pair = client.post("http://127.0.0.1:18741/pair") {
                 contentType(ContentType.Application.Json)
@@ -93,6 +101,13 @@ open class AgentServerTest {
             val token = Regex("\"token\"\\s*:\\s*\"([^\"]+)\"").find(pair)?.groupValues?.get(1)!!
             val ok = client.get("http://127.0.0.1:18741/apps/running") { bearerAuth(token) }
             assertEquals(HttpStatusCode.OK, ok.status)
+            val browseOk = client.post("http://127.0.0.1:18741/files/browse") {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(BrowseFilesRequest())
+            }
+            assertEquals(HttpStatusCode.OK, browseOk.status)
+            assertTrue(browseOk.bodyAsText().contains("entries"))
             val again = client.post("http://127.0.0.1:18741/pair") {
                 contentType(ContentType.Application.Json)
                 setBody("""{"pin":"$pin"}""")

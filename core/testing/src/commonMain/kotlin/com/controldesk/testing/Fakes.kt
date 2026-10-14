@@ -4,6 +4,8 @@ import com.controldesk.domain.model.AudioState
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.RunningApp
+import com.controldesk.domain.model.PinnedAppShortcut
+import com.controldesk.domain.model.MacFileListing
 import com.controldesk.domain.repository.AgentGateway
 import com.controldesk.domain.repository.HostPreferences
 import com.controldesk.domain.repository.PairHostRemote
@@ -45,6 +47,9 @@ class FakeAgentGateway(
 
     override suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp> =
         result(appsByHost[host.id] ?: apps)
+    override suspend fun loadInstalledApps(host: PairedHost): List<PinnedAppShortcut> = result(emptyList())
+    override suspend fun browseMacFiles(host: PairedHost, path: String?): MacFileListing =
+        result(MacFileListing(path = path ?: "/Users/test", parentPath = null))
 
     override suspend fun fetchHealth(host: PairedHost): Boolean? = result(true)
     override suspend fun fetchAudio(host: PairedHost): AudioState = result(audio)

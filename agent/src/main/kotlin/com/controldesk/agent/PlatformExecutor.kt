@@ -6,11 +6,16 @@ import com.controldesk.protocol.AudioResponse
 import com.controldesk.protocol.BrowserTabSwitchRequest
 import com.controldesk.protocol.MicRequest
 import com.controldesk.protocol.RunningAppInfo
+import com.controldesk.protocol.InstalledAppInfo
+import com.controldesk.protocol.BrowseFilesResponse
 import com.controldesk.protocol.VolumeRequest
+import com.controldesk.agent.macos.MacFileBrowser
 
 interface PlatformExecutor {
     val osName: String
     fun listRunningApps(includeIcons: Boolean): List<RunningAppInfo>
+    fun listInstalledApps(): List<InstalledAppInfo>
+    fun browseFiles(path: String?): BrowseFilesResponse
     fun launchApp(request: AppLaunchRequest)
     fun closeApp(request: AppCloseRequest)
     fun openBrowser(url: String, browser: String?)
@@ -34,6 +39,8 @@ class LoggingPlatformExecutor : PlatformExecutor {
     override val osName: String = System.getProperty("os.name") ?: "unknown"
 
     override fun listRunningApps(includeIcons: Boolean): List<RunningAppInfo> = apps.toList()
+    override fun listInstalledApps(): List<InstalledAppInfo> = emptyList()
+    override fun browseFiles(path: String?): BrowseFilesResponse = BrowseFilesResponse(path ?: System.getProperty("user.home"))
 
     override fun launchApp(request: AppLaunchRequest) {
         apps.replaceAll { if (it.appName.equals(request.target, true) || it.name.equals(request.target, true)) it.copy(isActive = true) else it.copy(isActive = false) }
@@ -81,6 +88,12 @@ class NativePlatformExecutor : PlatformExecutor {
 
     override fun listRunningApps(includeIcons: Boolean): List<RunningAppInfo> =
         if (isMac) MacWindowLister.list(includeIcons) else fallback.listRunningApps(includeIcons)
+
+    override fun listInstalledApps(): List<InstalledAppInfo> =
+        if (isMac) MacInstalledApps.list() else fallback.listInstalledApps()
+
+    override fun browseFiles(path: String?): BrowseFilesResponse =
+        if (isMac) MacFileBrowser.list(path) else fallback.browseFiles(path)
 
     override fun launchApp(request: AppLaunchRequest) {
         if (isMac) {

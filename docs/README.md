@@ -15,6 +15,7 @@ Painel remoto estilo Stream Deck — **Kotlin Multiplatform** (Android + iOS) + 
 | **[architecture.md](architecture.md)** | Arquitetura e comportamento implementado |
 | **[review.md](review.md)** | Revisão geral, riscos e próximas etapas |
 | **[feature-status.md](feature-status.md)** | Catálogo de features implementadas, parciais e futuras |
+| **[pinned-apps.md](pinned-apps.md)** | Apps fixos, reordenação e projetos/pastas associados |
 | **[spec.md](spec.md)** | Especificação geral — agente, API, arquitetura, regras de negócio |
 | **[mobile-app.md](mobile-app.md)** | App mobile — telas, ViewModels, pareamento, UX |
 | **[interaction-rules.md](interaction-rules.md)** | Interação instantânea — otimista, latência, poll vs toque |
@@ -99,6 +100,8 @@ agent            Servidor Ktor + PlatformExecutor
 | `WS /ws?token=…` | Snapshots, eventos e comandos em tempo real |
 | `POST /pair` | Pareamento PIN → token |
 | `GET /apps/running` | Janelas + apps fixados na Dock |
+| `GET /apps/installed` | Catálogo autenticado de apps instalados (macOS) |
+| `POST /files/browse` | Navegar por pastas do usuário no Mac para configurar atalhos |
 | `POST /apps/launch` | Abrir/focar app |
 | `POST /apps/close` | Encerrar app |
 | `POST /browser/open` | Abrir URL |
@@ -116,7 +119,7 @@ Detalhes e DTOs: [spec.md](spec.md#5-protocol--api).
 
 | Onde | Arquivo |
 |------|---------|
-| Android | `{filesDir}/control_desk_hosts.json` |
+| Android | `{filesDir}/control_desk_hosts.json` (substituição atômica + recuperação `.bak`; desinstalar apaga o sandbox) |
 | iOS | Documents/`control_desk_hosts.json` |
 | Agente (tokens) | `~/.control-desk/agent_tokens.txt` |
 

@@ -12,7 +12,23 @@ object MacFocusApp {
 
     fun focus(request: AppLaunchRequest) {
         val app = request.target.trim()
-        if (app.isEmpty()) return
+        val bundlePath = request.bundlePath?.trim().orEmpty()
+        if (app.isEmpty() && bundlePath.isEmpty()) return
+        if (bundlePath.isNotEmpty()) {
+            val appFile = java.io.File(bundlePath)
+            require(appFile.isDirectory && appFile.extension.equals("app", ignoreCase = true)) {
+                "O aplicativo selecionado não está disponível neste Mac."
+            }
+            val projectPath = request.projectPath?.trim()?.takeIf { it.isNotEmpty() }
+            if (projectPath != null) {
+                val project = java.io.File(projectPath)
+                require(project.exists()) { "O projeto ou documento não foi encontrado: $projectPath" }
+                Shell.spawn("/usr/bin/open", "-a", bundlePath, projectPath)
+            } else {
+                Shell.spawn("/usr/bin/open", "-a", bundlePath)
+            }
+            return
+        }
         val title = request.windowTitle?.trim().orEmpty()
         if (title.isNotEmpty()) {
             val raised = Shell.osascript(

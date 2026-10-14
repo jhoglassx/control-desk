@@ -30,6 +30,31 @@ data class AppLaunchRequest(
     val windowTitle: String? = null,
     val windowIndex: Int? = null,
     val windowNumber: Int? = null,
+    val bundlePath: String? = null,
+    val projectPath: String? = null,
+)
+
+@Serializable
+data class InstalledAppInfo(
+    val name: String,
+    val bundlePath: String,
+    val iconBase64: String? = null,
+)
+
+@Serializable
+data class InstalledAppsResponse(val apps: List<InstalledAppInfo> = emptyList())
+
+@Serializable
+data class BrowseFilesRequest(val path: String? = null)
+
+@Serializable
+data class BrowseFileEntry(val name: String, val path: String, val isDirectory: Boolean)
+
+@Serializable
+data class BrowseFilesResponse(
+    val path: String,
+    val parentPath: String? = null,
+    val entries: List<BrowseFileEntry> = emptyList(),
 )
 
 @Serializable
@@ -80,6 +105,7 @@ data class SetupResponse(
     val pin: String? = null,
     val backgroundService: Boolean = true,
     val accessibilityEnabled: Boolean? = null,
+    val agentVersion: String = "unknown",
 )
 
 @Serializable
