@@ -69,6 +69,7 @@ data class RunningApp(
     val windowIndex: Int? = null,
     val axWindowIndex: Int? = null,
     val windowNumber: Int? = null,
+    val windowCount: Int? = null,
     val iconBase64: String? = null,
     val isActive: Boolean = false,
     val isVisible: Boolean = true,

@@ -92,7 +92,7 @@ class AgentServer(
                             ok = true,
                             version = AgentVersion.VALUE,
                             os = executor.osName,
-                            windowListerVersion = 20,
+                            windowListerVersion = 21,
                             accessibilityEnabled = macAccessibilityEnabled(),
                         ),
                     )

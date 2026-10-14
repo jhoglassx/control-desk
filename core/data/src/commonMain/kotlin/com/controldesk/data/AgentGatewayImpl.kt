@@ -77,6 +77,7 @@ class AgentGatewayImpl(
                 windowIndex = info.windowIndex,
                 axWindowIndex = info.axWindowIndex,
                 windowNumber = info.windowNumber,
+                windowCount = info.windowCount,
                 iconBase64 = info.iconBase64,
                 isActive = info.isActive,
                 isVisible = info.isVisible,
@@ -113,6 +114,8 @@ class AgentGatewayImpl(
                     windowNumber = button.payload["windowNumber"]?.toIntOrNull(),
                     bundlePath = button.payload["bundlePath"],
                     projectPath = button.payload["projectPath"],
+                    pid = button.payload["pid"]?.toIntOrNull(),
+                    axWindowIndex = button.payload["axWindowIndex"]?.toIntOrNull(),
                 ),
             ).apps,
         )
@@ -127,6 +130,10 @@ class AgentGatewayImpl(
                 AppCloseRequest(
                     target = button.payload.getValue("target"),
                     targetType = button.payload["targetType"] ?: "appName",
+                    pid = button.payload["pid"]?.toIntOrNull(),
+                    windowTitle = button.payload["windowTitle"],
+                    axWindowIndex = button.payload["axWindowIndex"]?.toIntOrNull(),
+                    windowCount = button.payload["windowCount"]?.toIntOrNull(),
                 ),
             ).apps,
         )

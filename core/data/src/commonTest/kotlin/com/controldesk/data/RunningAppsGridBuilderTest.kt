@@ -156,5 +156,45 @@ class RunningAppsGridBuilderTest {
         )
     }
 
+    @Test
+    fun closePayloadPreservesProcessAndWindowIdentity() {
+        val button = RunningAppsGridBuilder.build(
+            listOf(
+                RunningApp(
+                    name = "Android Studio · project-a",
+                    appName = "Android Studio",
+                    pid = 101,
+                    windowTitle = "project-a",
+                    windowIndex = 0,
+                    axWindowIndex = 1,
+                    windowCount = 2,
+                    isVisible = true,
+                ),
+            ),
+        ).single()
+
+        assertEquals("101", button.payload["pid"])
+        assertEquals("project-a", button.payload["windowTitle"])
+        assertEquals("1", button.payload["axWindowIndex"])
+        assertEquals("2", button.payload["windowCount"])
+    }
+
+    @Test
+    fun duplicateReportsOfTheSameWindowProduceOneCard() {
+        val window = RunningApp(
+            name = "Android Studio · sample-android-app",
+            appName = "Android Studio",
+            pid = 101,
+            windowTitle = "sample-android-app",
+            axWindowIndex = 1,
+            isVisible = true,
+        )
+
+        val buttons = RunningAppsGridBuilder.build(listOf(window, window.copy(isActive = true)))
+
+        assertEquals(1, buttons.size)
+        assertEquals("Android Studio · sample-android-app", buttons.single().label)
+    }
+
     private fun GridButton.appNameFromPayload(): String = payload.getValue("target")
 }

@@ -32,6 +32,8 @@ data class AppLaunchRequest(
     val windowNumber: Int? = null,
     val bundlePath: String? = null,
     val projectPath: String? = null,
+    val pid: Int? = null,
+    val axWindowIndex: Int? = null,
 )
 
 @Serializable
@@ -61,6 +63,10 @@ data class BrowseFilesResponse(
 data class AppCloseRequest(
     val target: String,
     val targetType: String = "appName",
+    val pid: Int? = null,
+    val windowTitle: String? = null,
+    val axWindowIndex: Int? = null,
+    val windowCount: Int? = null,
 )
 
 @Serializable
@@ -131,6 +137,7 @@ data class RunningAppInfo(
     val windowIndex: Int? = null,
     val axWindowIndex: Int? = null,
     val windowNumber: Int? = null,
+    val windowCount: Int? = null,
     val iconBase64: String? = null,
     val isActive: Boolean = false,
     val isVisible: Boolean = true,

@@ -9,6 +9,7 @@ Inventário conferido no código em 14/10/2026. “Implementada” significa que
 | Desk remoto | Grade das janelas abertas, foco otimista, atualização e vários hosts | Android; UI compartilhada também compila como target iOS, sem app Xcode versionado |
 | Pareamento | PIN de seis dígitos do agente, token Bearer persistido no host | Mobile ↔ agente na mesma LAN |
 | Apps e janelas | Listagem por janela a cada 1 s, títulos próprios para distinguir várias janelas do mesmo app, ativo/visível e dados de monitor | Nativo no macOS, requer Acessibilidade |
+| Ação por instância | Identidade PID/janela preservada no foco e no fechamento; janelas do mesmo processo fecham individualmente | macOS; agente 1.1.5 |
 | Dock | Atalhos de apps fixos, placeholders e estado de encerramento | macOS |
 | Encerrar app | Toque longo e bloqueio de processos essenciais | macOS |
 | Navegador | Abrir URL, fechar navegador, listar/selecionar abas Chrome | macOS; ações disponíveis na API e nos templates configurados |

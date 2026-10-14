@@ -14,6 +14,24 @@ object MacFocusApp {
         val app = request.target.trim()
         val bundlePath = request.bundlePath?.trim().orEmpty()
         if (app.isEmpty() && bundlePath.isEmpty()) return
+        val pid = request.pid?.takeIf { it > 0 }
+        val axIndex = request.axWindowIndex?.takeIf { it > 0 }
+        if (pid != null && axIndex != null && bundlePath.isEmpty()) {
+            Shell.osascript(
+                """
+                tell application "System Events"
+                    tell (first application process whose unix id is $pid)
+                        set frontmost to true
+                        try
+                            perform action "AXRaise" of window $axIndex
+                        end try
+                    end tell
+                end tell
+                """.trimIndent(),
+                timeoutMs = 700,
+            )
+            return
+        }
         if (bundlePath.isNotEmpty()) {
             val appFile = java.io.File(bundlePath)
             require(appFile.isDirectory && appFile.extension.equals("app", ignoreCase = true)) {

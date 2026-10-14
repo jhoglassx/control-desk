@@ -107,7 +107,7 @@ class NativePlatformExecutor : PlatformExecutor {
 
     override fun closeApp(request: AppCloseRequest) {
         if (isMac) {
-            MacAppQuit.quit(request.target)
+            MacAppQuit.quit(request)
             MacWindowLister.refreshNow()
             MacChromeTabs.refreshNow()
         } else {

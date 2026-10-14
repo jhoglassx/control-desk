@@ -650,14 +650,22 @@ class DeskViewModel(
         val matchingInstances = mutableMapOf<String, GridButton>()
         shortcuts.forEach { shortcut ->
             val shortcutTarget = shortcut.payload["target"].orEmpty()
-            val running = buttons
+            val boundShortcutPids = matchingInstances.values
+                .mapNotNull { it.payload["pid"] }
+                .toSet()
+            val candidates = buttons
                 .asSequence()
                 .filterNot(GridButton::isFavoriteShortcut)
                 .filterNot { it.id in matchedRunningIds }
                 .filter { it.payload["target"].equals(shortcutTarget, ignoreCase = true) }
+                .toList()
+            val unboundInstances = candidates.filterNot { candidate ->
+                candidate.payload["pid"]?.let { it in boundShortcutPids } == true
+            }
+            val running = (unboundInstances.ifEmpty { candidates })
                 .maxByOrNull { candidate ->
-                    (if (candidate.isActive) 2 else 0) +
-                        (if (candidate.isVisible) 1 else 0) +
+                    (if (candidate.isActive) 4 else 0) +
+                        (if (candidate.isVisible) 2 else 0) +
                         (if (!candidate.isDockPlaceholder()) 1 else 0)
                 }
             if (running != null) {
@@ -1079,6 +1087,7 @@ class DeskViewModel(
             "windowIndex",
             "axWindowIndex",
             "pid",
+            "windowCount",
         )
         const val AUTO_REFRESH_MS = 150L
         const val FALLBACK_POLL_MS = 5_000L

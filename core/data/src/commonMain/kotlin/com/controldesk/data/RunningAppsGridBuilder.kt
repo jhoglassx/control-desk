@@ -10,8 +10,9 @@ object RunningAppsGridBuilder {
             compareBy<RunningApp> { if (it.dockIndex >= 0) it.dockIndex else 1_000 }
                 .thenBy { it.appName.lowercase() }
                 .thenBy { it.windowIndex ?: it.windowNumber ?: 0 }
-                .thenBy { it.label().lowercase() },
-        )
+                .thenBy { it.label().lowercase() }
+                .thenByDescending { it.isActive },
+        ).distinctBy(::stableId)
         return sorted.mapIndexed { index, app ->
             val id = stableId(app)
             val payload = if (app.isBrowserTab) {
@@ -33,6 +34,7 @@ object RunningAppsGridBuilder {
                     app.windowIndex?.let { put("windowIndex", it.toString()) }
                     app.pid?.let { put("pid", it.toString()) }
                     app.axWindowIndex?.let { put("axWindowIndex", it.toString()) }
+                    app.windowCount?.let { put("windowCount", it.toString()) }
                 }
             }
             GridButton(

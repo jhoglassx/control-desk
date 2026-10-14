@@ -147,6 +147,7 @@ object MacWindowLister {
                 windowIndex = obj.int("windowIndex") ?: index,
                 axWindowIndex = obj.int("axWindowIndex"),
                 windowNumber = obj.int("windowNumber") ?: (index + 1),
+                windowCount = obj.int("windowCount"),
                 isActive = obj.bool("isActive"),
                 isVisible = visible,
                 monitorIndex = obj.int("monitorIndex")?.coerceAtLeast(1) ?: 1,
@@ -281,6 +282,7 @@ object MacWindowLister {
             var path = bundlePath(pid);
             var windows = [];
             try { windows = p.windows(); } catch (e) { windows = []; }
+            var appWindowCount = windows ? windows.length : 0;
             if (!windows || windows.length === 0) {
               rows.push({
                 appName: name,
@@ -291,6 +293,7 @@ object MacWindowLister {
                 minimized: false,
                 windowIndex: 0,
                 axWindowIndex: 1,
+                windowCount: 1,
                 windowNumber: n++,
                 monitorIndex: front ? 1 : 0,
                 bundlePath: path
@@ -316,6 +319,7 @@ object MacWindowLister {
                 minimized: minimized,
                 windowIndex: w,
                 axWindowIndex: w + 1,
+                windowCount: appWindowCount,
                 windowNumber: n++,
                 monitorIndex: monitorFor(px, py, pw, ph, screens),
                 bundlePath: path
