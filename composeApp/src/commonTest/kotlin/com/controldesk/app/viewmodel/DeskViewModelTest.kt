@@ -464,6 +464,72 @@ class DeskViewModelTest {
     }
 
     @Test
+    fun appOrderSurvivesProcessNameAndPidChangesForSameBundle() = runTest(dispatcher) {
+        val studioBundle = "/Applications/Android Studio.app"
+        val host = pairedHost("10.0.2.2:8741", "Mac", 0)
+        val gateway = FakeAgentGateway(
+            apps = listOf(
+                RunningApp(
+                    name = "Android Studio · sample-android-app",
+                    appName = "Android Studio",
+                    pid = 321,
+                    windowTitle = "sample-android-app",
+                    axWindowIndex = 1,
+                    isVisible = true,
+                    bundlePath = studioBundle,
+                ),
+                RunningApp("Safari", "Safari", pid = 456, isVisible = true),
+                RunningApp("Terminal", "Terminal", pid = 789, isVisible = true),
+            ),
+        )
+        val preferences = FakeHostPreferences(listOf(host))
+        val viewModel = DeskViewModel(
+            hostPreferences = preferences,
+            agentGateway = gateway,
+            agentRealtime = FakeAgentRealtime(apps = gateway.apps),
+            executeGridButton = ExecuteGridButtonUseCase(gateway),
+            iconCache = FakeIconCache(),
+            coroutineScope = backgroundScope,
+        )
+        runCurrent()
+
+        val initial = viewModel.uiState.value.buttons
+        val chosenOrder = listOf(
+            initial.single { it.label == "Terminal" }.id,
+            initial.single { it.label.contains("Android Studio") }.id,
+            initial.single { it.label == "Safari" }.id,
+        )
+        viewModel.onIntent(DeskIntent.ReorderApps(chosenOrder))
+        runCurrent()
+
+        gateway.apps = listOf(
+            RunningApp(
+                name = "studio · sample-android-app",
+                appName = "studio",
+                pid = 987,
+                windowTitle = "sample-android-app",
+                axWindowIndex = 2,
+                isActive = true,
+                isVisible = true,
+                bundlePath = studioBundle,
+            ),
+            RunningApp("Safari", "Safari", pid = 456, isVisible = true),
+            RunningApp("Terminal", "Terminal", pid = 789, isVisible = true),
+        )
+        viewModel.refreshRunningApps()
+        runCurrent()
+
+        assertEquals(
+            listOf("Terminal", "studio · sample-android-app", "Safari"),
+            viewModel.uiState.value.buttons.map { it.label },
+        )
+        assertEquals(
+            viewModel.uiState.value.buttons.map { it.id },
+            preferences.getHosts().single().appOrder.take(3),
+        )
+    }
+
+    @Test
     fun longPressRemovesTilesAndClosesApp() = runTest(dispatcher) {
         val host = PairedHost(
             id = "10.0.2.2:8741",

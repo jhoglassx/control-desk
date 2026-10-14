@@ -730,11 +730,16 @@ class DeskViewModel(
         incoming: List<GridButton>,
         claimedIds: Set<String>,
     ): String? {
-        val previousTarget = previous.payload["target"]?.takeIf(String::isNotBlank) ?: return null
+        val previousTarget = previous.payload["target"]?.takeIf(String::isNotBlank)
+        val previousBundlePath = previous.payload["bundlePath"]?.takeIf(String::isNotBlank)
+        if (previousTarget == null && previousBundlePath == null) return null
         val candidates = incoming.filter { candidate ->
-            !candidate.isFavoriteShortcut &&
-                candidate.id !in claimedIds &&
-                candidate.payload["target"].equals(previousTarget, ignoreCase = true) &&
+            val sameBundle = previousBundlePath != null && candidate.payload["bundlePath"]
+                .equals(previousBundlePath, ignoreCase = true)
+            val sameTarget = previousTarget != null && candidate.payload["target"]
+                .equals(previousTarget, ignoreCase = true)
+            !candidate.isFavoriteShortcut && candidate.id !in claimedIds &&
+                (sameBundle || sameTarget) &&
                 candidate.payload["browser"] == previous.payload["browser"]
         }
         if (candidates.isEmpty()) return null
@@ -744,6 +749,9 @@ class DeskViewModel(
         val previousWindowIndex = previous.payload["windowIndex"]
         return candidates.maxByOrNull { candidate ->
             var score = if (candidate.isActive) 1 else 0
+            if (previousBundlePath != null && candidate.payload["bundlePath"]
+                    .equals(previousBundlePath, ignoreCase = true)
+            ) score += 32
             if (previousWindowTitle != null && previousWindowTitle == (candidate.payload["windowTitle"] ?: candidate.payload["value"])) score += 16
             if (previousPid != null && previousPid == candidate.payload["pid"]) score += 8
             if (previousBrowserWindow != null && previousBrowserWindow == candidate.payload["browserWindowIndex"]) score += 4
