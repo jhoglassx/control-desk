@@ -18,6 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import com.controldesk.app.ui.desk.DESK_PULL_REFRESH_INDICATOR_TAG
 import com.controldesk.app.ui.desk.DESK_PULL_REFRESH_TAG
+import com.controldesk.app.ui.desk.DESK_ADD_SHORTCUT_BUTTON_TAG
+import com.controldesk.app.ui.desk.DESK_REORGANIZE_BUTTON_TAG
 import com.controldesk.app.theme.ControlDeskTheme
 import com.controldesk.app.ui.desk.DeskScreen
 import com.controldesk.app.ui.desk.PinnedAppsScreen
@@ -140,6 +142,35 @@ class DeskScreenTest {
         }
         composeRule.onNodeWithContentDescription("Adicionar app fixo").performClick()
         composeRule.runOnIdle { assertTrue(catalogRequested) }
+    }
+
+    @Test
+    fun topBarActionsShareTheSameVerticalAlignment() {
+        val host = PairedHost(
+            id = "10.0.2.2:8741", name = "Mac Mini", host = "10.0.2.2", port = 8741,
+            osType = OsType.MACOS, sortOrder = 0, token = "token",
+        )
+        composeRule.setContent {
+            ControlDeskTheme {
+                DeskScreen(
+                    uiState = DeskUiState(hosts = listOf(host)),
+                    onPairHost = {}, onManageHosts = {}, onManageShortcuts = {},
+                    onRefresh = {}, onSelectHost = {}, onAppClick = {}, onAppClose = {},
+                    onVolumeChange = {}, onVolumeChangeFinished = {}, onMuteClick = {},
+                    onMicChange = {}, onMicChangeFinished = {}, onMicClick = {}, onClearFeedback = {},
+                )
+            }
+        }
+
+        val actionTags = listOf(
+            DESK_REORGANIZE_BUTTON_TAG,
+            DESK_ADD_SHORTCUT_BUTTON_TAG,
+            DESK_ADMIN_BUTTON_TAG,
+        )
+        val centerYs = actionTags.map { tag ->
+            composeRule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot.center.y
+        }
+        assertTrue(centerYs.all { centerY -> kotlin.math.abs(centerY - centerYs.first()) < 1f })
     }
 
     @Test

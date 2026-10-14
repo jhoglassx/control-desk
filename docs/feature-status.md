@@ -17,6 +17,7 @@ Inventário conferido no código em 14/10/2026. “Implementada” significa que
 | Tempo real | WebSocket com snapshots, eventos de apps/áudio, ACK/erro e reconexão | Cliente e agente JVM |
 | Fallback | Rotas HTTP protegidas e sincronização HTTP quando não conectado em tempo real | Mobile ↔ agente |
 | Cache e grade | Ícones persistidos/substituíveis em JSON; células de largura igual; título da janela em até duas linhas com nome do app como fallback | Android/iOS |
+| Ações da tela principal | Reorganizar, adicionar app fixo e abrir configurações em uma barra horizontal com ícones Material UI e áreas de toque uniformes | Android/iOS; teste instrumentado verifica alinhamento vertical |
 | Configuração do agente | Janela com dados locais, PIN/IP, modo headless e keep-alive | Desktop macOS |
 | Apps fixos e projetos | Tela dedicada com ícones reais, busca, fixar/remover/ordenar, navegador de pastas e associação de projeto/documento/arquivo | Android ↔ agente macOS; navegação autenticada limitada à pasta do usuário |
 | Distribuição | LaunchAgent, scripts de instalação/remoção e DMG | macOS |

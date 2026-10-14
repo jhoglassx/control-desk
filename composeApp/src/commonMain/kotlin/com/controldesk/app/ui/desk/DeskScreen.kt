@@ -7,6 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -22,9 +28,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -117,44 +122,41 @@ fun DeskScreen(
                         },
                 ) {
                     val host = uiState.hosts.getOrNull(selectedIndex)
-                    IconButton(
-                        onClick = onAdminAccessRequest,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(8.dp)
-                            .semantics { contentDescription = "Configurações e dispositivos" }
-                            .testTag(DESK_ADMIN_BUTTON_TAG),
+                    Row(
+                        modifier = Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(0.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        androidx.compose.material3.Text(
-                            "⚙",
-                            color = DeskColors.TextPrimary,
-                            fontSize = 21.sp,
-                        )
-                    }
-                    IconButton(
-                        onClick = onManageShortcuts,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 8.dp, end = 52.dp)
-                            .semantics { contentDescription = "Adicionar app fixo" },
-                    ) {
-                        androidx.compose.material3.Text("+", color = DeskColors.TextPrimary, fontSize = 24.sp)
-                    }
-                    IconButton(
-                        onClick = { onToggleReorganizeApps(!uiState.isReorganizingApps) },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 8.dp, end = 96.dp)
-                            .semantics {
-                                contentDescription = if (uiState.isReorganizingApps) "Concluir reorganização" else "Reorganizar apps"
-                            }
-                            .testTag(DESK_REORGANIZE_BUTTON_TAG),
-                    ) {
-                        androidx.compose.material3.Text(
-                            if (uiState.isReorganizingApps) "✓" else "↕",
-                            color = if (uiState.isReorganizingApps) DeskColors.Mint else DeskColors.TextPrimary,
-                            fontSize = 21.sp,
-                        )
+                        IconButton(
+                            onClick = { onToggleReorganizeApps(!uiState.isReorganizingApps) },
+                            modifier = Modifier
+                                .semantics {
+                                    contentDescription = if (uiState.isReorganizingApps) "Concluir reorganização" else "Reorganizar apps"
+                                }
+                                .testTag(DESK_REORGANIZE_BUTTON_TAG),
+                        ) {
+                            Icon(
+                                imageVector = if (uiState.isReorganizingApps) Icons.Default.Done else Icons.Default.SwapVert,
+                                contentDescription = null,
+                                tint = if (uiState.isReorganizingApps) DeskColors.Mint else DeskColors.TextPrimary,
+                            )
+                        }
+                        IconButton(
+                            onClick = onManageShortcuts,
+                            modifier = Modifier
+                                .semantics { contentDescription = "Adicionar app fixo" }
+                                .testTag(DESK_ADD_SHORTCUT_BUTTON_TAG),
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = DeskColors.TextPrimary)
+                        }
+                        IconButton(
+                            onClick = onAdminAccessRequest,
+                            modifier = Modifier
+                                .semantics { contentDescription = "Configurações e dispositivos" }
+                                .testTag(DESK_ADMIN_BUTTON_TAG),
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = null, tint = DeskColors.TextPrimary)
+                        }
                     }
                     PullToRefreshBox(
                         isRefreshing = uiState.isLoadingApps,
@@ -231,3 +233,4 @@ internal const val DESK_PULL_REFRESH_TAG = "desk-pull-refresh"
 internal const val DESK_PULL_REFRESH_INDICATOR_TAG = "desk-pull-refresh-indicator"
 internal const val DESK_ADMIN_BUTTON_TAG = "desk-admin-settings-button"
 internal const val DESK_REORGANIZE_BUTTON_TAG = "desk-reorganize-apps-button"
+internal const val DESK_ADD_SHORTCUT_BUTTON_TAG = "desk-add-shortcut-button"
