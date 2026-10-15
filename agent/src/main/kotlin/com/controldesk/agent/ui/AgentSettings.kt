@@ -44,6 +44,10 @@ import java.net.URI
 
 fun launchAgentSettings(port: Int, exitProcessOnClose: Boolean = true) {
     application(exitProcessOnExit = exitProcessOnClose) {
+        var deviceCatalog by remember { mutableStateOf<com.controldesk.protocol.DeviceCatalogResponse?>(null) }
+        var deviceCheckError by remember { mutableStateOf<String?>(null) }
+        var checkingDevices by remember { mutableStateOf(false) }
+        var deviceCheckRevision by remember { mutableStateOf(0) }
         var setup by remember { mutableStateOf<SetupResponse?>(null) }
         var status by remember { mutableStateOf("Iniciando…") }
         var accessibility by remember { mutableStateOf<Boolean?>(null) }
@@ -68,6 +72,14 @@ fun launchAgentSettings(port: Int, exitProcessOnClose: Boolean = true) {
                 delay(2_000)
             }
         }
+        LaunchedEffect(port, setup?.ok, deviceCheckRevision) {
+            if (setup?.ok != true) return@LaunchedEffect
+            checkingDevices = true
+            val result = withContext(Dispatchers.IO) { fetchSetupDevices(port) }
+            deviceCatalog = result.getOrNull()
+            deviceCheckError = result.exceptionOrNull()?.message
+            checkingDevices = false
+        }
         Window(
             onCloseRequest = ::exitApplication,
             title = "Control Desk Agent",
@@ -83,7 +95,7 @@ fun launchAgentSettings(port: Int, exitProcessOnClose: Boolean = true) {
                     ) {
                         Text("Control Desk", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(5.dp))
-                        Text("Conecte este Mac ao app do celular", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                        Text("Conecte este computador ao app do celular", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                         Spacer(Modifier.height(16.dp))
 
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
@@ -99,6 +111,10 @@ fun launchAgentSettings(port: Int, exitProcessOnClose: Boolean = true) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.Gray,
                             )
+                            if (setup?.buildId != null) Text("Compilação: ${setup?.buildId?.take(12)}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            if (setup?.buildId != null && setup?.buildId != AgentBuildIdentity.VALUE) {
+                                Text("A configuração e o serviço são de compilações diferentes. Reabra o app em Aplicativos para sincronizar.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF92400E))
+                            }
                             Spacer(Modifier.height(14.dp))
                             Text("PIN DE CONEXÃO", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
                             Text(setup?.pin ?: "—", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
@@ -149,6 +165,28 @@ fun launchAgentSettings(port: Int, exitProcessOnClose: Boolean = true) {
                         }
                         true -> Text("Acessibilidade ativada", color = Color(0xFF15803D), style = MaterialTheme.typography.bodySmall)
                         null -> Unit
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Dispositivos e permissões", fontWeight = FontWeight.SemiBold)
+                            Text("A primeira abertura solicita Acessibilidade no Mac. A confirmação da chave é feita por você nos Ajustes. As permissões e capacidades dos dispositivos são verificadas abaixo.", style = MaterialTheme.typography.bodySmall)
+                            Text(when {
+                                System.getProperty("os.name").lowercase().contains("mac") -> "Listar câmeras não inicia captura nem precisa solicitar acesso de captura. O macOS não expõe bloqueio global de câmera neste adaptador; conceder mais permissões não habilita essa ação."
+                                System.getProperty("os.name").lowercase().contains("win") -> "Para habilitar/desabilitar câmeras, feche e inicie o agente como administrador (Executar como administrador). Confirme o UAC do Windows."
+                                else -> "Use a sessão do seu usuário com acesso ao servidor de áudio e permissão de escrita no dispositivo de vídeo. Instale v4l-utils e pactl quando indicados; mudanças de grupo podem exigir nova sessão."
+                            }, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            if (checkingDevices) Text("Verificando dispositivos…", style = MaterialTheme.typography.bodySmall)
+                            deviceCheckError?.let { Text("Não foi possível verificar: $it", color = Color(0xFF92400E), style = MaterialTheme.typography.bodySmall) }
+                            deviceCatalog?.let { catalog ->
+                                Text("${catalog.devices.count { it.kind == "CAMERA" }} câmera(s) · ${catalog.devices.count { it.kind == "AUDIO_INPUT" }} entrada(s) · ${catalog.devices.count { it.kind == "AUDIO_OUTPUT" }} saída(s)", style = MaterialTheme.typography.bodySmall)
+                                catalog.diagnostics.forEach { (adapter, message) -> Text("$adapter: $message", color = Color(0xFF92400E), style = MaterialTheme.typography.bodySmall) }
+                                catalog.devices.filter { it.notice != null }.map { it.notice!! }.distinct().forEach { message ->
+                                    Text(message, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                }
+                            }
+                            OutlinedButton(enabled = !checkingDevices, onClick = { deviceCheckRevision++ }) { Text("Verificar novamente") }
+                        }
                     }
                     Spacer(Modifier.height(12.dp))
                     Text("O agente inicia junto com sua sessão e continua ativo ao fechar esta janela.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
@@ -220,3 +258,17 @@ private fun revokeAllTokens(port: Int): Int? = runCatching {
     connection.disconnect()
     response["revoked"]?.jsonPrimitive?.intOrNull
 }.getOrNull()
+
+
+private fun fetchSetupDevices(port: Int): Result<com.controldesk.protocol.DeviceCatalogResponse> = runCatching {
+    val connection = URI("http://127.0.0.1:$port/setup/devices").toURL().openConnection() as HttpURLConnection
+    try {
+        connection.connectTimeout = 1_000
+        connection.readTimeout = 20_000
+        val status = connection.responseCode
+        check(status != 404) { "O serviço em execução é de outra compilação. Reabra ControlDeskAgent em Aplicativos para atualizar o serviço; isso não é uma permissão de câmera negada." }
+        check(status == 200) { "O agente não confirmou o diagnóstico de dispositivos (HTTP $status)." }
+        val text = connection.inputStream.bufferedReader().use { it.readText() }
+        json.decodeFromString<com.controldesk.protocol.DeviceCatalogResponse>(text)
+    } finally { connection.disconnect() }
+}

@@ -55,6 +55,7 @@ class AgentServer(
     private val pairAttemptLimiter = PairAttemptLimiter()
 
     fun start() {
+        val serviceBuildId = AgentBuildIdentity.VALUE
         wsHub.start()
         engine = embeddedServer(CIO, port = port, host = bind) {
             install(ContentNegotiation) {
@@ -93,6 +94,8 @@ class AgentServer(
                             version = AgentVersion.VALUE,
                             os = executor.osName,
                             windowListerVersion = 25,
+                            deviceCatalogVersion = 1,
+                            buildId = serviceBuildId,
                             accessibilityEnabled = macAccessibilityEnabled(),
                         ),
                     )
@@ -137,6 +140,13 @@ class AgentServer(
                     }
                     call.respondDto(setupResponse())
                 }
+                get("/setup/devices") {
+                    if (!call.isLocalhost()) {
+                        call.respondText("""{"ok":false}""", ContentType.Application.Json, HttpStatusCode.Forbidden)
+                        return@get
+                    }
+                    call.respondDto(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { executor.devices() })
+                }
                 post("/setup/new-pin") {
                     if (!call.isLocalhost()) {
                         call.respondText(
@@ -166,6 +176,13 @@ class AgentServer(
                     )
                 }
                 authenticate("paired") {
+                    get("/devices") {
+                        call.respondDto(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { executor.devices() })
+                    }
+                    post("/devices/actions") {
+                        val body = call.receive<com.controldesk.protocol.DeviceActionRequest>()
+                        call.respondDto(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { executor.executeDeviceAction(body) })
+                    }
                     get("/apps/installed") {
                         call.respondDto(InstalledAppsResponse(apps = executor.listInstalledApps()))
                     }
@@ -246,6 +263,7 @@ class AgentServer(
         backgroundService = true,
         accessibilityEnabled = macAccessibilityEnabled(),
         agentVersion = AgentVersion.VALUE,
+        buildId = AgentBuildIdentity.VALUE,
     )
 
     private fun macAccessibilityEnabled(): Boolean? {

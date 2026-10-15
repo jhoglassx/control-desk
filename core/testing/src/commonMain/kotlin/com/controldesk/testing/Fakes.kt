@@ -35,6 +35,24 @@ class FakeAgentGateway(
     var failWith: Throwable? = null,
     var removeOnClose: Boolean = true,
 ) : AgentGateway {
+    var devices = com.controldesk.domain.model.DeviceCatalog()
+    var deviceCommandGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    val deviceCommands = mutableListOf<com.controldesk.domain.model.DeviceCommand>()
+    override suspend fun loadDevices(host: PairedHost) = result(devices)
+    override suspend fun executeDeviceCommand(host: PairedHost, command: com.controldesk.domain.model.DeviceCommand): com.controldesk.domain.model.ConnectedDevice {
+        result(Unit)
+        deviceCommands += command
+        deviceCommandGate?.await()
+        val device = devices.devices.single { it.id == command.deviceId }
+        val updated = when (command.action) {
+            com.controldesk.domain.model.DeviceCapability.SET_ENABLED -> device.copy(enabled = command.booleanValue)
+            com.controldesk.domain.model.DeviceCapability.SET_MUTED -> device.copy(muted = command.booleanValue)
+            com.controldesk.domain.model.DeviceCapability.SET_LEVEL -> device.copy(level = command.level)
+            com.controldesk.domain.model.DeviceCapability.SET_DEFAULT -> device.copy(isDefault = true)
+        }
+        devices = devices.copy(devices = devices.devices.map { if (it.id == updated.id) updated else it })
+        return updated
+    }
     var runningAppsLoadCount = 0
     val launched = mutableListOf<GridButton>()
     val openedUrls = mutableListOf<String>()

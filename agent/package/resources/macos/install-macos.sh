@@ -218,6 +218,25 @@ read_running_version() {
     fi
 }
 
+read_bundle_build_id() {
+    local app_path="$1"
+    if [[ -d "$app_path/Contents/app" ]]; then
+        (cd "$app_path/Contents/app" && LC_ALL=C /usr/bin/shasum -a 256 ./*.jar | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')
+    fi
+}
+
+service_needs_restart() {
+    [[ -n "$1" && "$1" != "$2" ]] || [[ -n "$4" && "$3" != "$4" ]]
+}
+
+read_running_build_id() {
+    local response
+    response="$(/usr/bin/curl --silent --fail --max-time 1 "http://127.0.0.1:${PORT}/health" 2>/dev/null || true)"
+    if [[ "$response" =~ \"buildId\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
+        echo "${BASH_REMATCH[1]}"
+    fi
+}
+
 SOURCE_APP="$(resolve_source_app "${1:-}")" || {
     echo "App não encontrado: $APP_NAME"
     echo
@@ -262,14 +281,21 @@ fi
 
 write_plist "$BINARY"
 RUNNING_VER="$(read_running_version)"
-if service_loaded && [[ -n "$RUNNING_VER" && "$RUNNING_VER" != "$TARGET_VER" ]]; then
-    echo "→ Serviço em memória está na versão $RUNNING_VER; reiniciando para carregar $TARGET_VER."
+TARGET_BUILD_ID="$(read_bundle_build_id "$TARGET_APP")"
+RUNNING_BUILD_ID="$(read_running_build_id)"
+if service_loaded && service_needs_restart "$RUNNING_VER" "$TARGET_VER" "$RUNNING_BUILD_ID" "$TARGET_BUILD_ID"; then
+    echo "→ Serviço em memória difere da compilação instalada; reiniciando para carregar $TARGET_VER."
     unload_agent
 fi
 load_agent
 verify_agent_health
 
 RUNNING_VER="$(read_running_version)"
+RUNNING_BUILD_ID="$(read_running_build_id)"
+if [[ -n "$TARGET_BUILD_ID" && "$RUNNING_BUILD_ID" != "$TARGET_BUILD_ID" ]]; then
+    echo "Compilação em memória difere da instalada; não foi possível atualizar o serviço."
+    exit 1
+fi
 if [[ -n "$RUNNING_VER" && "$RUNNING_VER" != "$TARGET_VER" ]]; then
     echo "Versão em execução ($RUNNING_VER) difere da instalada ($TARGET_VER); não foi possível atualizar o serviço."
     exit 1

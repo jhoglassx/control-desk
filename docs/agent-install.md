@@ -30,7 +30,7 @@ Especificação completa: **[README.md](README.md)** (índice) e **[spec.md](spe
 
 O `.dmg` sai em:
 
-`agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.12.dmg`
+`agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.14.dmg`
 
 O agente compilado é compatível com o runtime Java 17 incluído neste pacote; o usuário não precisa instalar Java.
 
@@ -207,3 +207,25 @@ CONTROL_DESK_SKIP_INSTALL=1 ./gradlew :agent:runDistributable
 ## Windows / Linux (futuro)
 
 O build configura apenas `TargetFormat.Dmg`. Não há MSI, DEB ou AppImage configurados; `NativePlatformExecutor` usa um executor simulado fora do macOS. Instaladores, controle nativo e auto-start dessas plataformas são backlog.
+
+## Permissões na primeira abertura (agente 1.1.14)
+
+O app abre a configuração após instalar/atualizar o serviço. A janela solicita Acessibilidade quando necessário e consulta automaticamente **Dispositivos e permissões**, mostrando os dispositivos encontrados, limitações de controle e falhas dos adaptadores. **Verificar novamente** repete a consulta depois de corrigir uma permissão. O diagnóstico usa `/setup/devices`, disponível somente em localhost.
+
+| Sistema | Como conceder o necessário |
+|---|---|
+| macOS | Em Ajustes → Privacidade e Segurança → Acessibilidade, autorize ControlDeskAgent. Volte ao agente; o status é atualizado. A confirmação é exigida pelo macOS e não pode ser concedida pelo instalador |
+| Windows | Para habilitar/desabilitar câmeras, o **processo servidor** precisa ser iniciado com **Executar como administrador** e o UAC deve ser confirmado. Elevar apenas uma janela de configuração não eleva um servidor já em execução. Não há instalador Windows com esse fluxo automatizado nesta entrega |
+| Linux | Execute na sessão do usuário com acesso ao servidor PulseAudio/PipeWire e permissão de escrita no dispositivo V4L2. Confira os diagnósticos, instale `v4l-utils`/`pactl` conforme a distribuição e ajuste os grupos/permissões quando necessário; mudanças de grupo podem exigir sair e entrar na sessão |
+
+Listar câmeras no Mac não inicia captura nem requer acesso de captura. O agente não solicita permissão de câmera para uma função que apenas consulta o inventário. Se uma futura integração iniciar captura, deverá solicitar a autorização correspondente nesse momento. Essa permissão não cria um comando global de bloquear/liberar câmera no macOS.
+
+Permissão, dependência e suporte são situações diferentes: conceder Acessibilidade não habilita ações de câmera inexistentes; instalar uma ferramenta não torna todo driver compatível. O agente não contorna TCC/UAC nem altera permissões administrativas silenciosamente. Eventuais solicitações de Automação do macOS aparecem quando uma ação realmente usa a integração correspondente.
+
+### Mesma versão, serviço de outra compilação
+
+Uma atualização podia substituir o app em Aplicativos enquanto o LaunchAgent continuava com classes antigas em memória. Como o instalador verificava somente a versão, duas compilações `1.1.13` pareciam equivalentes; a janela nova consultava `/setup/devices`, mas o serviço antigo retornava 404.
+
+A partir de `1.1.14`, `/health` e `/setup/health` incluem `buildId`, calculado no início do processo a partir de todos os JARs da aplicação. O instalador calcula a mesma assinatura dos arquivos instalados e reinicia o serviço se a compilação divergir ou o serviço antigo não anunciar identidade, mesmo com versão igual. A verificação final também compara a identidade. Não altera pareamentos.
+
+A configuração mostra a compilação e avisa quando difere do serviço. Erro 404 no diagnóstico passa a orientar reabrir o app instalado para sincronizar; não é apresentado como falha de permissão de câmera.

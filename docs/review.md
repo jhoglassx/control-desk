@@ -11,7 +11,7 @@ Estado revisto em 15/10/2026. Este documento descreve o checkout atual; a evidê
 | Atalhos | Catálogo persistente por host, migração de identidades antigas e reparo de duplicatas nome/bundle | Mover o bundle pode criar outro launcher |
 | Instâncias | Seleção por título/monitor, comandos com ID/PID e associação exclusiva a um atalho | Títulos de projeto dependem do aplicativo; snapshots podem mudar durante a ação |
 | iOS | Código compartilhado, targets e controller | Projeto Xcode completo e validação em dispositivo pendentes |
-| Windows/Linux | Estrutura JVM e seleção de SO | Controle nativo ainda simulado |
+| Windows/Linux | Catálogo de dispositivos com ações nativas parciais por capacidade | Apps/áudio legado simulados; suporte e validação em hardware variam por adaptador |
 
 ## Correções revisadas
 
@@ -23,7 +23,7 @@ Cada janela tem um único proprietário: favorito de projeto, favorito genérico
 
 Processos sem janela não geram mais a janela fictícia de índice 1. Com identidade de janela, foco e fechamento revalidam ID/PID; o fechamento usa `AXCloseButton`. A ausência da janela não autoriza selecionar outra. Solicitações legadas sem identidade ainda têm fallback de processo. Um resultado incerto após envio pelo WebSocket não é repetido automaticamente por HTTP.
 
-O empacotamento usa bytecode/runtime Java 17 compatíveis. O agente fonte e DMG atuais são **1.1.12**, com **windowListerVersion 25**. Na última inspeção, o agente instalado era **1.1.11**: gerar o pacote não atualiza automaticamente a instalação.
+O empacotamento usa bytecode/runtime Java 17 compatíveis. O agente fonte e DMG atuais são **1.1.14**, com **windowListerVersion 25**. O serviço deste Mac foi atualizado para **1.1.14**, com catálogo nativo validado por leitura. Acessibilidade exige nova confirmação após a assinatura ad hoc; gerar somente o pacote não atualiza a instalação.
 
 ## Validação registrada
 
@@ -44,4 +44,4 @@ O editor de reordenação/redimensionamento já existe. Próximas funcionalidade
 
 ## Revisão de layout e cadastro de dispositivos
 
-Os controles de áudio deixaram de ser posições reservadas da grade e receberam o mesmo comportamento de edição dos apps. O cadastro agora separa apps/projetos de controles, câmeras e painéis de dispositivo, com formulário MVI dedicado. Ações de aplicativo/URL são executadas pelo agente. Descoberta e controle direto de periféricos nos três sistemas permanecem pendentes; a revisão e o contrato proposto estão em [device-shortcuts.md](device-shortcuts.md).
+Os controles de áudio deixaram de ser posições reservadas da grade e receberam o mesmo comportamento de edição dos apps. O cadastro agora separa apps/projetos de controles, câmeras e painéis de dispositivo, com formulário MVI dedicado. Ações de aplicativo/URL são executadas pelo agente. O agente 1.1.14 acrescenta catálogo e ações nativas por capacidades, com controles de câmera Windows/Linux e áudio macOS/Linux; câmera Mac e áudio Windows são somente consulta. A validação de escrita em hardware Windows/Linux permanece pendente; a revisão e o contrato proposto estão em [device-shortcuts.md](device-shortcuts.md).

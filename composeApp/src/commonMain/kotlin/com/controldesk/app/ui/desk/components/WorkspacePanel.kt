@@ -304,7 +304,7 @@ private fun RenderTile(
         spanColumns = spanColumns,
         spanRows = button.tileSpanRows(),
         onResize = if (isReorganizingApps) ({ onResizeAppTile(button.id) }) else null,
-        customContent = when (button.payload["controlKind"]) {
+        customContent = when (button.payload["controlKind"].takeIf { button.actionType != com.controldesk.domain.model.ActionType.REMOTE_DEVICE }) {
             "VOLUME", "MICROPHONE" -> ({
                 val microphone = button.payload["controlKind"] == "MICROPHONE"
                 AudioShortcutContent(

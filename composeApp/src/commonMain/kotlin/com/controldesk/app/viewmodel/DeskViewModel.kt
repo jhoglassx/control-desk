@@ -24,6 +24,7 @@ import com.controldesk.domain.repository.RunningAppIconCache
 import com.controldesk.domain.usecase.ExecuteGridButtonUseCase
 import com.controldesk.logging.ControlDeskLog
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -66,6 +67,8 @@ class DeskViewModel(
     private var holdingAudioUntil: TimeMark? = null
     private var adjustingVolume = false
     private var adjustingMic = false
+    private var devicePollJob: Job? = null
+    private val deviceRefreshVersions = mutableMapOf<String, Int>()
     private var pendingHostLoad: Job? = null
     private var audioPollJob: Job? = null
     private var volumeSendJob: Job? = null
@@ -97,6 +100,7 @@ class DeskViewModel(
                 val sorted = hosts.sortedBy { it.sortOrder }
                 if (sorted.isEmpty()) {
                     stopAutoRefresh()
+                    devicePollJob?.cancel()
                     _uiState.value = DeskUiState()
                     return@collect
                 }
@@ -106,6 +110,8 @@ class DeskViewModel(
                 _uiState.update { it.copy(hosts = sorted, selectedHostIndex = index) }
                 if (previousHost == null || previousHost.connectionChangedFrom(selectedHost)) {
                     loadHost(selectedHost, showLoading = previousHost == null)
+                } else if (previousHost.controlShortcuts != selectedHost.controlShortcuts) {
+                    startDevicePolling(selectedHost)
                 }
             }
         }
@@ -350,6 +356,10 @@ class DeskViewModel(
     }
 
     fun onButtonClick(button: GridButton) {
+        if (button.actionType == ActionType.REMOTE_DEVICE) {
+            executeDeviceShortcut(button)
+            return
+        }
         if (button.payload["controlKind"] != null) {
             if (button.payload["controlKind"] == "VOLUME") { onVolumeKnobClick(); return }
             if (button.payload["controlKind"] == "MICROPHONE") { onMicKnobClick(); return }
@@ -362,6 +372,51 @@ class DeskViewModel(
         }
         if (requestWindowSelection(button, close = false)) return
         executeButtonClick(button)
+    }
+
+    private fun executeDeviceShortcut(button: GridButton) {
+        val host = _uiState.value.selectedHost ?: return
+        val key = "${host.id}:${button.payload["deviceId"]}"
+        if (key in _uiState.value.executingDeviceIds) return
+        _uiState.update { it.copy(executingDeviceIds = it.executingDeviceIds + key) }
+        jobsScope.launch {
+            try {
+                executeGridButton(button, host)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (error: Throwable) {
+                _uiState.update { it.copy(feedback = error.message ?: "Falha no controle do dispositivo") }
+            } finally {
+                _uiState.update { it.copy(executingDeviceIds = it.executingDeviceIds - key) }
+            }
+            refreshDevices(host)
+        }
+    }
+
+    private fun startDevicePolling(host: PairedHost) {
+        devicePollJob?.cancel()
+        if (host.controlShortcuts.none { it.destination == com.controldesk.domain.model.ShortcutDestination.DEVICE }) return
+        devicePollJob = jobsScope.launch {
+            while (kotlinx.coroutines.currentCoroutineContext().isActive) {
+                refreshDevices(host)
+                kotlinx.coroutines.delay(5_000)
+            }
+        }
+    }
+
+    private suspend fun refreshDevices(host: PairedHost) {
+        val version = (deviceRefreshVersions[host.id] ?: 0) + 1
+        deviceRefreshVersions[host.id] = version
+        try {
+            val catalog = agentGateway.loadDevices(host)
+            if (deviceRefreshVersions[host.id] == version) _uiState.update {
+                it.copy(deviceCatalogs = it.deviceCatalogs + (host.id to catalog), deviceErrors = it.deviceErrors - host.id)
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (error: Throwable) {
+            if (deviceRefreshVersions[host.id] == version) _uiState.update {
+                it.copy(deviceErrors = it.deviceErrors + (host.id to (error.message ?: "Agente indisponível")))
+            }
+        }
     }
 
     private fun requestWindowSelection(button: GridButton, close: Boolean): Boolean {
@@ -619,6 +674,7 @@ class DeskViewModel(
 
     private fun loadHost(host: PairedHost, showLoading: Boolean) {
         bindActiveTracking(host.id)
+        startDevicePolling(host)
         startRealtime(host)
         pendingHostLoad?.cancel()
         if (showLoading) {

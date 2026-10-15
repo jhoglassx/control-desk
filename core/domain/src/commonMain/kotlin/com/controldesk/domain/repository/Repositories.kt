@@ -22,6 +22,10 @@ interface HostPreferences {
 }
 
 interface AgentGateway {
+    suspend fun loadDevices(host: PairedHost): com.controldesk.domain.model.DeviceCatalog =
+        throw com.controldesk.domain.error.ControlDeskError.Generic("Atualize o agente para listar dispositivos.")
+    suspend fun executeDeviceCommand(host: PairedHost, command: com.controldesk.domain.model.DeviceCommand): com.controldesk.domain.model.ConnectedDevice =
+        throw com.controldesk.domain.error.ControlDeskError.Generic("Atualize o agente para controlar dispositivos.")
     suspend fun fetchHealth(host: PairedHost): Boolean?
     suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp>
     suspend fun loadInstalledApps(host: PairedHost): List<PinnedAppShortcut>

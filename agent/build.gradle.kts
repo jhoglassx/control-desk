@@ -1,7 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-val agentVersion = "1.1.12"
+val agentVersion = "1.1.14"
 
 plugins {
     alias(libs.plugins.kotlinJvm)
@@ -73,7 +73,7 @@ compose.desktop {
 val signAgentMacApp = tasks.register<Exec>("signAgentMacApp") {
     group = "distribution"
     description = "Assina e valida o app quando uma identidade persistente está configurada"
-    dependsOn("packageDistributionForCurrentOS")
+    dependsOn("createDistributable")
     onlyIf { System.getProperty("os.name").orEmpty().lowercase().contains("mac") }
     val appDir = layout.buildDirectory.dir("compose/binaries/main/app/ControlDeskAgent.app")
     commandLine("bash", file("package/resources/macos/sign-macos-app.sh").absolutePath, appDir.get().asFile.absolutePath)

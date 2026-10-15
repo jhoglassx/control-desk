@@ -125,7 +125,7 @@ Landscape (`compact`): ícone, título da janela e badge M{n}.
 
 `ControlShortcut` persiste os controles por host. `workspaceButtonsFor` reúne controles e apps na mesma grade; `AppLauncherTile` fornece o card e gestos de edição, com `AudioShortcutContent` para os knobs. Microfone e saída podem ser movidos, redimensionados, renomeados e removidos. Giro horário aumenta; anti-horário diminui; toque muta. Em edição, o card captura arraste para reorganizar.
 
-O cadastro MVI aceita ações de câmera/dispositivo por aplicativo ou URL, sempre executadas pelo agente. Descoberta de hardware e controle por capacidades são a próxima etapa, descrita em [device-shortcuts.md](device-shortcuts.md).
+O cadastro MVI aceita ações de câmera/dispositivo por aplicativo ou URL, sempre executadas pelo agente. O editor oferece dispositivos e ações retornados pelo agente 1.1.14. As capacidades e limitações por sistema estão descrita em [device-shortcuts.md](device-shortcuts.md).
 
 | Tile | Ação |
 |------|------|

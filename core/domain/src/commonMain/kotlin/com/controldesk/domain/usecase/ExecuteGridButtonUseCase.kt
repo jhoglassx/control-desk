@@ -15,6 +15,10 @@ class ExecuteGridButtonUseCase(
             throw ControlDeskError.Unauthorized()
         }
         return when (button.actionType) {
+            ActionType.REMOTE_DEVICE -> {
+                ExecuteDeviceShortcutUseCase(gateway)(button, host)
+                emptyList()
+            }
             ActionType.REMOTE_LAUNCH -> {
                 requirePayload(button, "target")
                 gateway.launchApp(host, button)

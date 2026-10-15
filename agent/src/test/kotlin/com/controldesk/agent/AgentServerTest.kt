@@ -84,6 +84,25 @@ open class AgentServerTest {
     }
 
     @Test
+    fun deviceRoutesRequireAuthenticationAndNeverSimulateControl() = runBlocking {
+        assertEquals(HttpStatusCode.Unauthorized, client.get("http://127.0.0.1:18741/devices").status)
+        val request = com.controldesk.protocol.DeviceActionRequest("camera", "SET_ENABLED", false)
+        assertEquals(HttpStatusCode.Unauthorized, client.post("http://127.0.0.1:18741/devices/actions") {
+            contentType(ContentType.Application.Json); setBody(request)
+        }.status)
+        val localSetup = client.get("http://127.0.0.1:18741/setup/devices")
+        assertEquals(HttpStatusCode.OK, localSetup.status)
+        val token = auth.pair(auth.currentPin() ?: auth.activatePin())!!
+        val catalog = client.get("http://127.0.0.1:18741/devices") { bearerAuth(token) }
+        assertEquals(HttpStatusCode.OK, catalog.status)
+        assertTrue(catalog.bodyAsText().contains("indisponível"))
+        val action = client.post("http://127.0.0.1:18741/devices/actions") {
+            bearerAuth(token); contentType(ContentType.Application.Json); setBody(request)
+        }
+        assertEquals(HttpStatusCode.InternalServerError, action.status)
+    }
+
+    @Test
     fun protectedRouteRequiresToken() {
         runBlocking {
             val unauthorized = client.get("http://127.0.0.1:18741/apps/running")

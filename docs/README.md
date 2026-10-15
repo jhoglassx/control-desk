@@ -2,7 +2,7 @@
 
 **Ponto único de documentação do projeto.** Tudo que é spec, guia ou backlog está nesta pasta `docs/`.
 
-**Estado verificado:** controle nativo macOS; Windows/Linux simulados. iOS requer projeto Xcode externo. Veja [architecture.md](architecture.md).
+**Estado verificado:** controle nativo macOS; apps Windows/Linux simulados, com suporte nativo parcial a dispositivos. iOS requer projeto Xcode externo. Veja [architecture.md](architecture.md).
 
 Painel remoto estilo Stream Deck — **Kotlin Multiplatform** (Android + iOS) + **agente desktop** (JVM). O celular controla o computador na LAN: apps, abas Chrome, volume e microfone.
 

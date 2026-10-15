@@ -137,7 +137,7 @@ agent            Ktor server + PlatformExecutor por SO
 
 - Tipo: `_controldesk._tcp.local.`
 - Nome: `ControlDesk-{ComputerName do macOS}` (fallback para hostname)
-- TXT: `version=1.1.12`
+- TXT: `version=1.1.14`
 - Falha no mDNS **não** impede o agente de rodar
 - Android (NSD) e iOS (Bonjour) procuram `_controldesk._tcp` na tela de pareamento; selecionando um resultado, host e porta são preenchidos. A entrada manual continua disponível.
 
@@ -220,7 +220,7 @@ Antes do servidor, no Mac:
 
 ## 5. API do agente (protocolo v1)
 
-**Versão health:** `1.1.12`
+**Versão health:** `1.1.14`
 **windowListerVersion:** `25`
 
 ### 5.1 Endpoints implementados
@@ -328,7 +328,7 @@ Ver `core/protocol/.../AgentDtos.kt`.
 
 ### 6.6 Windows / Linux (parcial)
 
-- **Windows/Linux:** `NativePlatformExecutor` delega ao `LoggingPlatformExecutor`, com apps e áudio simulados. Não há controle nativo implementado nessas plataformas.
+- **Windows/Linux:** `NativePlatformExecutor` delega ao `LoggingPlatformExecutor`, com apps e áudio simulados. O catálogo de dispositivos tem adaptadores nativos separados, com suporte parcial descrito em [device-shortcuts.md](device-shortcuts.md).
 
 ---
 
@@ -394,7 +394,7 @@ Documento completo: **[interaction-rules.md](interaction-rules.md)**.
 ./gradlew :composeApp:assembleDebug    # APK Android
 ```
 
-DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.12.dmg`
+DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.14.dmg`
 
 ### 9.2 Fluxo do usuário (produção)
 
@@ -482,4 +482,9 @@ DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.12.dmg`
 
 ## 14. Canal em tempo real
 
-`/ws?token=…` autentica pelo token de pareamento, envia snapshots de apps e áudio e aceita comandos com `id` para correlação. Veja o contrato e os intervalos atuais em [architecture.md](architecture.md). `/health` e o anúncio mDNS expõem a versão do agente (`1.1.12`).
+`/ws?token=…` autentica pelo token de pareamento, envia snapshots de apps e áudio e aceita comandos com `id` para correlação. Veja o contrato e os intervalos atuais em [architecture.md](architecture.md). `/health` e o anúncio mDNS expõem a versão do agente (`1.1.14`).
+
+
+## Catálogo de dispositivos (agente 1.1.14)
+
+`GET /devices` e `POST /devices/actions` exigem Bearer. O catálogo anuncia as capacidades reais por dispositivo e diagnósticos por adaptador. O comando revalida identidade/capacidade e só retorna sucesso após confirmar o estado. `GET /setup/devices` oferece o mesmo diagnóstico apenas em localhost para o onboarding. `/health` anuncia `deviceCatalogVersion=1` e `buildId`. Veja [o contrato completo](device-shortcuts.md).

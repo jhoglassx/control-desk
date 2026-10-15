@@ -74,7 +74,7 @@ O app macOS empacotado instala/atualiza LaunchAgent e abre configurações por p
 | `CONTROL_DESK_SKIP_INSTALL` | Evitar instalação automática do app empacotado |
 | `CONTROL_DESK_NO_RESPAWN` | Desativar respawn em desenvolvimento (`1`) |
 
-O pacote, `/health` e o TXT mDNS usam a versão `1.1.12`. O DMG contém app, atalho Applications e LEIA-ME; não inclui `docs/`. Os logs JVM Warn/Error podem ser enviados ao Firestore quando há configuração Firebase no classpath; a comunicação de controle na LAN não elimina essa telemetria.
+O pacote, `/health` e o TXT mDNS usam a versão `1.1.14`. O DMG contém app, atalho Applications e LEIA-ME; não inclui `docs/`. Os logs JVM Warn/Error podem ser enviados ao Firestore quando há configuração Firebase no classpath; a comunicação de controle na LAN não elimina essa telemetria.
 
 ## Identidade e associação de instâncias
 
@@ -86,4 +86,7 @@ O fluxo de publicação é `RunningAppsGridBuilder` → `ApplicationCatalogResol
 
 `PairedHost.controlShortcuts` armazena ações independentes das janelas. A projeção `workspaceButtons` reúne os controles e launchers antes da grade, permitindo aplicar as mesmas preferências de tamanho e organização. `AppLauncherTile` aceita conteúdo de áudio sem criar um segundo mecanismo de arraste. O editor publica intents em `PinnedAppsViewModel`, valida o destino e salva sobre o host mais recente.
 
-Os controles atuais reutilizam comandos autenticados existentes do agente para áudio, aplicativo e navegador. Não há acesso direto do mobile ao dispositivo. A descoberta e o controle nativo de hardware por capacidades ainda exigem novos adaptadores no agente; veja [device-shortcuts.md](device-shortcuts.md).
+Os controles atuais reutilizam comandos autenticados existentes do agente para áudio, aplicativo e navegador. Não há acesso direto do mobile ao dispositivo. A descoberta e ações nativas por capacidade usam `DeviceService` e adaptadores de plataforma no agente 1.1.14; veja [device-shortcuts.md](device-shortcuts.md).
+
+
+O agente 1.1.14 expõe `deviceCatalogVersion=1` e `buildId` em `/health`; a configuração local recebe a identidade em `/setup/health`. A identidade é calculada uma vez no início do serviço a partir dos JARs da aplicação/dependências. O instalador compara essa identidade com os arquivos instalados, reiniciando também quando há compilações distintas com a mesma versão. O onboarding consulta `/setup/devices` apenas em localhost e informa permissões/dependências/capacidades; as rotas remotas de dispositivos continuam autenticadas.

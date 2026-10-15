@@ -107,4 +107,62 @@ class ControlShortcutsViewModelTest {
         assertEquals(host.controlShortcuts.map { it.id }, prefs.getHosts().single().controlShortcuts.map { it.id })
         assertEquals("Fone", prefs.getHosts().single().controlShortcuts.first().name)
     }
+    @Test fun nativeEditorOffersOnlyCapabilitiesReportedByAgent() = runTest(dispatcher) {
+        val device = ConnectedDevice("cam", "USB Camera", DeviceKind.CAMERA, "native")
+        val gateway = FakeAgentGateway().apply { devices = DeviceCatalog(listOf(device)) }
+        val prefs = FakeHostPreferences(listOf(host()))
+        val vm = PinnedAppsViewModel(gateway, prefs)
+        vm.onIntent(PinnedAppsIntent.LoadInstalledApps(host()))
+        val draft = ControlShortcut("camera", "Camera", ControlShortcutKind.CAMERA, ShortcutDestination.DEVICE,
+            deviceId = device.id, deviceOperation = "TOGGLE_ENABLED")
+        vm.onIntent(PinnedAppsIntent.EditControl(draft))
+        runCurrent()
+        assertEquals(device, vm.uiState.value.deviceCatalog.devices.single())
+        vm.onIntent(PinnedAppsIntent.SaveControl)
+        runCurrent()
+        assertNotNull(vm.uiState.value.controlError)
+        assertEquals(ControlShortcut.defaults(), prefs.getHosts().single().controlShortcuts)
+        gateway.devices = DeviceCatalog(listOf(device.copy(capabilities = listOf(DeviceCapability.SET_ENABLED))))
+        vm.onIntent(PinnedAppsIntent.LoadDevices)
+        runCurrent()
+        vm.onIntent(PinnedAppsIntent.SaveControl)
+        runCurrent()
+        assertEquals(draft, prefs.getHosts().single().controlShortcuts.last())
+    }
+
+    @Test fun nativeCommandsGuardDoubleTapAndDisconnectedCardsKeepSizeAndPosition() = runTest(dispatcher) {
+        val camera = ConnectedDevice("real-camera", "Camera", DeviceKind.CAMERA, "native", listOf(DeviceCapability.SET_ENABLED), enabled = true)
+        val shortcut = ControlShortcut("camera-slot", "Camera", ControlShortcutKind.CAMERA, ShortcutDestination.DEVICE,
+            deviceId = camera.id, deviceOperation = "TOGGLE_ENABLED")
+        val configuredHost = host().copy(controlShortcuts = listOf(shortcut), appOrder = listOf(shortcut.id),
+            appTileSizes = mapOf("card:${shortcut.id}" to AppTileSize(2, 2)))
+        val gateway = FakeAgentGateway().apply {
+            devices = DeviceCatalog(listOf(camera))
+            deviceCommandGate = kotlinx.coroutines.CompletableDeferred()
+        }
+        val vm = DeskViewModel(FakeHostPreferences(listOf(configuredHost)), gateway, FakeAgentRealtime(),
+            ExecuteGridButtonUseCase(gateway), FakeIconCache(), coroutineScope = backgroundScope)
+        runCurrent()
+        val button = vm.uiState.value.workspaceButtonsFor(configuredHost.id).single()
+        vm.onButtonClick(button)
+        vm.onButtonClick(button)
+        runCurrent()
+        assertEquals(1, gateway.deviceCommands.size)
+        assertEquals("Executando…", vm.uiState.value.workspaceButtonsFor(configuredHost.id).single().payload["deviceStatus"])
+        gateway.deviceCommandGate!!.complete(Unit)
+        runCurrent()
+        assertEquals("Câmera bloqueada", vm.uiState.value.workspaceButtonsFor(configuredHost.id).single().payload["deviceStatus"])
+        gateway.devices = DeviceCatalog()
+        advanceTimeBy(5_001)
+        runCurrent()
+        val disconnected = vm.uiState.value.workspaceButtonsFor(configuredHost.id).single()
+        assertEquals(shortcut.id, disconnected.id)
+        assertEquals("2", disconnected.payload["spanRows"])
+        assertEquals("Desconectado / indisponível", disconnected.payload["deviceStatus"])
+        assertFalse(disconnected.isActive)
+        vm.onButtonClick(disconnected)
+        runCurrent()
+        assertEquals(1, gateway.deviceCommands.size)
+        assertTrue(vm.uiState.value.feedback.orEmpty().contains("indisponível"))
+    }
 }

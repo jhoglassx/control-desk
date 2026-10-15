@@ -49,4 +49,6 @@ Relay na nuvem, streaming, mouse remoto, sync entre celulares e loja de plugins.
 
 ## Dispositivos pelo agente
 
-Próxima entrega de dispositivos: catálogo por capacidades e comandos autenticados no agente, com adaptadores nativos macOS/Windows/Linux. Começar por descoberta e seleção de entrada/saída de áudio; seguir com câmeras e integrações por aplicativo/protocolo. Os novos atalhos já abrem aplicativo/painel web pelo agente, mas isso não constitui controle direto de periféricos. Contrato e critérios em [device-shortcuts.md](device-shortcuts.md).
+Entregue no agente 1.1.14: catálogo autenticado, capacidades, execução com ID exato e confirmação, editor mobile e adaptadores para inventário de câmera/áudio. Controles disponíveis: CoreAudio macOS, privacidade V4L2 e PulseAudio/PipeWire Linux, habilitar/desabilitar câmeras PnP Windows com privilégios existentes. Câmeras macOS e áudio Windows são apenas consulta.
+
+Próximas entregas: controle Core Audio Windows, controles adicionais de câmera e validação de comandos em hardware Windows/Linux. Contrato, dependências e limites em [device-shortcuts.md](device-shortcuts.md).

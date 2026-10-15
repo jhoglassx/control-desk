@@ -14,6 +14,20 @@ import io.ktor.http.contentType
 class AgentApiClient(
     private val httpClient: HttpClient,
 ) {
+    suspend fun devices(baseUrl: String, token: String): DeviceCatalogResponse =
+        httpClient.get("$baseUrl/devices") {
+            bearerAuth(token)
+            timeout { requestTimeoutMillis = 20_000 }
+        }.body()
+
+    suspend fun deviceAction(baseUrl: String, token: String, request: DeviceActionRequest): DeviceActionResponse =
+        httpClient.post("$baseUrl/devices/actions") {
+            bearerAuth(token)
+            timeout { requestTimeoutMillis = 30_000 }
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.body()
+
     suspend fun health(baseUrl: String): HealthResponse =
         httpClient.get("$baseUrl/health").body()
 

@@ -8,6 +8,8 @@ data class HealthResponse(
     val version: String = "1.1.0",
     val os: String? = null,
     val windowListerVersion: Int? = null,
+    val deviceCatalogVersion: Int = 0,
+    val buildId: String? = null,
     val accessibilityEnabled: Boolean? = null,
 )
 
@@ -114,6 +116,7 @@ data class SetupResponse(
     val backgroundService: Boolean = true,
     val accessibilityEnabled: Boolean? = null,
     val agentVersion: String = "unknown",
+    val buildId: String? = null,
 )
 
 @Serializable

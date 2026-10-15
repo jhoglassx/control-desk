@@ -18,6 +18,9 @@ sealed interface DeskIntent {
 }
 
 data class DeskUiState(
+    val deviceCatalogs: Map<String, com.controldesk.domain.model.DeviceCatalog> = emptyMap(),
+    val deviceErrors: Map<String, String> = emptyMap(),
+    val executingDeviceIds: Set<String> = emptySet(),
     val hosts: List<PairedHost> = emptyList(),
     val selectedHostIndex: Int = 0,
     val buttons: List<GridButton> = emptyList(),
@@ -47,7 +50,23 @@ data class DeskUiState(
         if (selectedHost?.id == hostId) buttons else cachedButtons[hostId].orEmpty()
 
     fun workspaceButtonsFor(hostId: String): List<GridButton> =
-        hosts.firstOrNull { it.id == hostId }?.workspaceButtons(buttonsFor(hostId)).orEmpty()
+        hosts.firstOrNull { it.id == hostId }?.workspaceButtons(buttonsFor(hostId)).orEmpty().map { button ->
+            val deviceId = button.payload["deviceId"] ?: return@map button
+            val catalog = deviceCatalogs[hostId]
+            val device = catalog?.devices?.singleOrNull { it.id == deviceId }
+            val status = when {
+                "$hostId:$deviceId" in executingDeviceIds -> "Executando…"
+                hostId in deviceErrors -> "Estado indisponível"
+                catalog == null -> "Consultando agente…"
+                device == null -> "Desconectado / indisponível"
+                device.enabled == false -> "Câmera bloqueada"
+                device.muted == true -> "Mudo"
+                device.isDefault == true -> "Dispositivo padrão"
+                device.level != null -> "${device.level}%"
+                else -> "Disponível"
+            }
+            button.copy(payload = button.payload + ("deviceStatus" to status))
+        }
 
     fun listHintFor(hostId: String): String? =
         if (selectedHost?.id == hostId) listHint else cachedListHints[hostId]

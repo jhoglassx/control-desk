@@ -22,6 +22,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Language
@@ -229,6 +231,8 @@ fun AppLauncherTile(
                 contentAlignment = Alignment.Center,
             ) {
                 val controlIcon = when (button.payload["controlKind"]) {
+                    "VOLUME" -> Icons.Default.VolumeUp
+                    "MICROPHONE" -> Icons.Default.Mic
                     "CAMERA" -> Icons.Default.CameraAlt
                     "DEVICE" -> Icons.Default.Devices
                     "WEBSITE" -> Icons.Default.Language
@@ -268,6 +272,10 @@ fun AppLauncherTile(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
             )
+        }
+        if (!reorderMode) button.payload["deviceStatus"]?.let { status ->
+            Text(status, color = DeskColors.TextMuted, fontSize = 8.sp, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp))
         }
         if (reorderMode && isSelectedForReorder) {
             Text(

@@ -18,6 +18,9 @@ import com.controldesk.protocol.BrowserTabSwitchRequest
 import com.controldesk.protocol.MicRequest
 import com.controldesk.protocol.VolumeRequest
 import com.controldesk.protocol.agentBaseUrl
+import io.ktor.client.statement.bodyAsText
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.ResponseException
 import io.ktor.http.HttpStatusCode
@@ -27,6 +30,43 @@ import kotlinx.coroutines.CancellationException
 class AgentGatewayImpl(
     private val api: AgentApiClient,
 ) : AgentGateway {
+
+    override suspend fun loadDevices(host: PairedHost): com.controldesk.domain.model.DeviceCatalog = try { mapErrors {
+        requireToken(host)
+        val response = api.devices(host.baseUrl(), host.token)
+        com.controldesk.domain.model.DeviceCatalog(response.devices.mapNotNull(::mapDevice), response.diagnostics)
+    } } catch (error: ControlDeskError.Generic) {
+        if (error.message?.contains("(404)") == true) throw ControlDeskError.Generic("Agente desatualizado. Instale o Control Desk Agent 1.1.13 ou superior para listar dispositivos.")
+        throw error
+    }
+
+    override suspend fun executeDeviceCommand(host: PairedHost, command: com.controldesk.domain.model.DeviceCommand): com.controldesk.domain.model.ConnectedDevice = mapErrors {
+        requireToken(host)
+        val response = try {
+            api.deviceAction(host.baseUrl(), host.token,
+                com.controldesk.protocol.DeviceActionRequest(command.deviceId, command.action.name, command.booleanValue, command.level))
+        } catch (error: ResponseException) {
+            if (error.response.status == HttpStatusCode.Unauthorized) throw error
+            val message = runCatching {
+                com.controldesk.protocol.AgentJson.parseToJsonElement(error.response.bodyAsText()).jsonObject["message"]?.jsonPrimitive?.content
+            }.getOrNull()
+            throw ControlDeskError.Generic(message ?: "O agente recusou o comando de dispositivo (${error.response.status.value}).")
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Throwable) {
+            if (isOffline(error)) throw ControlDeskError.Generic("Não foi possível confirmar a ação no dispositivo. Atualize o estado antes de tentar novamente.")
+            throw error
+        }
+        check(response.device.id == command.deviceId) { "O agente retornou outro dispositivo; resultado não confirmado." }
+        check(response.confirmed) { "O agente não confirmou o estado do dispositivo. Atualize antes de tentar novamente." }
+        mapDevice(response.device) ?: error("Resposta de dispositivo incompatível")
+    }
+
+    private fun mapDevice(info: com.controldesk.protocol.DeviceInfo): com.controldesk.domain.model.ConnectedDevice? {
+        val kind = com.controldesk.domain.model.DeviceKind.entries.singleOrNull { it.name == info.kind } ?: return null
+        return com.controldesk.domain.model.ConnectedDevice(info.id, info.name, kind, info.adapter,
+            info.capabilities.mapNotNull { value -> com.controldesk.domain.model.DeviceCapability.entries.singleOrNull { it.name == value } },
+            info.enabled, info.muted, info.level, info.isDefault, info.notice)
+    }
 
     override suspend fun fetchHealth(host: PairedHost): Boolean? = mapErrors {
         api.health(host.baseUrl()).accessibilityEnabled

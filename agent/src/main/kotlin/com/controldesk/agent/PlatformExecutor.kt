@@ -12,6 +12,10 @@ import com.controldesk.protocol.VolumeRequest
 import com.controldesk.agent.macos.MacFileBrowser
 
 interface PlatformExecutor {
+    fun devices(): com.controldesk.protocol.DeviceCatalogResponse = com.controldesk.protocol.DeviceCatalogResponse(
+        diagnostics = mapOf("platform" to "Catálogo de dispositivos indisponível neste executor"))
+    fun executeDeviceAction(request: com.controldesk.protocol.DeviceActionRequest): com.controldesk.protocol.DeviceActionResponse =
+        error("Controle de dispositivos indisponível neste executor")
     val osName: String
     fun listRunningApps(includeIcons: Boolean): List<RunningAppInfo>
     fun listInstalledApps(): List<InstalledAppInfo>
@@ -76,6 +80,9 @@ class LoggingPlatformExecutor : PlatformExecutor {
 }
 
 class NativePlatformExecutor : PlatformExecutor {
+    private val deviceService by lazy { com.controldesk.agent.devices.DeviceService.native() }
+    override fun devices() = deviceService.catalog()
+    override fun executeDeviceAction(request: com.controldesk.protocol.DeviceActionRequest) = deviceService.execute(request)
     private val os = System.getProperty("os.name").lowercase()
     private val isMac = os.contains("mac")
     private val fallback = LoggingPlatformExecutor()

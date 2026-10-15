@@ -1,84 +1,100 @@
-# Atalhos de áudio, câmera e dispositivos
+# Dispositivos e ações pelo agente
 
-Revisão de 15/10/2026. Este documento separa o que está implementado do contrato proposto para controle direto de hardware.
+Atualizado em 15/10/2026. Requer **agente 1.1.14** (`deviceCatalogVersion=1`) e o APK desta entrega.
 
-## Requisitos confirmados
+## Fluxo implementado
 
-- Microfone e saída de áudio devem participar da mesma grade dos aplicativos, com identidade, posição e tamanho persistidos por computador.
-- O usuário deve poder cadastrar ações de câmera e outros dispositivos.
-- Todo comando remoto deve passar pelo agente: **mobile → agente autenticado → sistema operacional / integração / dispositivo**. O celular não acessa diretamente a câmera ou seus serviços de rede.
-- A descoberta futura deve considerar dispositivos disponíveis no PC/notebook, sem regras por marca, e informar capacidades reais em macOS, Windows e Linux.
-- A referência de experiência é o Stream Deck: escolher ação, configurar destino e colocar o card na grade. Isso não implica compatibilidade com seus plugins.
+1. Na tela principal, toque em **+ / Adicionar atalho** → **Adicionar controle ou dispositivo**.
+2. Escolha câmera, microfone, saída de áudio ou outro dispositivo.
+3. Escolha **Dispositivo detectado pelo agente** e aguarde a descoberta.
+4. Selecione o dispositivo e uma ação suportada. Um dispositivo sem capacidades aparece para consulta, com a limitação explicada; não é possível salvar uma ação inexistente.
+5. Defina o nome e salve. Reordenação e tamanhos 1×1, 2×1, 2×2 e 1×2 continuam disponíveis.
 
-## Revisão do layout e fluxo anterior
+O caminho completo é **mobile → API autenticada do agente → adaptador nativo → dispositivo**. Não há acesso direto do celular ao periférico e não é necessário integrar cada aplicativo para os controles nativos suportados.
 
-Volume e microfone eram inseridos pelo componente visual como duas células reservadas antes dos aplicativos. O layout impedia arrastar apps para essas células; os controles não tinham preferências próprias de tamanho/ordem. O cadastro existente aceitava somente aplicativos com caminho opcional de projeto, documento ou pasta.
+As alternativas **Abrir aplicativo** e **Abrir painel web** permanecem disponíveis, mas não representam controle direto de hardware. Os knobs antigos continuam controlando o áudio padrão do Mac; um atalho associado a dispositivo físico executa a ação escolhida, sem confundir o dispositivo com o áudio padrão.
 
-Agora a composição de workspace reúne launchers e controles persistentes antes de renderizar. A grade não reserva as duas primeiras posições. Cada controle usa o mesmo shell do card, seleção, arraste, elevação e redimensionamento dos aplicativos. Em edição, o knob não captura os gestos de ajuste de nível; o card inteiro pode ser movido. Fora da edição, o controle conserva toque para mute e arraste para nível.
+## Suporte entregue
 
-## Uso implementado
-
-1. Na tela principal, toque em **+ / Adicionar atalho**.
-2. Em **Controles e dispositivos**, toque em **Adicionar controle ou dispositivo**.
-3. Escolha saída de áudio, microfone, câmera, outro dispositivo ou site/painel web.
-4. Informe um nome. Para câmera/dispositivo/site, escolha um aplicativo instalado no Mac ou uma URL HTTP(S).
-5. Salve. O card aparece na grade. Use **Reorganizar** para arrastar ou alternar 1×1, 2×1, 2×2 e 1×2.
-6. Na lista de controles, use **Editar** ou **Remover**. A remoção explícita dos controles padrão permanece salva.
-
-O formulário é uma tela dedicada com intents e estado MVI, validação, indicação de gravação e feedback de erro. A seleção de aplicativo exibe seu ícone. O card de câmera/dispositivo tem ícone Material correspondente ao tipo de ação; não representa uma câmera detectada automaticamente.
-
-## Capacidades disponíveis nesta entrega
-
-| Ação | Execução | Limite |
+| Sistema / categoria | Descoberta | Ações |
 |---|---|---|
-| Saída de áudio | Agente ajusta nível/mute do dispositivo padrão do Mac | Não escolhe uma saída física específica |
-| Microfone | Agente ajusta nível/mute da entrada padrão do Mac | Não é o botão de mute interno de Teams/Zoom/OBS |
-| Câmera / dispositivo por aplicativo | Agente abre o aplicativo de controle selecionado | Não altera captura, zoom ou liga/desliga o hardware |
-| Câmera IP / painel web | Agente abre a URL no navegador do computador | Não transmite vídeo para o mobile nem envia comandos proprietários ao dispositivo |
-| Site | Mesmo comando remoto de abertura de URL | Não é `OPEN_URL` local ao celular |
+| macOS / câmeras | `system_profiler SPCameraDataType`, usando o UID do dispositivo | Consulta. Sem chave pública global de bloquear/liberar câmera neste adaptador; nenhuma sessão de captura é iniciada |
+| macOS / áudio | CoreAudio via JNA, com UID e direção entrada/saída | Selecionar padrão; mute e nível quando a propriedade principal existir e for gravável |
+| Windows / câmeras | PnP: classe Camera e dispositivos Image associados ao serviço USB Video | Habilitar/desabilitar quando o agente já tiver privilégios administrativos e o dispositivo não apresentar outro erro |
+| Windows / áudio | Endpoints MMDevice presentes via PnP | Consulta. Controle Core Audio de endpoints Windows ainda pendente |
+| Linux / câmeras | `/sys/class/video4linux` e `v4l2-ctl` | Bloquear/liberar privacidade somente quando o driver expõe `privacy` gravável |
+| Linux / áudio | `pactl`, PulseAudio ou compatibilidade PulseAudio do PipeWire | Selecionar padrão, mute e nível por entrada/saída; fontes monitor são excluídas |
 
-Não há descoberta automática de hardware nem endpoint de seleção de dispositivo nesta entrega. O catálogo existente é de **aplicativos instalados**, não de periféricos. O agente Windows/Linux continua com executores simulados; essas plataformas não devem ser tratadas como suporte de controle nativo pronto.
+Não existe suporte automático a todo periférico USB/Bluetooth ou a todo parâmetro de câmera. O catálogo cobre as categorias acima. Zoom, foco, exposição, protocolos de câmeras IP, plugins de fabricantes e captura em OBS/Teams/Zoom continuam fora desta entrega. O registro de adaptadores permite acrescentá-los sem codificar regras por fabricante no mobile.
 
-## Dados e arquitetura implementados
+No Windows, desabilitar o dispositivo afeta o sistema e alguns drivers exigem reinício. O agente não solicita elevação silenciosa. No Linux, privacidade não significa remover/desligar eletricamente o dispositivo. No macOS, não se apresenta uma câmera detectada como “ligada” ou “capturando”: disponibilidade não é captura.
 
-`PairedHost.controlShortcuts` persiste uma lista de `ControlShortcut`, com ID, nome, categoria, tipo de destino e alvo. Hosts antigos recebem os dois controles de áudio por padrão; uma lista explicitamente vazia permanece vazia. A edição usa as preferências mais recentes para preservar layout e pareamento.
+## Identidade, execução e confirmação
 
-`workspaceButtons` projeta os controles junto aos aplicativos para aplicar `appGridPositions`, `appOrder` e `appTileSizes["card:<id>"]`. Os controles ficam fora de `DockShortcutProjector` e `ShortcutWindowBinder`: não recebem janelas, monitor ou estado ativo de outro app. Favoritos de projeto continuam usando sua própria identidade.
+- O atalho guarda seu próprio ID, o ID nativo do dispositivo e a operação. Nome, posição e tamanho não dependem do estado do hardware.
+- IDs: UID de câmera e CoreAudio no Mac; InstanceId PnP no Windows; alias `/dev/v4l/by-id` ou caminho de hardware + índice de interface no Linux; nome persistente do servidor de áudio para PulseAudio/PipeWire. O fallback de câmera Linux pode mudar se a porta/caminho de hardware mudar.
+- Nomes iguais não identificam dispositivos. O agente reconsulta o catálogo a cada comando, valida capacidade/parâmetros e nunca usa outro dispositivo como fallback.
+- Alternar mute/disponibilidade consulta um estado recente e envia um comando explícito com o estado desejado. O mobile bloqueia toques concorrentes para o mesmo dispositivo durante a execução.
+- Depois do comando, o agente consulta o estado até cinco vezes e só retorna `confirmed=true` se confirmar a alteração. Falha, remoção ou resultado não confirmado não geram sucesso fictício e não causam reenvio automático.
+- O painel consulta o catálogo a cada cinco segundos quando o computador selecionado possui atalhos nativos, além da atualização após uma ação. Respostas antigas são descartadas por geração de requisição.
+- Um dispositivo desconectado conserva o card e seu layout, com indicação de indisponibilidade. Estado desconhecido não é apresentado como ativo. O estado de dispositivos fica separado do foco e das janelas de aplicativos.
 
-Os comandos reutilizam o contrato autenticado do agente: volume/microfone, abertura de app e abertura de navegador. Ações de câmera/dispositivo não acionam foco otimista de aplicativo, não substituem o catálogo e não fecham processos por toque longo. Nome e destino configurados permanecem independentes dos snapshots de janelas.
+## Contrato implementado
 
-## Próxima etapa: dispositivos reais pelo agente — proposta, não implementada
+Ambas as rotas exigem Bearer token de pareamento:
 
-O agente deve expor um catálogo por capacidades, com adaptadores de plataforma e integrações desacopladas:
+- `GET /devices` → `DeviceCatalogResponse { devices, diagnostics }`.
+- `POST /devices/actions` → `DeviceActionRequest { deviceId, action, booleanValue?, level? }`.
+- Resposta de comando → `DeviceActionResponse { device, confirmed }` com o estado confirmado.
 
-- **Identidade:** ID persistente fornecido pelo SO/driver, categoria, nome, adaptador, presença e capacidades. Não identificar hardware por índice na lista ou só pelo nome amigável.
-- **Descoberta autenticada:** proposta `GET /devices`, retornando dispositivos e operações suportadas. Ausência de dispositivo, falta de permissão e adaptador indisponível devem ser estados diferentes.
-- **Execução autenticada:** proposta `POST /devices/{id}/actions`, com ação tipada, parâmetros validados e ID de correlação. Revalidar presença/capacidade antes de executar; não selecionar outro dispositivo se o escolhido sumir.
-- **Estado:** snapshots/eventos de conexão, dispositivo padrão, nível/mute e resultado confirmado pelo adaptador. Não indicar câmera ligada ou ação concluída com base só no toque.
-- **Áudio:** adaptadores CoreAudio no macOS, Core Audio no Windows e PipeWire/PulseAudio/ALSA conforme disponibilidade no Linux. Permitir selecionar entrada/saída padrão e controlar nível/mute quando suportado.
-- **Câmera:** enumerar dispositivos e recursos expostos pelo SO/driver. Não pressupor uma chave global de ligar/desligar nem seleção global da câmera usada por todos os apps. Ações de captura/cena/filtro exigem integração com o aplicativo; controles de câmera IP exigem protocolo suportado.
-- **Integrações:** adaptador por API, como OBS ou fabricante, com configuração no agente. Segredos de integração devem ficar no armazenamento protegido do computador; o mobile referencia a conexão cadastrada.
-- **Outros dispositivos:** publicar apenas ações que o adaptador consegue executar; dispositivo desconhecido pode oferecer abertura de painel, sem inventar capacidades de controle.
+`DeviceInfo` informa `id`, `name`, `kind`, `adapter`, `capabilities`, estados opcionais (`enabled`, `muted`, `level`, `isDefault`) e `notice`. `diagnostics` distingue adaptadores indisponíveis de uma lista simplesmente vazia; a falha de um adaptador não esconde dispositivos de outros.
 
-O fluxo final de cadastro deve ser **tipo de ação → dispositivo encontrado pelo agente → capacidade disponível → parâmetros → nome/ícone → salvar**. O atalho permanece na grade se o dispositivo desconectar, com indicação de indisponibilidade, tamanho e ordem preservados.
+Ações de transporte: `SET_ENABLED`, `SET_MUTED`, `SET_LEVEL` (0–100), `SET_DEFAULT`. Operações do atalho incluem habilitar, desabilitar, alternar disponibilidade, mutar, desmutar, alternar mute, nível fixo e dispositivo padrão. Parâmetros são tipados; o mobile não envia comandos de shell nem scripts arbitrários.
 
-### Critérios de aceite para os adaptadores
+`ControlShortcut` preserva compatibilidade com os atalhos antigos de app/URL. `ShortcutDestination.DEVICE` e `ActionType.REMOTE_DEVICE` usam `ExecuteDeviceShortcutUseCase` → `AgentGateway` → `AgentApiClient`. O editor mantém estado/intents MVI. `DeviceService` valida e confirma ações; `DeviceAdapter` encapsula cada integração nativa. A API roda as consultas bloqueantes em `Dispatchers.IO`.
 
-Testar descoberta, dispositivos homônimos, mudança de porta, reconexão, remoção durante comando, falta de permissões, capacidade ausente, persistência e migração. Validar em máquinas reais dos três sistemas. Ações enviadas com resultado incerto não podem ser repetidas automaticamente. Abertura de painel e controle de hardware devem aparecer como ações distintas.
+## Instalação e permissões
 
-## Referências e validação
+- Atualize o agente para **1.1.14**. O build do DMG não atualiza a cópia já instalada. Preserve o pareamento atual; não desinstale o mobile para atualizar.
+- No Mac, CoreAudio e o inventário de câmeras usam APIs/ferramentas do sistema, sem instalar compiladores ou pacotes extras. Acessibilidade continua necessária para controle de janelas, mas não representa autorização global de câmera.
+- Windows requer PowerShell/PnpDevice. A capacidade de habilitar/desabilitar só é anunciada quando o processo já é administrador. O instalador Windows ainda não faz parte do projeto.
+- Linux requer `v4l-utils` para controles V4L2 e `pactl` com um servidor de áudio compatível. Permissões da sessão, grupo de vídeo e driver continuam aplicáveis. Não há fallback para comandos simulados de dispositivo.
+- O restante do controle de apps/áudio legado em Windows/Linux ainda usa executores simulados; estes novos adaptadores de dispositivo não tornam todo o agente multiplataforma completo.
 
-O modelo de integrações do produto de referência está descrito no [SDK Stream Deck](https://docs.elgato.com/streamdeck/sdk/guides/devices/) e no [controle de Cam Link Pro](https://help.elgato.com/hc/en-us/articles/360058671492-Cam-Link-Pro-How-to-Control-Multiview-with-Stream-Deck). São referências de interação e integração, sem dependência dessas APIs neste projeto.
+## Testes e limites
 
-A cobertura adicionada verifica migração de controles padrão, remoção persistida, validação de URL, destinos remotos, independência de identidade, preservação do layout mais recente ao salvar, cancelamento do formulário e tamanho/ordem de áudio após snapshot vazio. A compilação do APK instrumentado não equivale à validação visual ou a testes com periféricos reais.
+Cobertura de serviço: IDs homônimos, remoção, capacidades ausentes, parâmetros inválidos, adaptador com falha e ausência de confirmação. Fixtures de plataforma verificam câmera Mac sem captura, privilégios/IDs exatos no Windows e áudio Linux por nome persistente. Domínio/mobile cobrem serialização, alternância com estado recente, seleção de capacidades, toque duplicado, card desconectado e preservação de layout.
 
-### Execução registrada nesta revisão
+A leitura nativa de inventário de câmeras e áudio foi exercitada neste Mac, sem modificar propriedades ou iniciar captura. Windows/Linux usam fixtures nesta revisão; comandos de habilitar/desabilitar/mute/nível não foram executados em hardware real. Testes instrumentados compilados não equivalem à validação visual no telefone.
 
-Comando concluído com `BUILD SUCCESSFUL`:
+## Evolução
+
+Próximos adaptadores: controle de endpoints Windows, controles UVC/V4L2 adicionais de câmera, integrações de fabricantes e APIs de aplicativos quando necessárias. Novas capacidades devem ter identidade persistente, validação de permissão, leitura do estado e testes por plataforma antes de aparecer como ação disponível.
+
+Referências: [CoreAudio](https://developer.apple.com/documentation/coreaudio/kaudiohardwarepropertydefaultoutputdevice), [Windows PnP](https://learn.microsoft.com/en-us/powershell/module/pnpdevice/disable-pnpdevice), [controles V4L2](https://docs.kernel.org/userspace-api/media/v4l/ext-ctrls-camera.html). O modelo de catálogo/ações/configuração segue a referência de experiência do [Stream Deck](https://docs.elgato.com/streamdeck/sdk/guides/actions/), sem compatibilidade com seus plugins.
+
+## Onboarding de permissões
+
+Na primeira abertura, o agente consulta o inventário e mostra **Dispositivos e permissões**, com diagnóstico e botão de nova verificação. O fluxo de Acessibilidade continua sendo solicitado automaticamente no Mac, com confirmação manual obrigatória do sistema. A lista de câmeras não inicia captura e não pede acesso de captura sem necessidade.
+
+A rota local `GET /setup/devices` permite esse diagnóstico antes de parear um telefone; é bloqueada para clientes fora de localhost. A API remota `/devices` e os comandos continuam exigindo token. No Windows/Linux, permissões administrativas/grupos não são elevadas silenciosamente. Consulte [instalação e permissões](agent-install.md#permissões-na-primeira-abertura-agente-1114).
+
+### Correção de atualização na versão 1.1.14
+
+O serviço instalado pode manter uma compilação antiga em memória mesmo exibindo o mesmo número de versão. Isso foi confirmado por `/health` 1.1.13 e `/setup/devices` 404. A versão 1.1.14 compara `buildId` do serviço com os JARs instalados e reinicia quando necessário, incluindo alterações em dependências. O diagnóstico distingue esse caso de permissão negada e a janela exibe a compilação do serviço.
+
+## Validação desta entrega
+
+Comando concluído com sucesso:
 
 ```sh
-./gradlew :core:domain:allTests :core:data:allTests :composeApp:allTests \
-  :composeApp:assembleDebug :composeApp:assembleDebugAndroidTest
+./gradlew :agent:test :core:domain:allTests :core:protocol:allTests :core:data:allTests \
+  :composeApp:allTests :composeApp:assembleDebug :composeApp:assembleDebugAndroidTest \
+  :agent:packageInstallerDmg
 ```
 
-Os testes comuns executaram em Android/JVM e no simulador iOS ARM64; iOS x64 foi ignorado pelo ambiente. O APK de aplicação e o APK instrumentado foram gerados. Os testes instrumentados não foram executados, o APK não foi instalado no telefone nesta entrega e não houve validação de controle com periféricos reais. Nenhum adaptador de hardware novo foi entregue no agente.
+O teste opt-in `CONTROL_DESK_TEST_NATIVE_DEVICES=1 ./gradlew :agent:test --tests '*MacDeviceInventoryTest'` também passou, exercitando somente leitura. O APK instrumentado foi compilado; os testes instrumentados e a validação visual no telefone não foram executados nesta revisão. Os testes comuns executaram no simulador iOS ARM64; iOS x64 foi ignorado pelo ambiente.
+
+Após atualizar este Mac com `:agent:installMacos`, `/health` confirmou **1.1.14**, `deviceCatalogVersion=1` e identidade de compilação; `/setup/devices` retornou **200**, uma câmera, uma entrada e uma saída de áudio, sem diagnósticos de erro. O checksum do arquivo de tokens permaneceu igual. Nenhuma ação de alteração de dispositivo foi executada em hardware real.
+
+A nova assinatura ad hoc voltou a exigir confirmação de Acessibilidade pelo usuário; o instalador abriu os Ajustes automaticamente. Essa autorização continua pendente na última verificação, embora o catálogo de dispositivos funcione. Para distribuição com preservação de permissões entre atualizações, continua necessário configurar assinatura persistente adequada.

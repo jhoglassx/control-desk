@@ -9,7 +9,7 @@ Inventário conferido no código em 15/10/2026. “Implementada” significa que
 | Desk remoto | Launchers persistentes por aplicativo, seleção das janelas, foco otimista e vários hosts | Android; UI compartilhada também compila como target iOS, sem app Xcode versionado |
 | Pareamento | PIN de seis dígitos do agente, token Bearer persistido no host | Mobile ↔ agente na mesma LAN |
 | Apps e janelas | Listagem nativa de instâncias; um launcher por aplicativo, seleção por título/monitor e estado ativo/visível | Nativo no macOS, requer Acessibilidade |
-| Ação por instância | ID/PID da janela selecionada enviados por HTTP/WS e revalidados no agente; layout identificado pelo atalho persistente; fechar uma janela não termina o processo por contagem antiga | macOS; agente 1.1.12 |
+| Ação por instância | ID/PID da janela selecionada enviados por HTTP/WS e revalidados no agente; layout identificado pelo atalho persistente; fechar uma janela não termina o processo por contagem antiga | macOS; agente 1.1.14 |
 | Dock | Atalhos de apps fixos, placeholders e estado de encerramento | macOS |
 | Encerrar app | Toque longo e bloqueio de processos essenciais | macOS |
 | Navegador | Abrir URL, fechar navegador, listar/selecionar abas Chrome | macOS; ações disponíveis na API e nos templates configurados |
@@ -55,4 +55,4 @@ A [revisão de identidade](shortcut-identity-review.md) descreve a migração pa
 
 ## Atualização: controles na grade
 
-Microfone e saída de áudio compartilham movimento, tamanho e persistência com os aplicativos. O cadastro de controles inclui câmera/dispositivo por aplicativo ou URL, executados pelo agente. Isso abre o painel configurado; descoberta e controle direto de hardware em macOS/Windows/Linux ainda não estão implementados. Veja [device-shortcuts.md](device-shortcuts.md).
+Microfone e saída de áudio compartilham movimento, tamanho e persistência com os aplicativos. O cadastro de controles inclui câmera/dispositivo por aplicativo ou URL, executados pelo agente. As alternativas de app/URL abrem o painel configurado. O agente 1.1.14 também oferece descoberta e controles nativos por capacidade, com limites por sistema. Veja [device-shortcuts.md](device-shortcuts.md).

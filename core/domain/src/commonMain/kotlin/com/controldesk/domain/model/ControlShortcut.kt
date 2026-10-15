@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 enum class ControlShortcutKind { VOLUME, MICROPHONE, CAMERA, DEVICE, WEBSITE }
 
 @Serializable
-enum class ShortcutDestination { APPLICATION, URL }
+enum class ShortcutDestination { APPLICATION, URL, DEVICE }
 
 /** User-owned action; never participates in runtime window reconciliation. */
 @Serializable
@@ -16,9 +16,18 @@ data class ControlShortcut(
     val kind: ControlShortcutKind,
     val destination: ShortcutDestination = ShortcutDestination.APPLICATION,
     val target: String = "",
+    val deviceId: String? = null,
+    val deviceOperation: String? = null,
+    val deviceLevel: Int = 50,
 ) {
     fun validationError(): String? = when {
         name.isBlank() -> "Informe um nome para o atalho."
+        destination == ShortcutDestination.DEVICE -> when {
+            deviceId.isNullOrBlank() -> "Selecione um dispositivo detectado pelo agente."
+            DeviceOperation.entries.none { it.name == deviceOperation } -> "Selecione uma ação disponível."
+            deviceOperation == "SET_LEVEL" && deviceLevel !in 0..100 -> "Nível deve estar entre 0 e 100."
+            else -> null
+        }
         kind == ControlShortcutKind.VOLUME || kind == ControlShortcutKind.MICROPHONE -> null
         target.isBlank() -> "Escolha um aplicativo ou informe a URL do dispositivo."
         destination == ShortcutDestination.URL && !isWebUrl(target.trim()) -> "Use uma URL http:// ou https:// válida."
@@ -28,14 +37,18 @@ data class ControlShortcut(
     fun toButton() = GridButton(
         id = id,
         label = name,
-        actionType = when (kind) {
+        actionType = if (destination == ShortcutDestination.DEVICE) ActionType.REMOTE_DEVICE else when (kind) {
             ControlShortcutKind.VOLUME -> ActionType.REMOTE_VOLUME
             ControlShortcutKind.MICROPHONE -> ActionType.REMOTE_MIC_MUTE
             else -> if (destination == ShortcutDestination.URL) ActionType.REMOTE_BROWSER_OPEN_SITE else ActionType.REMOTE_LAUNCH
         },
         payload = buildMap {
             put("controlKind", kind.name)
-            when (kind) {
+            if (destination == ShortcutDestination.DEVICE) {
+                put("deviceId", deviceId.orEmpty())
+                put("deviceOperation", deviceOperation.orEmpty())
+                put("deviceLevel", deviceLevel.toString())
+            } else when (kind) {
                 ControlShortcutKind.VOLUME -> put("delta", "0")
                 ControlShortcutKind.MICROPHONE -> put("toggle", "true")
                 else -> if (destination == ShortcutDestination.URL) put("url", target.trim()) else {

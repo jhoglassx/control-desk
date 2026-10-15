@@ -19,11 +19,21 @@ class PinnedAppsViewModel(
     private val _uiState = MutableStateFlow(PinnedAppsUiState())
     val uiState: StateFlow<PinnedAppsUiState> = _uiState.asStateFlow()
     private var activeHost: PairedHost? = null
+    private var devicesJob: kotlinx.coroutines.Job? = null
 
     fun onIntent(intent: PinnedAppsIntent) {
         when (intent) {
-            is PinnedAppsIntent.EditControl -> _uiState.update { it.copy(editingControl = intent.shortcut, controlError = null) }
-            is PinnedAppsIntent.UpdateControl -> _uiState.update { it.copy(editingControl = intent.shortcut, controlError = null) }
+            PinnedAppsIntent.LoadDevices -> loadDevices()
+            is PinnedAppsIntent.EditControl -> {
+                _uiState.update { it.copy(editingControl = intent.shortcut, controlError = null) }
+                loadDevices()
+            }
+            is PinnedAppsIntent.UpdateControl -> {
+                val previous = _uiState.value.editingControl
+                _uiState.update { it.copy(editingControl = intent.shortcut, controlError = null) }
+                if (intent.shortcut.destination == com.controldesk.domain.model.ShortcutDestination.DEVICE &&
+                    (previous?.destination != intent.shortcut.destination || previous.kind != intent.shortcut.kind)) loadDevices()
+            }
             PinnedAppsIntent.CancelControl -> _uiState.update { it.copy(editingControl = null, controlError = null) }
             PinnedAppsIntent.SaveControl -> saveControl()
             is PinnedAppsIntent.RemoveControl -> changeControls { controls -> controls.filterNot { it.id == intent.id } }
@@ -54,10 +64,33 @@ class PinnedAppsViewModel(
         }
     }
 
+    private fun loadDevices() {
+        val host = activeHost ?: return
+        devicesJob?.cancel()
+        _uiState.update { it.copy(isLoadingDevices = true, devicesError = null) }
+        devicesJob = viewModelScope.launch {
+            try {
+                val catalog = agentGateway.loadDevices(host)
+                _uiState.update { it.copy(deviceCatalog = catalog, isLoadingDevices = false) }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (error: Throwable) {
+                _uiState.update { it.copy(isLoadingDevices = false, devicesError = error.message ?: "Não foi possível consultar os dispositivos") }
+            }
+        }
+    }
+
     private fun saveControl() {
         val shortcut = _uiState.value.editingControl ?: return
         val error = shortcut.validationError()
         if (error != null) { _uiState.update { it.copy(controlError = error) }; return }
+        if (shortcut.destination == com.controldesk.domain.model.ShortcutDestination.DEVICE) {
+            val device = _uiState.value.deviceCatalog.devices.singleOrNull { it.id == shortcut.deviceId }
+            val operation = com.controldesk.domain.model.DeviceOperation.entries.singleOrNull { it.name == shortcut.deviceOperation }
+            if (device == null || operation?.capability !in device.capabilities) {
+                _uiState.update { it.copy(controlError = "Atualize a lista e selecione um dispositivo e uma ação disponíveis.") }
+                return
+            }
+        }
         val saved = shortcut.copy(name = shortcut.name.trim(), target = shortcut.target.trim())
         changeControls { controls ->
             if (controls.any { it.id == saved.id }) controls.map { if (it.id == saved.id) saved else it }
@@ -84,6 +117,10 @@ class PinnedAppsViewModel(
     }
 
     private fun loadInstalledApps(host: PairedHost) {
+        if (activeHost?.id != host.id) {
+            devicesJob?.cancel()
+            _uiState.update { it.copy(deviceCatalog = com.controldesk.domain.model.DeviceCatalog(), devicesError = null, isLoadingDevices = false) }
+        }
         activeHost = host
         _uiState.update { it.copy(isLoadingApps = true, appsError = null) }
         viewModelScope.launch {

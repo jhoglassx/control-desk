@@ -113,7 +113,7 @@ private fun PinnedAppsListScreen(
                 Button(onClick = {
                     onIntent(PinnedAppsIntent.EditControl(ControlShortcut(
                         id = "control-${kotlin.random.Random.nextLong().toULong()}",
-                        name = "", kind = ControlShortcutKind.CAMERA,
+                        name = "", kind = ControlShortcutKind.CAMERA, destination = ShortcutDestination.DEVICE,
                     )))
                 }) { Text("Adicionar controle ou dispositivo") }
                 state.controlError?.let { Text(it, color = DeskColors.Warning) }
