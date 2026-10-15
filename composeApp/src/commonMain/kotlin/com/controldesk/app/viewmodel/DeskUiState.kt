@@ -1,5 +1,6 @@
 package com.controldesk.app.viewmodel
 
+import com.controldesk.domain.model.workspaceButtons
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
 
@@ -44,6 +45,9 @@ data class DeskUiState(
 
     fun buttonsFor(hostId: String): List<GridButton> =
         if (selectedHost?.id == hostId) buttons else cachedButtons[hostId].orEmpty()
+
+    fun workspaceButtonsFor(hostId: String): List<GridButton> =
+        hosts.firstOrNull { it.id == hostId }?.workspaceButtons(buttonsFor(hostId)).orEmpty()
 
     fun listHintFor(hostId: String): String? =
         if (selectedHost?.id == hostId) listHint else cachedListHints[hostId]

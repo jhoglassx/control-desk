@@ -41,6 +41,9 @@ import com.controldesk.app.theme.DeskColors
 import com.controldesk.app.util.rememberBase64Image
 import com.controldesk.app.viewmodel.PinnedAppsIntent
 import com.controldesk.app.viewmodel.PinnedAppsUiState
+import com.controldesk.domain.model.ControlShortcut
+import com.controldesk.domain.model.ControlShortcutKind
+import com.controldesk.domain.model.ShortcutDestination
 import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.PinnedAppShortcut
 
@@ -51,6 +54,10 @@ fun PinnedAppsScreen(
     onBack: () -> Unit,
     onIntent: (PinnedAppsIntent) -> Unit,
 ) {
+    if (state.editingControl != null) {
+        ControlShortcutEditor(state, onIntent)
+        return
+    }
     val selectedApp = host.pinnedApps.firstOrNull { it.id == state.selectedAppId }
     if (selectedApp != null) {
         MacPathPickerScreen(
@@ -89,9 +96,9 @@ private fun PinnedAppsListScreen(
             Spacer(Modifier.weight(1f))
             Text("${pinned.size} fixos", color = DeskColors.TextMuted, fontSize = 12.sp)
         }
-        Text("Apps fixos", color = DeskColors.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Text("Atalhos", color = DeskColors.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Text(
-            "Escolha o que aparece primeiro e o que cada app abre no Mac.",
+            "Adicione apps, áudio e painéis de câmera ou dispositivos. Organize tudo na tela principal.",
             color = DeskColors.TextMuted,
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
@@ -101,6 +108,28 @@ private fun PinnedAppsListScreen(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item(key = "control-heading") {
+                SectionHeading("CONTROLES E DISPOSITIVOS", "Áudio, câmeras e outros dispositivos como cards da grade.")
+                Button(onClick = {
+                    onIntent(PinnedAppsIntent.EditControl(ControlShortcut(
+                        id = "control-${kotlin.random.Random.nextLong().toULong()}",
+                        name = "", kind = ControlShortcutKind.CAMERA,
+                    )))
+                }) { Text("Adicionar controle ou dispositivo") }
+                state.controlError?.let { Text(it, color = DeskColors.Warning) }
+            }
+            items(host.controlShortcuts, key = { "control-${it.id}" }) { shortcut ->
+                Card(colors = CardDefaults.cardColors(containerColor = DeskColors.SurfaceRaised)) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(shortcut.name, color = DeskColors.TextPrimary)
+                            Text(shortcut.kind.displayName(), color = DeskColors.TextMuted, fontSize = 12.sp)
+                        }
+                        TextButton(onClick = { onIntent(PinnedAppsIntent.EditControl(shortcut)) }) { Text("Editar") }
+                        TextButton(enabled = !state.isSavingControl, onClick = { onIntent(PinnedAppsIntent.RemoveControl(shortcut.id)) }) { Text("Remover") }
+                    }
+                }
+            }
             if (pinned.isNotEmpty()) {
                 item(key = "pinned-heading") {
                     SectionHeading("FIXADOS", "Toque em um app para abrir. Você pode associar um projeto, pasta ou arquivo.")
@@ -265,7 +294,7 @@ private fun MacPathPickerScreen(
 }
 
 @Composable
-private fun AppIcon(app: PinnedAppShortcut, size: androidx.compose.ui.unit.Dp) {
+internal fun AppIcon(app: PinnedAppShortcut, size: androidx.compose.ui.unit.Dp) {
     val icon = rememberBase64Image(app.iconBase64)
     Box(
         Modifier.size(size).clip(RoundedCornerShape(12.dp)).background(DeskColors.Surface),

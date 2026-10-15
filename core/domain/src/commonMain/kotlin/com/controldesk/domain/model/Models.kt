@@ -31,6 +31,7 @@ data class PairedHost(
     val pinnedApps: List<PinnedAppShortcut> = emptyList(),
     val appOrder: List<String> = emptyList(),
     val applicationShortcuts: List<ApplicationShortcut> = emptyList(),
+    val controlShortcuts: List<ControlShortcut> = ControlShortcut.defaults(),
     val appTileSizes: Map<String, AppTileSize> = emptyMap(),
     val appGridPositions: Map<String, Int> = emptyMap(),
     val appLayoutIdentities: Map<String, String> = emptyMap(),

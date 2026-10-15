@@ -646,7 +646,7 @@ class DeskViewModelTest {
         )
         runCurrent()
 
-        val initialIds = viewModel.uiState.value.buttons.map(GridButton::id)
+        val initialIds = viewModel.uiState.value.workspaceButtonsFor(host.id).map(GridButton::id)
         viewModel.onIntent(DeskIntent.ResizeAppTile(initialIds[1]))
         runCurrent()
 
@@ -676,8 +676,8 @@ class DeskViewModelTest {
         )
         runCurrent()
 
-        val buttons = viewModel.uiState.value.buttons
-        val positions = mapOf(buttons[0].id to 10, buttons[1].id to 11)
+        val buttons = viewModel.uiState.value.workspaceButtonsFor(host.id)
+        val positions = buttons.mapIndexed { index, button -> button.id to index + 10 }.toMap()
         viewModel.onIntent(DeskIntent.PreviewAppGridPositions(positions))
         viewModel.onIntent(DeskIntent.FinishAppReorderDrag)
         runCurrent()
@@ -1378,8 +1378,8 @@ class DeskViewModelTest {
 
         val refreshedStudio = viewModel.uiState.value.buttons.single { it.payload["bundlePath"] == studioBundle }
         val savedHost = preferences.getHosts().single()
-        assertEquals(chosenOrder.map { id -> if (id == studioButton.id) refreshedStudio.id else id }, savedHost.appOrder.take(3))
-        assertEquals(1, savedHost.appGridPositions[refreshedStudio.id])
+        assertEquals(chosenOrder.map { id -> if (id == studioButton.id) refreshedStudio.id else id }, savedHost.appOrder.filter { it in chosenOrder })
+        assertEquals(savedHost.appOrder.indexOf(refreshedStudio.id), savedHost.appGridPositions[refreshedStudio.id])
         assertEquals("2", refreshedStudio.payload["spanColumns"])
     }
 

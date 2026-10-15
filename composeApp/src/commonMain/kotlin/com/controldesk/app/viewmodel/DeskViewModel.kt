@@ -12,6 +12,7 @@ import com.controldesk.domain.model.ActionType
 import com.controldesk.domain.model.AppTileSize
 import com.controldesk.domain.model.AgentRealtimeEvent
 import com.controldesk.domain.model.AudioState
+import com.controldesk.domain.model.workspaceButtons
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.PinnedAppShortcut
@@ -164,7 +165,7 @@ class DeskViewModel(
                     selectedAppIdForReorder = intent.appId,
                     selectedAppDragOffsetX = 0f,
                     selectedAppDragOffsetY = 0f,
-                    selectedAppDragStartIndex = state.buttons.indexOfFirst { button -> button.id == intent.appId }.takeIf { index -> index >= 0 },
+                    selectedAppDragStartIndex = state.selectedHost?.workspaceButtons(state.buttons)?.indexOfFirst { button -> button.id == intent.appId }?.takeIf { index -> index >= 0 },
                     selectedAppDragCellWidth = intent.cellWidth,
                     selectedAppDragCellHeight = intent.cellHeight,
                 ) else state
@@ -187,7 +188,7 @@ class DeskViewModel(
 
     private fun finishAppReorderDrag() {
         val state = _uiState.value
-        val host = state.selectedHost?.let { persistGridLayout(it, state.buttons) }
+        val host = state.selectedHost?.let { persistGridLayout(it, it.workspaceButtons(state.buttons)) }
         _uiState.update {
             it.copy(
                 selectedAppIdForReorder = null,
@@ -214,9 +215,9 @@ class DeskViewModel(
 
     private fun resizeAppTile(buttonId: String) {
         val state = _uiState.value
-        val host = state.selectedHost?.let { persistGridLayout(it, state.buttons) } ?: return
+        val host = state.selectedHost?.let { persistGridLayout(it, it.workspaceButtons(state.buttons)) } ?: return
         val sizes = listOf(1 to 1, 2 to 1, 2 to 2, 1 to 2)
-        val currentButton = state.buttons.firstOrNull { it.id == buttonId } ?: return
+        val currentButton = host.workspaceButtons(state.buttons).firstOrNull { it.id == buttonId } ?: return
         val sizeKeys = tileSizeKeys(currentButton)
         val windowKeys = tileSizeKeys(currentButton)
         val currentSize = currentButton.tileSpanColumns() to currentButton.tileSpanRows()
@@ -284,7 +285,7 @@ class DeskViewModel(
         closed: GridButton,
         placeholder: GridButton?,
     ): PairedHost {
-        val layout = persistGridLayout(host, buttons)
+        val layout = persistGridLayout(host, host.workspaceButtons(buttons))
         if (placeholder == null || placeholder.id == closed.id) return layout
 
         val positions = layout.appGridPositions.toMutableMap()
@@ -349,6 +350,16 @@ class DeskViewModel(
     }
 
     fun onButtonClick(button: GridButton) {
+        if (button.payload["controlKind"] != null) {
+            if (button.payload["controlKind"] == "VOLUME") { onVolumeKnobClick(); return }
+            if (button.payload["controlKind"] == "MICROPHONE") { onMicKnobClick(); return }
+            val host = _uiState.value.selectedHost ?: return
+            jobsScope.launch {
+                runCatching { executeGridButton(button, host) }
+                    .onFailure { error -> _uiState.update { it.copy(feedback = error.message ?: "Falha ao executar atalho") } }
+            }
+            return
+        }
         if (requestWindowSelection(button, close = false)) return
         executeButtonClick(button)
     }
@@ -422,6 +433,7 @@ class DeskViewModel(
     }
 
     fun onAppClose(button: GridButton) {
+        if (button.payload["controlKind"] != null) return
         if (requestWindowSelection(button, close = true)) return
         executeAppClose(button)
     }

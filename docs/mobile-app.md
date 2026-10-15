@@ -119,11 +119,13 @@ Landscape (`compact`): ícone, título da janela e badge M{n}.
 
 **Clique:** `onAppClick(button)` → `DeskViewModel.onButtonClick` (abre/foca).
 
-**Toque longo:** `onAppClose(button)` → `DeskViewModel.onAppClose` (encerra o app). Tiles daquele app somem na hora; o poll recoloca o ícone da Dock se estiver fixado. Finder e processos de sistema não fecham.
+**Toque longo:** `onAppClose(button)` → `DeskViewModel.onAppClose`; seleciona a instância quando há várias e fecha a janela identificada. O launcher conserva posição e tamanho. Controles de dispositivo não fecham processos por esse gesto.
 
-### 3.6 Tiles de sistema (`VolumeAppTile`, `MicAppTile`)
+### 3.6 Controles de áudio e dispositivos
 
-Knobs rotativos na mesma grade dos apps, **sem card nem título** — só o disco com o % no centro. Giro horário aumenta; anti-horário diminui; toque muta (anel vermelho).
+`ControlShortcut` persiste os controles por host. `workspaceButtonsFor` reúne controles e apps na mesma grade; `AppLauncherTile` fornece o card e gestos de edição, com `AudioShortcutContent` para os knobs. Microfone e saída podem ser movidos, redimensionados, renomeados e removidos. Giro horário aumenta; anti-horário diminui; toque muta. Em edição, o card captura arraste para reorganizar.
+
+O cadastro MVI aceita ações de câmera/dispositivo por aplicativo ou URL, sempre executadas pelo agente. Descoberta de hardware e controle por capacidades são a próxima etapa, descrita em [device-shortcuts.md](device-shortcuts.md).
 
 | Tile | Ação |
 |------|------|

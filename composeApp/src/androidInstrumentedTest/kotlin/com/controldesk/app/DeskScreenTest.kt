@@ -140,7 +140,7 @@ class DeskScreenTest {
                 )
             }
         }
-        composeRule.onNodeWithContentDescription("Adicionar app fixo").performClick()
+        composeRule.onNodeWithContentDescription("Adicionar atalho").performClick()
         composeRule.runOnIdle { assertTrue(catalogRequested) }
     }
 

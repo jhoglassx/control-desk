@@ -41,3 +41,7 @@ O APK foi atualizado no telefone com `adb install -r`. A releitura confirmou pre
 6. Limitar fila e tempos de espera do logger remoto e explicitar o suporte parcial a Windows/Linux na interface.
 
 O editor de reordenação/redimensionamento já existe. Próximas funcionalidades de produto estão no [roadmap](roadmap.md); o inventário completo está em [feature-status.md](feature-status.md).
+
+## Revisão de layout e cadastro de dispositivos
+
+Os controles de áudio deixaram de ser posições reservadas da grade e receberam o mesmo comportamento de edição dos apps. O cadastro agora separa apps/projetos de controles, câmeras e painéis de dispositivo, com formulário MVI dedicado. Ações de aplicativo/URL são executadas pelo agente. Descoberta e controle direto de periféricos nos três sistemas permanecem pendentes; a revisão e o contrato proposto estão em [device-shortcuts.md](device-shortcuts.md).

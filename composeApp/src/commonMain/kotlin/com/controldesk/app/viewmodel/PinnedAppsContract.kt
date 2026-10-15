@@ -1,10 +1,14 @@
 package com.controldesk.app.viewmodel
 
+import com.controldesk.domain.model.ControlShortcut
 import com.controldesk.domain.model.MacFileListing
 import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.PinnedAppShortcut
 
 data class PinnedAppsUiState(
+    val editingControl: ControlShortcut? = null,
+    val controlError: String? = null,
+    val isSavingControl: Boolean = false,
     val installedApps: List<PinnedAppShortcut> = emptyList(),
     val isLoadingApps: Boolean = false,
     val appsError: String? = null,
@@ -15,6 +19,11 @@ data class PinnedAppsUiState(
 )
 
 sealed interface PinnedAppsIntent {
+    data class EditControl(val shortcut: ControlShortcut) : PinnedAppsIntent
+    data class UpdateControl(val shortcut: ControlShortcut) : PinnedAppsIntent
+    data object SaveControl : PinnedAppsIntent
+    data object CancelControl : PinnedAppsIntent
+    data class RemoveControl(val id: String) : PinnedAppsIntent
     data class LoadInstalledApps(val host: PairedHost) : PinnedAppsIntent
     data class PinApp(val app: PinnedAppShortcut) : PinnedAppsIntent
     data class UnpinApp(val id: String) : PinnedAppsIntent

@@ -81,3 +81,9 @@ O pacote, `/health` e o TXT mDNS usam a versão `1.1.12`. O DMG contém app, ata
 O fluxo de publicação é `RunningAppsGridBuilder` → `ApplicationCatalogResolver` / `DockShortcutProjector` → `ShortcutWindowBinder` → aplicação de tamanho/ordem → estado MVI. O catálogo resolve aliases de nome para bundles somente sem ambiguidade. O binder atribui cada janela uma vez, priorizando projeto, favorito genérico e launcher padrão. Tanto o destaque quanto a seleção de instâncias usam essa atribuição.
 
 `WindowSelection` guarda o destino da seleção de foco/fechamento; o ViewModel valida a janela contra a associação atual antes do envio. `AppCommandMapping` produz o mesmo contrato HTTP/WebSocket. O agente reconsulta a identidade de janela antes da ação. Consulte [a revisão de identidade](shortcut-identity-review.md) para migração, testes e limites.
+
+## Controles personalizados no workspace
+
+`PairedHost.controlShortcuts` armazena ações independentes das janelas. A projeção `workspaceButtons` reúne os controles e launchers antes da grade, permitindo aplicar as mesmas preferências de tamanho e organização. `AppLauncherTile` aceita conteúdo de áudio sem criar um segundo mecanismo de arraste. O editor publica intents em `PinnedAppsViewModel`, valida o destino e salva sobre o host mais recente.
+
+Os controles atuais reutilizam comandos autenticados existentes do agente para áudio, aplicativo e navegador. Não há acesso direto do mobile ao dispositivo. A descoberta e o controle nativo de hardware por capacidades ainda exigem novos adaptadores no agente; veja [device-shortcuts.md](device-shortcuts.md).

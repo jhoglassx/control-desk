@@ -87,7 +87,7 @@ internal fun reorderGridIdsAtCell(
         val position = positions.getOrNull(originalIndex + systemTileCount) ?: return@indexOfFirst false
         val centerRow = position.row + (position.span.rows - 1) / 2f
         val centerColumn = position.column + (position.span.columns - 1) / 2f
-        targetRow < centerRow || (targetRow == centerRow.toInt() && targetColumn < centerColumn)
+        targetRow < centerRow || (targetRow == centerRow.toInt() && targetColumn <= centerColumn)
     }.let { if (it < 0) remaining.size else it }
     return remaining.toMutableList().apply { add(insertAt, moving) }
 }
@@ -97,12 +97,13 @@ internal fun placeTilesInGrid(
     spans: List<TileSpan>,
     columns: Int,
     preferredCells: Map<Int, Int> = emptyMap(),
+    fixedTileCount: Int = 2,
 ): List<TilePosition> {
     val safeColumns = columns.coerceAtLeast(1)
     val orderedIndices = buildList {
-        addAll(spans.indices.take(2))
+        addAll(spans.indices.take(fixedTileCount))
         addAll(
-            spans.indices.drop(2).sortedWith(
+            spans.indices.drop(fixedTileCount).sortedWith(
                 compareBy<Int> { preferredCells[it] ?: Int.MAX_VALUE }
                     .thenBy { it },
             ),

@@ -35,3 +35,7 @@ O catálogo de apps usa `GET /apps/installed` autenticado; o navegador de arquiv
 No Android, filtre o Logcat por `[app-layout]`: os eventos indicam ID persistente, chave do tamanho, título e ID da janela associada.
 
 No Mac, `[window-identity]` em `~/.control-desk/agent.log` registra alterações na associação Accessibility/Quartz. Logs incluem títulos de janelas e devem ser revisados antes do compartilhamento.
+
+## Controles e dispositivos
+
+A mesma tela **+** oferece controles de microfone/saída de áudio e ações de câmera/dispositivos por aplicativo ou URL. Os controles participam da mesma grade, sem posições reservadas. Veja [device-shortcuts.md](device-shortcuts.md) para uso, capacidades disponíveis e evolução do controle direto pelo agente.

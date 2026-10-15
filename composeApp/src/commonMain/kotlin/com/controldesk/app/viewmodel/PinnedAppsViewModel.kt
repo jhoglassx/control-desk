@@ -22,6 +22,11 @@ class PinnedAppsViewModel(
 
     fun onIntent(intent: PinnedAppsIntent) {
         when (intent) {
+            is PinnedAppsIntent.EditControl -> _uiState.update { it.copy(editingControl = intent.shortcut, controlError = null) }
+            is PinnedAppsIntent.UpdateControl -> _uiState.update { it.copy(editingControl = intent.shortcut, controlError = null) }
+            PinnedAppsIntent.CancelControl -> _uiState.update { it.copy(editingControl = null, controlError = null) }
+            PinnedAppsIntent.SaveControl -> saveControl()
+            is PinnedAppsIntent.RemoveControl -> changeControls { controls -> controls.filterNot { it.id == intent.id } }
             is PinnedAppsIntent.LoadInstalledApps -> loadInstalledApps(intent.host)
             is PinnedAppsIntent.PinApp -> updatePinnedApps { apps ->
                 if (apps.any { it.bundlePath == intent.app.bundlePath }) apps
@@ -45,6 +50,35 @@ class PinnedAppsViewModel(
             }
             PinnedAppsIntent.CancelPathSelection -> _uiState.update {
                 it.copy(selectedAppId = null, fileListing = null, filesError = null)
+            }
+        }
+    }
+
+    private fun saveControl() {
+        val shortcut = _uiState.value.editingControl ?: return
+        val error = shortcut.validationError()
+        if (error != null) { _uiState.update { it.copy(controlError = error) }; return }
+        val saved = shortcut.copy(name = shortcut.name.trim(), target = shortcut.target.trim())
+        changeControls { controls ->
+            if (controls.any { it.id == saved.id }) controls.map { if (it.id == saved.id) saved else it }
+            else controls + saved
+        }
+    }
+
+    private fun changeControls(transform: (List<com.controldesk.domain.model.ControlShortcut>) -> List<com.controldesk.domain.model.ControlShortcut>) {
+        val host = activeHost ?: return
+        if (_uiState.value.isSavingControl) return
+        _uiState.update { it.copy(isSavingControl = true, controlError = null) }
+        viewModelScope.launch {
+            runCatching {
+                val latest = hostPreferences.getHosts().firstOrNull { it.id == host.id } ?: host
+                val updated = latest.copy(controlShortcuts = transform(latest.controlShortcuts))
+                hostPreferences.saveHost(updated)
+                activeHost = updated
+            }.onSuccess {
+                _uiState.update { it.copy(editingControl = null, isSavingControl = false) }
+            }.onFailure { error ->
+                _uiState.update { it.copy(isSavingControl = false, controlError = error.message ?: "Não foi possível salvar o atalho") }
             }
         }
     }

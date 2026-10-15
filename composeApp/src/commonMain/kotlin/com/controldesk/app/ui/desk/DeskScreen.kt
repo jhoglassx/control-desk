@@ -172,7 +172,7 @@ fun DeskScreen(
                         IconButton(
                             onClick = onManageShortcuts,
                             modifier = Modifier
-                                .semantics { contentDescription = "Adicionar app fixo" }
+                                .semantics { contentDescription = "Adicionar atalho" }
                                 .testTag(DESK_ADD_SHORTCUT_BUTTON_TAG),
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, tint = DeskColors.TextPrimary)
@@ -205,7 +205,7 @@ fun DeskScreen(
                         },
                     ) {
                         WorkspacePanel(
-                            buttons = host?.id?.let(uiState::buttonsFor).orEmpty(),
+                            buttons = host?.id?.let(uiState::workspaceButtonsFor).orEmpty(),
                             listHint = host?.id?.let(uiState::listHintFor),
                             onAppClick = onAppClick,
                             onAppClose = onAppClose,

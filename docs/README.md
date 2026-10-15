@@ -16,6 +16,7 @@ Painel remoto estilo Stream Deck — **Kotlin Multiplatform** (Android + iOS) + 
 | **[review.md](review.md)** | Revisão geral, riscos e próximas etapas |
 | **[feature-status.md](feature-status.md)** | Catálogo de features implementadas, parciais e futuras |
 | **[shortcut-identity-review.md](shortcut-identity-review.md)** | Identidade dos launchers, migração, associação exclusiva de janelas e evidências de testes |
+| **[device-shortcuts.md](device-shortcuts.md)** | Áudio na grade, cadastro de câmera/dispositivo e contrato futuro de controle via agente |
 | **[pinned-apps.md](pinned-apps.md)** | Apps fixos, reordenação e projetos/pastas associados |
 | **[spec.md](spec.md)** | Especificação geral — agente, API, arquitetura, regras de negócio |
 | **[mobile-app.md](mobile-app.md)** | App mobile — telas, ViewModels, pareamento, UX |

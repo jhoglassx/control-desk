@@ -39,10 +39,14 @@ Próxima feature de produto recomendada: permitir vários atalhos do mesmo app p
 - Pareamento por QR.
 - Menu nativo macOS e gestão de dispositivos pareados.
 - Múltiplos atalhos do mesmo app para projetos diferentes, com nomes personalizados.
-- Editor de ações e perfis de layout; novos comandos de browser/hotkeys. A grade atual já permite arrastar e redimensionar launchers.
+- Editor de macros/hotkeys e perfis de layout; novos comandos de browser. A grade atual já permite arrastar e redimensionar launchers.
 - Controle nativo Windows/Linux e respectivos instaladores/auto-start.
 - TLS na LAN e armazenamento protegido dos tokens.
 
 ## Fora de escopo atual
 
 Relay na nuvem, streaming, mouse remoto, sync entre celulares e loja de plugins.
+
+## Dispositivos pelo agente
+
+Próxima entrega de dispositivos: catálogo por capacidades e comandos autenticados no agente, com adaptadores nativos macOS/Windows/Linux. Começar por descoberta e seleção de entrada/saída de áudio; seguir com câmeras e integrações por aplicativo/protocolo. Os novos atalhos já abrem aplicativo/painel web pelo agente, mas isso não constitui controle direto de periféricos. Contrato e critérios em [device-shortcuts.md](device-shortcuts.md).

@@ -37,6 +37,7 @@ class FakeAgentGateway(
 ) : AgentGateway {
     var runningAppsLoadCount = 0
     val launched = mutableListOf<GridButton>()
+    val openedUrls = mutableListOf<String>()
     val closed = mutableListOf<GridButton>()
     val volumes = mutableListOf<Triple<Int?, Int?, Boolean?>>()
     val mics = mutableListOf<Triple<Boolean?, Boolean, Int?>>()
@@ -74,7 +75,7 @@ class FakeAgentGateway(
         launched += button
         return appsByHost[host.id] ?: apps
     }
-    override suspend fun openBrowser(host: PairedHost, url: String) { result(Unit) }
+    override suspend fun openBrowser(host: PairedHost, url: String) { result(Unit); openedUrls += url }
     override suspend fun closeBrowser(host: PairedHost) { result(Unit) }
     override suspend fun setVolume(host: PairedHost, level: Int?, delta: Int?, mute: Boolean?) {
         result(Unit)

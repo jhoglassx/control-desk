@@ -40,3 +40,5 @@ O último comando abre o agente e sua janela de configuração. A opção desati
 - [Roadmap](docs/roadmap.md)
 
 O mobile mantém launchers persistentes por aplicativo, com ícones reais, tamanho e ordem salvos por computador. As janelas são instâncias selecionáveis por título e monitor; abrir ou fechar uma janela não substitui o launcher. Favoritos de projeto recebem somente as janelas correspondentes. Para instalação atualizada, consulte [a revisão geral](docs/review.md) e [o catálogo de features](docs/feature-status.md).
+
+Microfone e saída de áudio podem ser organizados e redimensionados junto aos apps. O cadastro também oferece atalhos de câmera/dispositivo por aplicativo ou URL, executados pelo agente. Descoberta e controle direto de hardware ainda estão planejados; veja [atalhos de dispositivos](docs/device-shortcuts.md).

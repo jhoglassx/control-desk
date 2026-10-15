@@ -21,6 +21,11 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -68,6 +73,7 @@ fun AppLauncherTile(
     spanColumns: Int = 1,
     spanRows: Int = 1,
     onResize: (() -> Unit)? = null,
+    customContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val dockOnly = !button.isFavoriteShortcut && button.isDockPinned && !button.isVisible && !button.isActive
@@ -199,14 +205,16 @@ fun AppLauncherTile(
                 contentDescription = tileDescription
             }
             .then(
-                if (!reorderMode) Modifier.pointerInput(button.id) {
+                if (!reorderMode && customContent != null) Modifier else if (!reorderMode) Modifier.pointerInput(button.id) {
                     detectTapGestures(onLongPress = { currentLongClick() }, onTap = { currentClick() })
                 } else reorderGestureModifier,
             ),
     ) {
         val iconSize = (maxWidth * 0.58f).coerceIn(34.dp, 52.dp)
         val accent = accentForLabel(appName)
-        Column(
+        if (customContent != null) {
+            Box(Modifier.fillMaxSize().padding(bottom = if (reorderMode) 22.dp else 0.dp)) { customContent() }
+        } else Column(
             Modifier
                 .fillMaxSize()
                 .padding(horizontal = 4.dp, vertical = 4.dp)
@@ -220,7 +228,15 @@ fun AppLauncherTile(
                     .clip(RoundedCornerShape(DeskDesign.IconCornerRadius.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                if (icon != null) {
+                val controlIcon = when (button.payload["controlKind"]) {
+                    "CAMERA" -> Icons.Default.CameraAlt
+                    "DEVICE" -> Icons.Default.Devices
+                    "WEBSITE" -> Icons.Default.Language
+                    else -> null
+                }
+                if (controlIcon != null) {
+                    Icon(controlIcon, contentDescription = label, tint = DeskColors.Accent, modifier = Modifier.fillMaxSize())
+                } else if (icon != null) {
                     Image(
                         bitmap = icon,
                         contentDescription = label,

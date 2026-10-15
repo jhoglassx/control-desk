@@ -69,11 +69,12 @@ fun WorkspacePanel(
     columns: Int,
     modifier: Modifier = Modifier,
 ) {
-    val focused = buttons.count { it.isActive }
-    val open = buttons.count { it.isVisible && !it.isActive }
-    val hidden = buttons.count { !it.isVisible && !it.isDockPinned }
-    val docked = buttons.count { it.isDockPinned && !it.isVisible && !it.isFavoriteShortcut }
-    val monitors = buttons.filter { it.monitorIndex > 0 }.groupBy { it.monitorIndex }
+    val appButtons = buttons.filter { it.payload["controlKind"] == null }
+    val focused = appButtons.count { it.isActive }
+    val open = appButtons.count { it.isVisible && !it.isActive }
+    val hidden = appButtons.count { !it.isVisible && !it.isDockPinned }
+    val docked = appButtons.count { it.isDockPinned && !it.isVisible && !it.isFavoriteShortcut }
+    val monitors = appButtons.filter { it.monitorIndex > 0 }.groupBy { it.monitorIndex }
         .entries
         .sortedBy { it.key }
         .joinToString(" · ") { entry -> "M${entry.key}: ${entry.value.size}" }
@@ -86,7 +87,7 @@ fun WorkspacePanel(
                 buttons.isEmpty() -> listHint ?: "Nenhuma janela detectada no PC"
                 listHint != null -> listHint
                 else -> buildString {
-                    append("${buttons.size} apps")
+                    append("${appButtons.size} apps")
                     if (open > 0) append(" · $open abertos")
                     append(" · $focused em uso")
                     if (monitors.isNotBlank()) append(" · $monitors")
@@ -109,13 +110,13 @@ fun WorkspacePanel(
         val columnCount = columns.coerceAtLeast(1)
         val density = LocalDensity.current
         val gapPx = with(density) { DeskDesign.TileGap.dp.toPx() }
-        val tileSpans = listOf(TileSpan(), TileSpan()) + buttons.map { button ->
+        val tileSpans = buttons.map { button ->
             TileSpan(button.tileSpanColumns(), button.tileSpanRows())
         }
         val savedCells = buttons.mapIndexedNotNull { index, button ->
-            appGridPositions[button.id]?.let { (index + 2) to it }
+            appGridPositions[button.id]?.let { index to it }
         }.toMap()
-        val tilePositions = placeTilesInGrid(tileSpans, columnCount, savedCells)
+        val tilePositions = placeTilesInGrid(tileSpans, columnCount, savedCells, fixedTileCount = 0)
         var dragStartTilePositions by remember { mutableStateOf<List<TilePosition>?>(null) }
         Column(
             Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
@@ -131,11 +132,7 @@ fun WorkspacePanel(
                 Layout(
                     content = {
                         tilePositions.forEachIndexed { tileIndex, position ->
-                            val itemKey = when (tileIndex) {
-                                0 -> "system-volume"
-                                1 -> "system-microphone"
-                                else -> buttons.getOrNull(tileIndex - 2)?.id ?: "missing-tile-$tileIndex"
-                            }
+                            val itemKey = buttons[tileIndex].id
                             val offset = IntOffset(
                                 position.column * (cellPx + gapCellPx),
                                 position.row * (cellPx + gapCellPx),
@@ -143,7 +140,7 @@ fun WorkspacePanel(
                             key(itemKey) {
                                 GridPositionedItem(
                                     offset = offset,
-                                    isDragged = tileIndex >= 2 && selectedAppIdForReorder == buttons.getOrNull(tileIndex - 2)?.id,
+                                    isDragged = selectedAppIdForReorder == buttons.getOrNull(tileIndex)?.id,
                                 ) {
                                     RenderTile(
                                         tileIndex = tileIndex,
@@ -258,84 +255,73 @@ private fun RenderTile(
     onMicChangeFinished: () -> Unit,
     onMicClick: () -> Unit,
 ) {
-    when (tileIndex) {
-                        0 -> VolumeAppTile(
-                            volumeLevel = volumeLevel,
-                            muted = volumeMuted,
-                            onLevelChange = onVolumeChange,
-                            onAdjustFinished = onVolumeChangeFinished,
-                            onMuteClick = onMuteClick,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        1 -> MicAppTile(
-                            micLevel = micLevel,
-                            muted = micMuted,
-                            onLevelChange = onMicChange,
-                            onAdjustFinished = onMicChangeFinished,
-                            onMuteClick = onMicClick,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        else -> {
-                            val button = buttons[tileIndex - 2]
-                            val buttonIndex = tileIndex - 2
-                            val spanColumns = button.tileSpanColumns().coerceAtMost(columnCount)
-                            val startPositions = dragStartTilePositions ?: tilePositions
-                            val currentPosition = tilePositions[buttonIndex + 2]
-                            AppLauncherTile(
-                                button = button,
-                                onClick = { onAppClick(button) },
-                                onLongClick = { onAppClose(button) },
-                                onPreviewReorder = { draggedId, rowDelta, columnDelta ->
-                                    val startIndex = selectedAppDragStartIndex ?: return@AppLauncherTile
-                                    val origin = startPositions.getOrNull(startIndex + 2) ?: return@AppLauncherTile
-                                    val targetRow = (origin.row + rowDelta).coerceAtLeast(0)
-                                    val targetColumn = (origin.column + columnDelta)
-                                        .coerceIn(0, columnCount - button.tileSpanColumns().coerceAtMost(columnCount))
-                                    if (targetRow == origin.row && targetColumn == origin.column) return@AppLauncherTile
-                                    val movingSpan = button.tileSpanColumns().coerceAtMost(columnCount)
-                                    if (startPositions.take(2).any { systemTile ->
-                                            systemTile.row == targetRow &&
-                                                (targetColumn until targetColumn + movingSpan).contains(systemTile.column)
-                                        }
-                                    ) {
-                                        return@AppLauncherTile
-                                    }
-                                    val orderedIds = reorderGridIdsAtCell(
-                                        appIds = buttons.map(GridButton::id),
-                                        positions = startPositions,
-                                        draggedId = draggedId,
-                                        targetRow = targetRow,
-                                        targetColumn = targetColumn,
-                                    )
-                                    onPreviewAppGridPositions(
-                                        orderedIds.mapIndexed { index, id -> id to index }.toMap(),
-                                    )
-                                },
-                                isSelectedForReorder = selectedAppIdForReorder == button.id,
-                                onSelectForReorder = { appId, cellWidth, cellHeight ->
-                                    onDragStarted()
-                                    onSelectAppForReorder(appId, cellWidth, cellHeight)
-                                },
-                                selectedDragOffsetX = if (selectedAppIdForReorder == button.id) {
-                                    val start = dragStartTilePositions?.getOrNull(selectedAppDragStartIndex?.plus(2) ?: -1)
-                                    val columnDelta = start?.let { currentPosition.column - it.column } ?: 0
-                                    selectedAppDragOffsetX - columnDelta * (selectedAppDragCellWidth + gapPx)
-                                } else 0f,
-                                selectedDragOffsetY = if (selectedAppIdForReorder == button.id) {
-                                    val start = dragStartTilePositions?.getOrNull(selectedAppDragStartIndex?.plus(2) ?: -1)
-                                    val rowDelta = start?.let { currentPosition.row - it.row } ?: 0
-                                    selectedAppDragOffsetY - rowDelta * (selectedAppDragCellHeight + gapPx)
-                                } else 0f,
-                                onDragBy = onMoveSelectedAppBy,
-                                onFinishReorderDrag = onDragFinished,
-                                compact = compact,
-                                spanColumns = spanColumns,
-                                spanRows = button.tileSpanRows(),
-                                onResize = if (isReorganizingApps) ({ onResizeAppTile(button.id) }) else null,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-    }
+    val button = buttons[tileIndex]
+    val buttonIndex = tileIndex
+    val spanColumns = button.tileSpanColumns().coerceAtMost(columnCount)
+    val startPositions = dragStartTilePositions ?: tilePositions
+    val currentPosition = tilePositions[buttonIndex]
+    AppLauncherTile(
+        button = button,
+        onClick = { onAppClick(button) },
+        onLongClick = { onAppClose(button) },
+        onPreviewReorder = { draggedId, rowDelta, columnDelta ->
+            val startIndex = selectedAppDragStartIndex ?: return@AppLauncherTile
+            val origin = startPositions.getOrNull(startIndex) ?: return@AppLauncherTile
+            val targetRow = (origin.row + rowDelta).coerceAtLeast(0)
+            val targetColumn = (origin.column + columnDelta)
+                .coerceIn(0, columnCount - button.tileSpanColumns().coerceAtMost(columnCount))
+            if (targetRow == origin.row && targetColumn == origin.column) return@AppLauncherTile
+            val orderedIds = reorderGridIdsAtCell(
+                appIds = buttons.map(GridButton::id),
+                positions = startPositions,
+                draggedId = draggedId,
+                targetRow = targetRow,
+                targetColumn = targetColumn,
+                systemTileCount = 0,
+            )
+            onPreviewAppGridPositions(
+                orderedIds.mapIndexed { index, id -> id to index }.toMap(),
+            )
+        },
+        isSelectedForReorder = selectedAppIdForReorder == button.id,
+        onSelectForReorder = { appId, cellWidth, cellHeight ->
+            onDragStarted()
+            onSelectAppForReorder(appId, cellWidth, cellHeight)
+        },
+        selectedDragOffsetX = if (selectedAppIdForReorder == button.id) {
+            val start = dragStartTilePositions?.getOrNull(selectedAppDragStartIndex ?: -1)
+            val columnDelta = start?.let { currentPosition.column - it.column } ?: 0
+            selectedAppDragOffsetX - columnDelta * (selectedAppDragCellWidth + gapPx)
+        } else 0f,
+        selectedDragOffsetY = if (selectedAppIdForReorder == button.id) {
+            val start = dragStartTilePositions?.getOrNull(selectedAppDragStartIndex ?: -1)
+            val rowDelta = start?.let { currentPosition.row - it.row } ?: 0
+            selectedAppDragOffsetY - rowDelta * (selectedAppDragCellHeight + gapPx)
+        } else 0f,
+        onDragBy = onMoveSelectedAppBy,
+        onFinishReorderDrag = onDragFinished,
+        compact = compact,
+        spanColumns = spanColumns,
+        spanRows = button.tileSpanRows(),
+        onResize = if (isReorganizingApps) ({ onResizeAppTile(button.id) }) else null,
+        customContent = when (button.payload["controlKind"]) {
+            "VOLUME", "MICROPHONE" -> ({
+                val microphone = button.payload["controlKind"] == "MICROPHONE"
+                AudioShortcutContent(
+                    label = button.label,
+                    level = if (microphone) micLevel else volumeLevel,
+                    muted = if (microphone) micMuted else volumeMuted,
+                    microphone = microphone,
+                    editing = isReorganizingApps,
+                    onLevelChange = if (microphone) onMicChange else onVolumeChange,
+                    onAdjustFinished = if (microphone) onMicChangeFinished else onVolumeChangeFinished,
+                    onMuteClick = if (microphone) onMicClick else onMuteClick,
+                )
+            })
+            else -> null
+        },
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 private fun GridButton.tileSpanColumns(): Int =

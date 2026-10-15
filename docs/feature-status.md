@@ -36,7 +36,7 @@ Inventário conferido no código em 15/10/2026. “Implementada” significa que
 
 - Pareamento via QR e gestão/revogação individual por dispositivo.
 - TLS na LAN e armazenamento protegido dos tokens.
-- Editor de ações customizadas, perfis e sincronização entre aparelhos. Reordenação e redimensionamento da grade já estão implementados.
+- Editor de ações avançadas (macros/hotkeys), perfis e sincronização entre aparelhos. Reordenação e redimensionamento da grade já estão implementados.
 - Integração nativa de controle de apps/áudio e instaladores para Windows/Linux.
 - Projeto iOS completo versionado e distribuição TestFlight.
 - Pipeline CI e fluxo E2E Maestro versionados no checkout.
@@ -52,3 +52,7 @@ Inventário conferido no código em 15/10/2026. “Implementada” significa que
 Confira o [roadmap](roadmap.md) para prioridades, a [arquitetura](architecture.md) para os módulos e o [guia de instalação](agent-install.md) para operar o agente macOS.
 
 A [revisão de identidade](shortcut-identity-review.md) descreve a migração para launchers persistentes, os testes e os limites da validação em dispositivo.
+
+## Atualização: controles na grade
+
+Microfone e saída de áudio compartilham movimento, tamanho e persistência com os aplicativos. O cadastro de controles inclui câmera/dispositivo por aplicativo ou URL, executados pelo agente. Isso abre o painel configurado; descoberta e controle direto de hardware em macOS/Windows/Linux ainda não estão implementados. Veja [device-shortcuts.md](device-shortcuts.md).

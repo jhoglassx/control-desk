@@ -111,7 +111,7 @@ class AppGridLayoutTest {
         )
 
         assertEquals(
-            listOf("a", "c", "b"),
+            listOf("c", "a", "b"),
             reorderGridIdsAtCell(ids, positions, draggedId = "c", targetRow = 0, targetColumn = 2),
         )
         assertEquals(
@@ -157,5 +157,21 @@ class AppGridLayoutTest {
                 }
             }
         }
+    }
+    @Test
+    fun unifiedGridDoesNotReserveAudioPositions() {
+        val positions = placeTilesInGrid(
+            spans = listOf(TileSpan(), TileSpan(2, 2), TileSpan(), TileSpan()),
+            columns = 4,
+            preferredCells = mapOf(0 to 3, 1 to 2, 2 to 1, 3 to 0),
+            fixedTileCount = 0,
+        )
+        assertEquals(TilePosition(0, 0, TileSpan()), positions[3])
+        assertEquals(TilePosition(0, 1, TileSpan()), positions[2])
+        val reordered = reorderGridIdsAtCell(
+            listOf("audio", "app", "camera", "mic"), positions, "audio", 0, 0, systemTileCount = 0,
+        )
+        assertEquals("audio", reordered.first())
+        assertEquals(4, reordered.distinct().size)
     }
 }
