@@ -236,3 +236,11 @@ A configuração mostra a compilação e avisa quando difere do serviço. Erro 4
 Atualize o agente e o mobile para esta entrega. O primeiro uso solicita Acessibilidade e, após essa etapa, autorização de câmera quando ainda não decidida. Confirme os diálogos no Mac; o instalador não pode conceder essas permissões. Em **Dispositivos e permissões**, use **Autorizar controles da câmera** para tentar novamente; se negado, habilite **Control Desk Camera** em Privacidade e Segurança → Câmera.
 
 O inventário não inicia captura. Modos de foco, exposição e balanço de branco são oferecidos somente conforme AVFoundation/driver e autorização. Não há botão de bloqueio global da câmera no macOS. O helper nativo acompanha o app, sem dependências de compilação no computador do usuário. Veja [dispositivos e atalhos](device-shortcuts.md#painel-de-controles-e-câmera-nativa--1115).
+
+## Diagnóstico dos comandos de aplicativos (1.1.16)
+
+A revisão de abrir/selecionar/fechar encontrou no serviço 1.1.15 Acessibilidade ativa, falhas de abertura por caminho de bundle indisponível e erro `-1719` ao consultar diretamente um botão de fechamento da janela inicial do Xcode. O catálogo atual informou caminhos existentes para Xcode e Preview; portanto, a origem do caminho inválido recebido do mobile ainda exige reproduzir o toque com os novos logs.
+
+A versão 1.1.16 consulta o atributo acessível `AXCloseButton`, usa `AXPress` e conserva a busca direta como alternativa quando o atributo não existe. Janelas sem controle acessível retornam erro explícito, sem encerrar outras instâncias. Selecionar restaura uma janela minimizada antes de `AXRaise`. Abrir aguarda a aceitação de `/usr/bin/open` e propaga código de erro/timeout; aceitação pelo sistema não garante que um documento terminou de carregar. O caminho ausente aparece na mensagem para permitir corrigir o atalho, sem abrir outro aplicativo arbitrariamente. A busca antiga por título parcial sem PID foi removida.
+
+Logs `[app-command]` registram alvo, bundle, PID e identidade da janela, sem token ou PIN. Testes cobrem falha/timeout do processo, script de fechamento por atributo e restauração antes do foco. Testes de scripts não equivalem a executar comandos sobre aplicativos reais. A validação de abrir/fechar/selecionar no mobile continua necessária.

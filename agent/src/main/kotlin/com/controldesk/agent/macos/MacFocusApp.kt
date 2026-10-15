@@ -13,6 +13,7 @@ object MacFocusApp {
     fun focus(request: AppLaunchRequest) {
         val app = request.target.trim()
         val bundlePath = request.bundlePath?.trim().orEmpty()
+        com.controldesk.logging.ControlDeskLog.agent.i { "[app-command] launch target=$app bundle=$bundlePath pid=${request.pid} window=${request.stableWindowId} index=${request.axWindowIndex} project=${!request.projectPath.isNullOrBlank()}" }
         if (app.isEmpty() && bundlePath.isEmpty()) return
         val pid = request.pid?.takeIf { it > 0 }
         val resolved = request.stableWindowId?.takeIf { request.projectPath.isNullOrBlank() }
@@ -20,7 +21,7 @@ object MacFocusApp {
         val axIndex = (resolved?.axWindowIndex ?: request.axWindowIndex)?.takeIf { it > 0 }
         val windowTitle = (resolved?.windowTitle ?: request.windowTitle)?.takeIf { it.isNotBlank() }
         if (shouldFocusExistingProcess(request)) {
-            val result = Shell.osascript(focusWindowScript(requireNotNull(pid), axIndex, windowTitle), timeoutMs = 1_500)
+            val result = Shell.osascript(focusWindowScript(requireNotNull(pid), axIndex, windowTitle), timeoutMs = 3_000)
             if (result != "no_windows" || resolved != null) {
                 check(result == "focused") { result.ifBlank { "O macOS não confirmou o foco da janela" } }
                 return
@@ -29,35 +30,19 @@ object MacFocusApp {
         if (bundlePath.isNotEmpty()) {
             val appFile = java.io.File(bundlePath)
             require(appFile.isDirectory && appFile.extension.equals("app", ignoreCase = true)) {
-                "O aplicativo selecionado não está disponível neste Mac."
+                "O aplicativo selecionado não está disponível neste caminho: $bundlePath. Atualize o atalho com o aplicativo instalado."
             }
             val projectPath = request.projectPath?.trim()?.takeIf { it.isNotEmpty() }
             if (projectPath != null) {
                 val project = java.io.File(projectPath)
                 require(project.exists()) { "O projeto ou documento não foi encontrado: $projectPath" }
-                Shell.spawn("/usr/bin/open", "-a", bundlePath, projectPath)
+                Shell.runChecked("/usr/bin/open", "-a", bundlePath, projectPath)
             } else {
-                Shell.spawn("/usr/bin/open", "-a", bundlePath)
+                Shell.runChecked("/usr/bin/open", "-a", bundlePath)
             }
             return
         }
-        val title = request.windowTitle?.trim().orEmpty()
-        if (title.isNotEmpty()) {
-            Shell.osascript(
-                """
-                tell application "System Events"
-                    tell process "${Shell.escape(app)}"
-                        set frontmost to true
-                        try
-                            perform action "AXRaise" of (first window whose name contains "${Shell.escape(title)}")
-                        end try
-                    end tell
-                end tell
-                """.trimIndent(),
-                timeoutMs = 400,
-            )
-        }
-        Shell.spawn("/usr/bin/open", "-a", app)
+        Shell.runChecked("/usr/bin/open", "-a", app)
     }
 
     internal fun focusWindowScript(pid: Int, index: Int?, title: String?): String {
@@ -76,6 +61,9 @@ object MacFocusApp {
         }
         val raise = if (selection.isBlank()) "" else """
             $selection
+            try
+                set value of attribute "AXMinimized" of targetWindow to false
+            end try
             perform action "AXRaise" of targetWindow
         """.trimIndent()
         return """

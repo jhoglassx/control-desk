@@ -67,7 +67,9 @@ class MacAppQuitTest {
         )
 
         assertContains(script, "whose name is \"project \\\"blue\\\"\"")
-        assertContains(script, "AXCloseButton")
+        assertContains(script, "value of attribute \"AXCloseButton\" of targetWindow")
+        assertContains(script, "perform action \"AXPress\" of closeControl")
+        assertContains(script, "if closeControl is missing value then")
         assertContains(script, "(count of matchingWindows) is not 1")
         assertFalse(script.contains("set targetWindow to window 2 of targetProcess"))
     }

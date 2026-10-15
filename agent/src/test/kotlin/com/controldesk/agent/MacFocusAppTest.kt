@@ -21,7 +21,7 @@ class MacFocusAppTest {
         assertContains(script, "window 2 of targetProcess")
         assertContains(script, "name of targetWindow is not \"Same title\"")
         assertContains(script, "return \"focused\"")
-        assertFalse(script.contains("try"))
+        assertContains(script, "set value of attribute \"AXMinimized\" of targetWindow to false")
     }
 
     @Test

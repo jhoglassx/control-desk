@@ -83,7 +83,16 @@ object MacAppQuit {
             tell application "System Events"
                 set targetProcess to first application process whose unix id is $pid
                 $selectWindow
-                click (first button of targetWindow whose subrole is "AXCloseButton")
+                set closeControl to missing value
+                try
+                    set closeControl to value of attribute "AXCloseButton" of targetWindow
+                end try
+                if closeControl is missing value then
+                    set closeButtons to (every button of targetWindow whose subrole is "AXCloseButton")
+                    if (count of closeButtons) is not 1 then error "Esta janela não disponibiliza um controle de fechamento acessível"
+                    set closeControl to item 1 of closeButtons
+                end if
+                perform action "AXPress" of closeControl
                 return "$CLOSE_WINDOW_SUCCESS"
             end tell
         """.trimIndent()
