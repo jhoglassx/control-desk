@@ -1,7 +1,9 @@
 package com.controldesk.domain.usecase
 
+import com.controldesk.domain.model.ApplicationShortcut
 import com.controldesk.domain.model.OsType
 import com.controldesk.domain.model.PinnedAppShortcut
+import com.controldesk.domain.model.AppTileSize
 import com.controldesk.domain.model.PairedHost
 import com.controldesk.testing.FakeHostPreferences
 import com.controldesk.testing.FakePairHostRemote
@@ -35,6 +37,10 @@ class PairHostUseCaseTest {
             id = "10.0.2.2:8741", name = "Mac", host = "10.0.2.2", port = 8741,
             osType = OsType.MACOS, sortOrder = 0, token = "first",
             pinnedApps = listOf(PinnedAppShortcut("studio", "Android Studio", "/Applications/Android Studio.app")),
+            appTileSizes = mapOf("/applications/android studio.app" to AppTileSize(columns = 2, rows = 1)),
+            appGridPositions = mapOf("favorite-studio" to 7),
+            applicationShortcuts = listOf(ApplicationShortcut("app-slot", "/applications/editor.app", "Editor", "Editor")),
+            appLayoutIdentities = mapOf("app-slot" to "app:/applications/editor.app"),
         )
         val prefs = FakeHostPreferences(listOf(previous))
         val remote = FakePairHostRemote(token = "first")
@@ -44,6 +50,10 @@ class PairHostUseCaseTest {
         val again = useCase("Mac", "10.0.2.2", "8741", "654321", OsType.MACOS).getOrThrow()
         assertEquals("second", again.token)
         assertEquals(previous.pinnedApps, again.pinnedApps)
+        assertEquals(previous.appTileSizes, again.appTileSizes)
+        assertEquals(previous.appGridPositions, again.appGridPositions)
+        assertEquals(previous.applicationShortcuts, again.applicationShortcuts)
+        assertEquals(previous.appLayoutIdentities, again.appLayoutIdentities)
         assertEquals(1, prefs.getHosts().size)
     }
 }

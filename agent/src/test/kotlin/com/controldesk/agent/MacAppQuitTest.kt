@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertContains
 
 class MacAppQuitTest {
     @Test
@@ -17,7 +18,7 @@ class MacAppQuitTest {
             ),
         )
         assertEquals(
-            MacAppQuit.CloseAction.TERMINATE_PROCESS,
+            MacAppQuit.CloseAction.CLOSE_WINDOW,
             MacAppQuit.closeAction(
                 AppCloseRequest(target = "Android Studio", pid = 120, axWindowIndex = 2, windowCount = 1),
                 matchingProcessCount = 1,
@@ -55,6 +56,27 @@ class MacAppQuitTest {
                 matchingProcessCount = 2,
             ),
         )
+    }
+
+    @Test
+    fun closeWindowUsesStableTitleBeforePotentiallyStaleAccessibilityIndex() {
+        val script = MacAppQuit.closeWindowScript(
+            pid = 120,
+            index = 2,
+            title = "project \"blue\"",
+        )
+
+        assertContains(script, "whose name is \"project \\\"blue\\\"\"")
+        assertContains(script, "AXCloseButton")
+        assertContains(script, "(count of matchingWindows) is not 1")
+        assertFalse(script.contains("set targetWindow to window 2 of targetProcess"))
+    }
+
+    @Test
+    fun closeWindowFallsBackToAccessibilityIndexWhenTitleIsUnavailable() {
+        val script = MacAppQuit.closeWindowScript(pid = 120, index = 2, title = null)
+
+        assertContains(script, "set targetWindow to window 2 of targetProcess")
     }
 
     @Test

@@ -188,6 +188,7 @@ class DeskScreenTest {
             payload = mapOf("target" to "Safari"), isActive = true, isVisible = true, monitorIndex = 2,
         )
         var uiState by mutableStateOf(DeskUiState(hosts = listOf(host), buttons = listOf(fixed, running)))
+        var resizedShortcutId: String? = null
         composeRule.setContent {
             ControlDeskTheme {
                 DeskScreen(
@@ -216,16 +217,14 @@ class DeskScreenTest {
                             selectedAppDragStartIndex = null,
                         )
                     },
-                    onPreviewReorderApp = { appId, targetIndex ->
-                        val currentIndex = uiState.buttons.indexOfFirst { it.id == appId }
-                        if (currentIndex >= 0 && targetIndex in uiState.buttons.indices) {
-                            uiState = uiState.copy(
-                                buttons = uiState.buttons.toMutableList().apply {
-                                    add(targetIndex, removeAt(currentIndex))
-                                },
-                            )
-                        }
+                    onPreviewAppGridPositions = { positions ->
+                        uiState = uiState.copy(
+                            hosts = uiState.hosts.map { currentHost ->
+                                if (currentHost.id == host.id) currentHost.copy(appGridPositions = positions) else currentHost
+                            },
+                        )
                     },
+                    onResizeAppTile = { buttonId -> resizedShortcutId = buttonId },
                     onRefresh = {}, onSelectHost = {}, onAppClick = {}, onAppClose = {},
                     onVolumeChange = {}, onVolumeChangeFinished = {}, onMuteClick = {},
                     onMicChange = {}, onMicChangeFinished = {}, onMicClick = {}, onClearFeedback = {},
@@ -234,6 +233,16 @@ class DeskScreenTest {
         }
 
         composeRule.onNodeWithContentDescription("Reorganizar apps").performClick()
+        composeRule.onNodeWithContentDescription("Android Studio, segure e arraste qualquer parte para mover").assertIsDisplayed()
+        composeRule.onAllNodesWithContentDescription("Espaço vazio para app").assertCountEquals(0)
+        composeRule.onNodeWithContentDescription("Redimensionar Android Studio, tamanho 1 por 1")
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.runOnIdle { assertEquals("favorite-studio", resizedShortcutId) }
+        composeRule.onNodeWithContentDescription("Redimensionar Safari · GitHub, tamanho 1 por 1")
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.runOnIdle { assertEquals("app-safari", resizedShortcutId) }
         composeRule.onNodeWithContentDescription("Android Studio, segure e arraste qualquer parte para mover").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("GitHub, aplicativo ativo, monitor 2, segure e arraste qualquer parte para mover").assertIsDisplayed()
         composeRule.onNodeWithText("M2").assertIsDisplayed()
@@ -245,7 +254,8 @@ class DeskScreenTest {
                 up()
             }
         composeRule.runOnIdle {
-            assertEquals(listOf(running.id, fixed.id), uiState.buttons.map { it.id })
+            assertEquals(0, uiState.selectedHost?.appGridPositions?.get(running.id))
+            assertEquals(1, uiState.selectedHost?.appGridPositions?.get(fixed.id))
         }
         composeRule.onNodeWithContentDescription("Android Studio, segure e arraste qualquer parte para mover").assertIsDisplayed()
         composeRule.onAllNodesWithText("Selecionado").assertCountEquals(0)

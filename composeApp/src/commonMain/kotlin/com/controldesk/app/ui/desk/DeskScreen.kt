@@ -12,6 +12,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
@@ -44,6 +51,8 @@ import com.controldesk.domain.model.GridButton
 @OptIn(ExperimentalMaterial3Api::class)
 fun DeskScreen(
     uiState: DeskUiState,
+    onSelectWindow: (String) -> Unit = {},
+    onDismissWindowSelection: () -> Unit = {},
     onPairHost: () -> Unit,
     onManageHosts: () -> Unit,
     onAdminAccessRequest: () -> Unit = onManageHosts,
@@ -51,9 +60,9 @@ fun DeskScreen(
     onToggleReorganizeApps: (Boolean) -> Unit = {},
     onSelectAppForReorder: (String, Float, Float) -> Unit = { _, _, _ -> },
     onMoveSelectedAppBy: (Float, Float) -> Unit = { _, _ -> },
-    onPreviewReorderApp: (String, Int) -> Unit = { _, _ -> },
+    onPreviewAppGridPositions: (Map<String, Int>) -> Unit = {},
     onFinishAppReorderDrag: () -> Unit = {},
-    onReorderApps: (List<String>) -> Unit = {},
+    onResizeAppTile: (String) -> Unit = {},
     onRefresh: () -> Unit,
     onSelectHost: (Int) -> Unit,
     onAppClick: (GridButton) -> Unit,
@@ -67,6 +76,25 @@ fun DeskScreen(
     onClearFeedback: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    uiState.windowSelection?.let { selection ->
+        AlertDialog(
+            onDismissRequest = onDismissWindowSelection,
+            title = { Text(if (selection.close) "Fechar janela · ${selection.appName}" else selection.appName) },
+            text = {
+                Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
+                    selection.windows.forEach { window ->
+                        TextButton(onClick = { onSelectWindow(window.id) }) {
+                            Text(buildString {
+                                append(window.payload["windowTitle"]?.takeIf { it.isNotBlank() } ?: window.label)
+                                if (window.monitorIndex > 0) append(" · Monitor ${window.monitorIndex}")
+                            })
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = onDismissWindowSelection) { Text("Cancelar") } },
+        )
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val panelMode = LocalPanelMode.current.enabled
     LaunchedEffect(uiState.feedback) {
@@ -190,9 +218,10 @@ fun DeskScreen(
                             selectedAppDragCellHeight = uiState.selectedAppDragCellHeight,
                             onSelectAppForReorder = onSelectAppForReorder,
                             onMoveSelectedAppBy = onMoveSelectedAppBy,
-                            onPreviewReorderApp = onPreviewReorderApp,
+                            onPreviewAppGridPositions = onPreviewAppGridPositions,
+                            appGridPositions = host?.appGridPositions.orEmpty(),
                             onFinishAppReorderDrag = onFinishAppReorderDrag,
-                            onReorderApps = onReorderApps,
+                            onResizeAppTile = onResizeAppTile,
                             volumeLevel = uiState.volumeLevel,
                             volumeMuted = uiState.volumeMuted,
                             micLevel = uiState.micLevel,

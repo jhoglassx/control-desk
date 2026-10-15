@@ -232,6 +232,8 @@ class AgentWsHub(
             append(':')
             append(app.axWindowIndex ?: app.windowIndex ?: -1)
             append(':')
+            append(app.stableWindowId.orEmpty())
+            append(':')
             append(app.isActive)
             append(':')
             append(app.isVisible)

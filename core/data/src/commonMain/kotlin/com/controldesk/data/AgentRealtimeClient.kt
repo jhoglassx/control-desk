@@ -9,8 +9,6 @@ import com.controldesk.domain.model.RunningApp
 import com.controldesk.domain.repository.AgentRealtime
 import com.controldesk.logging.ControlDeskLog
 import com.controldesk.protocol.AgentJson
-import com.controldesk.protocol.AppCloseRequest
-import com.controldesk.protocol.AppLaunchRequest
 import com.controldesk.protocol.BrowserTabSwitchRequest
 import com.controldesk.protocol.MicRequest
 import com.controldesk.protocol.VolumeRequest
@@ -88,17 +86,7 @@ class AgentRealtimeClient(
             request(
                 WsClientMessage(
                     type = WsMessageType.LAUNCH,
-                    launch = AppLaunchRequest(
-                        target = button.payload.getValue("target"),
-                        targetType = button.payload["targetType"] ?: "appName",
-                        windowTitle = button.payload["windowTitle"],
-                        windowIndex = button.payload["windowIndex"]?.toIntOrNull(),
-                        windowNumber = button.payload["windowNumber"]?.toIntOrNull(),
-                        bundlePath = button.payload["bundlePath"],
-                        projectPath = button.payload["projectPath"],
-                        pid = button.payload["pid"]?.toIntOrNull(),
-                        axWindowIndex = button.payload["axWindowIndex"]?.toIntOrNull(),
-                    ),
+                    launch = button.toLaunchRequest(),
                 ),
             ).apps,
         )
@@ -108,14 +96,7 @@ class AgentRealtimeClient(
             request(
                 WsClientMessage(
                     type = WsMessageType.CLOSE,
-                    close = AppCloseRequest(
-                        target = button.payload.getValue("target"),
-                        targetType = button.payload["targetType"] ?: "appName",
-                        pid = button.payload["pid"]?.toIntOrNull(),
-                        windowTitle = button.payload["windowTitle"],
-                        axWindowIndex = button.payload["axWindowIndex"]?.toIntOrNull(),
-                        windowCount = button.payload["windowCount"]?.toIntOrNull(),
-                    ),
+                    close = button.toCloseRequest(),
                 ),
             ).apps,
         )
@@ -196,6 +177,7 @@ class AgentRealtimeClient(
                 windowIndex = info.windowIndex,
                 axWindowIndex = info.axWindowIndex,
                 windowNumber = info.windowNumber,
+                stableWindowId = info.stableWindowId,
                 windowCount = info.windowCount,
                 iconBase64 = info.iconBase64,
                 isActive = info.isActive,

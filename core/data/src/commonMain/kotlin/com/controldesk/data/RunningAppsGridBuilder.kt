@@ -1,5 +1,6 @@
 package com.controldesk.data
 
+import com.controldesk.domain.model.ApplicationIdentity
 import com.controldesk.domain.model.ActionType
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.RunningApp
@@ -19,6 +20,7 @@ object RunningAppsGridBuilder {
                 buildMap {
                     put("target", app.appName.ifBlank { "Google Chrome" })
                     put("targetType", "appName")
+                    app.bundlePath?.let { put("bundlePath", it) }
                     put("browser", "chrome")
                     put("action", "select")
                     app.windowTitle?.let { put("value", it) }
@@ -31,6 +33,7 @@ object RunningAppsGridBuilder {
                     put("targetType", "appName")
                     app.windowTitle?.let { put("windowTitle", it) }
                     app.windowNumber?.let { put("windowNumber", it.toString()) }
+                    app.stableWindowId?.let { put("stableWindowId", it) }
                     app.windowIndex?.let { put("windowIndex", it.toString()) }
                     app.pid?.let { put("pid", it.toString()) }
                     app.axWindowIndex?.let { put("axWindowIndex", it.toString()) }
@@ -59,7 +62,6 @@ object RunningAppsGridBuilder {
         incoming: List<GridButton>,
         preferMerge: Boolean,
     ): List<GridButton> {
-        if (preferMerge && incoming.isEmpty()) return current
         if (!preferMerge) return incoming
         val currentById = current.associateBy { it.id }
         return incoming.map { next ->
@@ -83,7 +85,9 @@ object RunningAppsGridBuilder {
     private fun RunningApp.isDockOnly(): Boolean = isDockPinned && !isActive && !isVisible
 
     private fun stableId(app: RunningApp): String {
-        if (app.isDockOnly()) return "app-${app.appName}-dock"
+        val applicationKey = ApplicationIdentity.applicationKey(app.bundlePath, app.appName)
+        if (app.isDockOnly()) return app.bundlePath?.let { "dock:${it.trimEnd('/').lowercase()}" }
+            ?: ApplicationIdentity.dockShortcutId(null, app.appName)
         if (app.isBrowserTab) {
             val window = app.browserWindowIndex ?: 0
             val tab = app.windowIndex ?: 0
@@ -91,14 +95,18 @@ object RunningAppsGridBuilder {
             return "tab-${app.appName}-w$window-t$tab-$title"
         }
         val pid = app.pid?.takeIf { it > 0 }
+        app.stableWindowId?.takeIf(String::isNotBlank)?.let { return "window-quartz-$it" }
         val ax = app.axWindowIndex ?: app.windowIndex ?: 0
-        val title = app.windowTitle?.takeIf { it.isNotBlank() }?.hashCode() ?: 0
+        val title = app.windowTitle?.takeIf { it.isNotBlank() }?.stableWindowTitleKey() ?: "0"
         val key = if (pid != null) {
             "pid$pid-ax$ax-t$title"
         } else {
             app.windowNumber?.let { "wn-$it" }
                 ?: "ax$ax-t$title"
         }
-        return "app-${app.appName}-$key"
+        return "app-$applicationKey-$key"
     }
+
+    /** A second independent hash prevents distinct window titles from collapsing to the same tile ID. */
+    private fun String.stableWindowTitleKey(): String = "${this.hashCode()}-${this.reversed().hashCode()}-${this.length}"
 }

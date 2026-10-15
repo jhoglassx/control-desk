@@ -28,7 +28,6 @@ object MacChromeTabs {
         if (chromeWindows.isEmpty()) return windows
         val tabs = cache.get()
         if (tabs.isEmpty()) return windows
-        val others = windows.filterNot { it.appName.contains("Chrome", ignoreCase = true) }
         val orderedChrome = chromeWindows.sortedBy { it.windowIndex ?: 0 }
         val monitorByWindow = orderedChrome.mapIndexed { index, window -> (index + 1) to window.monitorIndex }.toMap()
         val activeChromeWindow = orderedChrome.indexOfFirst { it.isActive }.takeIf { it >= 0 }?.plus(1)
@@ -37,6 +36,7 @@ object MacChromeTabs {
         val mapped = tabs.map { tab ->
             val windowIndex = tab.browserWindowIndex ?: 1
             tab.copy(
+                bundlePath = chromeWindows.first().bundlePath,
                 monitorIndex = monitorByWindow[windowIndex] ?: chromeWindows.first().monitorIndex,
                 iconBase64 = icon ?: tab.iconBase64,
                 isActive = activeChromeWindow != null &&
@@ -44,7 +44,7 @@ object MacChromeTabs {
                     tab.isActive,
             )
         }
-        return others + mapped
+        return windows + mapped
     }
 
     fun switchTab(request: BrowserTabSwitchRequest) {

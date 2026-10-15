@@ -4,12 +4,16 @@ import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
 
 sealed interface DeskIntent {
+    data object DismissWindowSelection : DeskIntent
+    data class SelectWindow(val windowId: String) : DeskIntent
     data class SetReorganizingApps(val enabled: Boolean) : DeskIntent
     data class SelectAppForReorder(val appId: String, val cellWidth: Float = 0f, val cellHeight: Float = 0f) : DeskIntent
     data class MoveSelectedAppBy(val deltaX: Float, val deltaY: Float) : DeskIntent
     data class PreviewReorderApp(val appId: String, val targetIndex: Int) : DeskIntent
     data object FinishAppReorderDrag : DeskIntent
     data class ReorderApps(val orderedIds: List<String>) : DeskIntent
+    data class ResizeAppTile(val buttonId: String) : DeskIntent
+    data class PreviewAppGridPositions(val positions: Map<String, Int>) : DeskIntent
 }
 
 data class DeskUiState(
@@ -33,6 +37,7 @@ data class DeskUiState(
     val micLevel: Int = 75,
     val listHint: String? = null,
     val feedback: String? = null,
+    val windowSelection: WindowSelection? = null,
 ) {
     val selectedHost: PairedHost? get() = hosts.getOrNull(selectedHostIndex)
     val hasHosts: Boolean get() = hosts.isNotEmpty()
@@ -43,3 +48,11 @@ data class DeskUiState(
     fun listHintFor(hostId: String): String? =
         if (selectedHost?.id == hostId) listHint else cachedListHints[hostId]
 }
+
+data class WindowSelection(
+    val hostId: String,
+    val shortcutId: String,
+    val appName: String,
+    val windows: List<GridButton>,
+    val close: Boolean,
+)

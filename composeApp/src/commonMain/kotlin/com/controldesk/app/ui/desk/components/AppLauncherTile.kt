@@ -22,6 +22,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.Text
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
@@ -56,7 +57,6 @@ fun AppLauncherTile(
     button: GridButton,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onCommitReorder: (() -> Unit)? = null,
     onPreviewReorder: (appId: String, rowDelta: Int, columnDelta: Int) -> Unit = { _, _, _ -> },
     compact: Boolean,
     isSelectedForReorder: Boolean = false,
@@ -65,6 +65,9 @@ fun AppLauncherTile(
     selectedDragOffsetY: Float = 0f,
     onDragBy: (Float, Float) -> Unit = { _, _ -> },
     onFinishReorderDrag: () -> Unit = {},
+    spanColumns: Int = 1,
+    spanRows: Int = 1,
+    onResize: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val dockOnly = !button.isFavoriteShortcut && button.isDockPinned && !button.isVisible && !button.isActive
@@ -91,7 +94,7 @@ fun AppLauncherTile(
     }
 
     val cardShape = RoundedCornerShape(16.dp)
-    val reorderMode = onCommitReorder != null
+    val reorderMode = onResize != null
     val shakeTransition = rememberInfiniteTransition(label = "app-tile-reorder-${button.id}")
     val shakeAngle = if (reorderMode && !isSelectedForReorder) {
         shakeTransition.animateFloat(
@@ -112,32 +115,39 @@ fun AppLauncherTile(
             append(if (isSelectedForReorder) ", selecionado para mover" else ", segure e arraste qualquer parte para mover")
         }
     }
+    val currentClick by rememberUpdatedState(onClick)
+    val currentLongClick by rememberUpdatedState(onLongClick)
     val currentButtonId by rememberUpdatedState(button.id)
     val currentSelectForReorder by rememberUpdatedState(onSelectForReorder)
     val currentPreviewReorder by rememberUpdatedState(onPreviewReorder)
     val currentDragBy by rememberUpdatedState(onDragBy)
     val currentFinishDrag by rememberUpdatedState(onFinishReorderDrag)
-    val currentCommitReorder by rememberUpdatedState(onCommitReorder)
-    val reorderGestureModifier = if (!reorderMode) Modifier else Modifier.pointerInput(reorderMode) {
+    val reorderGestureModifier = if (!reorderMode) Modifier else Modifier.pointerInput(reorderMode, spanColumns, spanRows) {
         var dragDistance = androidx.compose.ui.geometry.Offset.Zero
         var draggedAppId: String? = null
         var previousRowDelta = 0
         var previousColumnDelta = 0
         val gapPx = DeskDesign.TileGap.dp.toPx()
+        val tileCellWidth = (size.width - gapPx * (spanColumns - 1)) / spanColumns.coerceAtLeast(1)
+        val tileCellHeight = (size.height - gapPx * (spanRows - 1)) / spanRows.coerceAtLeast(1)
         detectDragGesturesAfterLongPress(
             onDragStart = {
                 dragDistance = androidx.compose.ui.geometry.Offset.Zero
                 previousRowDelta = 0
                 previousColumnDelta = 0
                 draggedAppId = currentButtonId
-                currentSelectForReorder(currentButtonId, size.width.toFloat(), size.height.toFloat())
+                currentSelectForReorder(
+                    currentButtonId,
+                    tileCellWidth.toFloat(),
+                    tileCellHeight.toFloat(),
+                )
             },
             onDrag = { change, amount ->
                 change.consume()
                 dragDistance += amount
                 currentDragBy(amount.x, amount.y)
-                val rowDelta = (dragDistance.y / (size.height + gapPx)).roundToInt()
-                val columnDelta = (dragDistance.x / (size.width + gapPx)).roundToInt()
+                val rowDelta = (dragDistance.y / (tileCellHeight + gapPx)).roundToInt()
+                val columnDelta = (dragDistance.x / (tileCellWidth + gapPx)).roundToInt()
                 if (rowDelta != previousRowDelta || columnDelta != previousColumnDelta) {
                     draggedAppId?.let { currentPreviewReorder(it, rowDelta, columnDelta) }
                     previousRowDelta = rowDelta
@@ -145,7 +155,6 @@ fun AppLauncherTile(
                 }
             },
             onDragEnd = {
-                currentCommitReorder?.invoke()
                 currentFinishDrag()
                 draggedAppId = null
             },
@@ -155,7 +164,7 @@ fun AppLauncherTile(
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
+            .aspectRatio(spanColumns.coerceAtLeast(1).toFloat() / spanRows.coerceAtLeast(1))
             .alpha(tileAlpha)
             .then(
                 if (reorderMode && isSelectedForReorder) {
@@ -191,7 +200,7 @@ fun AppLauncherTile(
             }
             .then(
                 if (!reorderMode) Modifier.pointerInput(button.id) {
-                    detectTapGestures(onLongPress = { onLongClick() }, onTap = { onClick() })
+                    detectTapGestures(onLongPress = { currentLongClick() }, onTap = { currentClick() })
                 } else reorderGestureModifier,
             ),
     ) {
@@ -200,7 +209,8 @@ fun AppLauncherTile(
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+                .padding(horizontal = 4.dp, vertical = 4.dp)
+                .then(if (onResize != null) Modifier.padding(bottom = 18.dp) else Modifier),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -275,6 +285,34 @@ fun AppLauncherTile(
                     .border(1.dp, monitorTint, RoundedCornerShape(8.dp))
                     .padding(horizontal = 4.dp, vertical = 1.dp),
             )
+        }
+        val instanceCount = button.payload["instanceCount"]?.toIntOrNull() ?: 0
+        if (instanceCount > 1 && !reorderMode) {
+            Text(
+                "$instanceCount janelas",
+                color = DeskColors.TextMuted,
+                fontSize = 8.sp,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp),
+            )
+        }
+        if (onResize != null) {
+            IconButton(
+                onClick = onResize,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(4.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(DeskColors.Surface)
+                    .border(1.dp, DeskColors.Accent, RoundedCornerShape(10.dp))
+                    .semantics { contentDescription = "Redimensionar ${button.label}, tamanho ${spanColumns} por ${spanRows}" },
+            ) {
+                Text(
+                    "${spanColumns}×${spanRows}",
+                    color = DeskColors.TextPrimary,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
     }
 }

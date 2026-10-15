@@ -67,6 +67,8 @@ fun App() {
 
         when (screen) {
             AppScreen.Desk -> DeskScreen(
+                onSelectWindow = { deskViewModel.onIntent(DeskIntent.SelectWindow(it)) },
+                onDismissWindowSelection = { deskViewModel.onIntent(DeskIntent.DismissWindowSelection) },
                 uiState = deskState,
                 onPairHost = ::openAdminSettings,
                 onManageHosts = ::openAdminSettings,
@@ -86,11 +88,11 @@ fun App() {
                 onMoveSelectedAppBy = { deltaX, deltaY ->
                     deskViewModel.onIntent(DeskIntent.MoveSelectedAppBy(deltaX, deltaY))
                 },
-                onPreviewReorderApp = { appId, targetIndex ->
-                    deskViewModel.onIntent(DeskIntent.PreviewReorderApp(appId, targetIndex))
+                onPreviewAppGridPositions = { positions ->
+                    deskViewModel.onIntent(DeskIntent.PreviewAppGridPositions(positions))
                 },
                 onFinishAppReorderDrag = { deskViewModel.onIntent(DeskIntent.FinishAppReorderDrag) },
-                onReorderApps = { orderedIds -> deskViewModel.onIntent(DeskIntent.ReorderApps(orderedIds)) },
+                onResizeAppTile = { buttonId -> deskViewModel.onIntent(DeskIntent.ResizeAppTile(buttonId)) },
                 onRefresh = deskViewModel::refreshRunningApps,
                 onSelectHost = deskViewModel::selectHost,
                 onAppClick = deskViewModel::onButtonClick,

@@ -35,6 +35,7 @@ class FakeAgentGateway(
     var failWith: Throwable? = null,
     var removeOnClose: Boolean = true,
 ) : AgentGateway {
+    var runningAppsLoadCount = 0
     val launched = mutableListOf<GridButton>()
     val closed = mutableListOf<GridButton>()
     val volumes = mutableListOf<Triple<Int?, Int?, Boolean?>>()
@@ -45,8 +46,10 @@ class FakeAgentGateway(
         return value
     }
 
-    override suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp> =
-        result(appsByHost[host.id] ?: apps)
+    override suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp> {
+        runningAppsLoadCount += 1
+        return result(appsByHost[host.id] ?: apps)
+    }
     override suspend fun loadInstalledApps(host: PairedHost): List<PinnedAppShortcut> = result(emptyList())
     override suspend fun browseMacFiles(host: PairedHost, path: String?): MacFileListing =
         result(MacFileListing(path = path ?: "/Users/test", parentPath = null))

@@ -15,29 +15,16 @@ object MacFocusApp {
         val bundlePath = request.bundlePath?.trim().orEmpty()
         if (app.isEmpty() && bundlePath.isEmpty()) return
         val pid = request.pid?.takeIf { it > 0 }
-        val axIndex = request.axWindowIndex?.takeIf { it > 0 }
-        val windowTitle = request.windowTitle?.takeIf { it.isNotBlank() }
+        val resolved = request.stableWindowId?.takeIf { request.projectPath.isNullOrBlank() }
+            ?.let { MacWindowTarget.resolve(it, pid) }
+        val axIndex = (resolved?.axWindowIndex ?: request.axWindowIndex)?.takeIf { it > 0 }
+        val windowTitle = (resolved?.windowTitle ?: request.windowTitle)?.takeIf { it.isNotBlank() }
         if (shouldFocusExistingProcess(request)) {
-            val windowSelector = when {
-                axIndex != null -> "window $axIndex"
-                windowTitle != null -> "first window whose name is \"${Shell.escape(windowTitle)}\""
-                else -> null
+            val result = Shell.osascript(focusWindowScript(requireNotNull(pid), axIndex, windowTitle), timeoutMs = 1_500)
+            if (result != "no_windows" || resolved != null) {
+                check(result == "focused") { result.ifBlank { "O macOS não confirmou o foco da janela" } }
+                return
             }
-            val raiseWindow = windowSelector?.let { selector ->
-                "try\n    perform action \"AXRaise\" of $selector\nend try"
-            }.orEmpty()
-            Shell.osascript(
-                """
-                tell application "System Events"
-                    tell (first application process whose unix id is $pid)
-                        set frontmost to true
-                        $raiseWindow
-                    end tell
-                end tell
-                """.trimIndent(),
-                timeoutMs = 700,
-            )
-            return
         }
         if (bundlePath.isNotEmpty()) {
             val appFile = java.io.File(bundlePath)
@@ -56,7 +43,7 @@ object MacFocusApp {
         }
         val title = request.windowTitle?.trim().orEmpty()
         if (title.isNotEmpty()) {
-            val raised = Shell.osascript(
+            Shell.osascript(
                 """
                 tell application "System Events"
                     tell process "${Shell.escape(app)}"
@@ -69,13 +56,41 @@ object MacFocusApp {
                 """.trimIndent(),
                 timeoutMs = 400,
             )
-            if (raised.isNotBlank() || true) {
-                // AXRaise is best-effort; always also activate via Launch Services.
-            }
         }
         Shell.spawn("/usr/bin/open", "-a", app)
     }
 
+    internal fun focusWindowScript(pid: Int, index: Int?, title: String?): String {
+        val safeTitle = title?.takeIf(String::isNotBlank)?.let(Shell::escape)
+        val selection = when {
+            index != null -> buildString {
+                append("set targetWindow to window $index of targetProcess")
+                if (safeTitle != null) append("\nif name of targetWindow is not \"$safeTitle\" then error \"A janela mudou; atualize a lista\"")
+            }
+            safeTitle != null -> """
+                set matchingWindows to (every window of targetProcess whose name is "$safeTitle")
+                if (count of matchingWindows) is not 1 then error "Janela não encontrada ou título ambíguo"
+                set targetWindow to item 1 of matchingWindows
+            """.trimIndent()
+            else -> ""
+        }
+        val raise = if (selection.isBlank()) "" else """
+            $selection
+            perform action "AXRaise" of targetWindow
+        """.trimIndent()
+        return """
+            tell application "System Events"
+                set targetProcess to first application process whose unix id is $pid
+                if (count of windows of targetProcess) is 0 then return "no_windows"
+                set frontmost of targetProcess to true
+                $raise
+                return "focused"
+            end tell
+        """.trimIndent()
+    }
+
     internal fun shouldFocusExistingProcess(request: AppLaunchRequest): Boolean =
-        request.pid?.let { it > 0 } == true
+        request.pid?.let { it > 0 } == true && request.projectPath.isNullOrBlank() &&
+            (!request.stableWindowId.isNullOrBlank() || !request.windowTitle.isNullOrBlank() ||
+                (request.axWindowIndex ?: 0) > 0)
 }

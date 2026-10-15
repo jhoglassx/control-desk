@@ -34,6 +34,7 @@ data class AppLaunchRequest(
     val projectPath: String? = null,
     val pid: Int? = null,
     val axWindowIndex: Int? = null,
+    val stableWindowId: String? = null,
 )
 
 @Serializable
@@ -67,6 +68,7 @@ data class AppCloseRequest(
     val windowTitle: String? = null,
     val axWindowIndex: Int? = null,
     val windowCount: Int? = null,
+    val stableWindowId: String? = null,
 )
 
 @Serializable
@@ -137,6 +139,8 @@ data class RunningAppInfo(
     val windowIndex: Int? = null,
     val axWindowIndex: Int? = null,
     val windowNumber: Int? = null,
+    /** Stable macOS Quartz window ID; unlike windowIndex, this does not shift when sibling windows change. */
+    val stableWindowId: String? = null,
     val windowCount: Int? = null,
     val iconBase64: String? = null,
     val isActive: Boolean = false,

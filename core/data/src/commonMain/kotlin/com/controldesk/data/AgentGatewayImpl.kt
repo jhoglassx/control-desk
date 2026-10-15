@@ -11,9 +11,7 @@ import com.controldesk.domain.model.MacFileListing
 import com.controldesk.domain.repository.AgentGateway
 import com.controldesk.logging.ControlDeskLog
 import com.controldesk.protocol.AgentApiClient
-import com.controldesk.protocol.AppCloseRequest
 import com.controldesk.protocol.BrowseFilesRequest
-import com.controldesk.protocol.AppLaunchRequest
 import com.controldesk.protocol.BrowserCloseRequest
 import com.controldesk.protocol.BrowserOpenRequest
 import com.controldesk.protocol.BrowserTabSwitchRequest
@@ -24,6 +22,7 @@ import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.ResponseException
 import io.ktor.http.HttpStatusCode
 import io.ktor.util.network.UnresolvedAddressException
+import kotlinx.coroutines.CancellationException
 
 class AgentGatewayImpl(
     private val api: AgentApiClient,
@@ -77,6 +76,7 @@ class AgentGatewayImpl(
                 windowIndex = info.windowIndex,
                 axWindowIndex = info.axWindowIndex,
                 windowNumber = info.windowNumber,
+                stableWindowId = info.stableWindowId,
                 windowCount = info.windowCount,
                 iconBase64 = info.iconBase64,
                 isActive = info.isActive,
@@ -107,17 +107,7 @@ class AgentGatewayImpl(
             api.launchApp(
                 host.baseUrl(),
                 host.token,
-                AppLaunchRequest(
-                    target = button.payload.getValue("target"),
-                    targetType = button.payload["targetType"] ?: "appName",
-                    windowTitle = button.payload["windowTitle"],
-                    windowIndex = button.payload["windowIndex"]?.toIntOrNull(),
-                    windowNumber = button.payload["windowNumber"]?.toIntOrNull(),
-                    bundlePath = button.payload["bundlePath"],
-                    projectPath = button.payload["projectPath"],
-                    pid = button.payload["pid"]?.toIntOrNull(),
-                    axWindowIndex = button.payload["axWindowIndex"]?.toIntOrNull(),
-                ),
+                button.toLaunchRequest(),
             ).apps,
         )
     }
@@ -128,14 +118,7 @@ class AgentGatewayImpl(
             api.closeApp(
                 host.baseUrl(),
                 host.token,
-                AppCloseRequest(
-                    target = button.payload.getValue("target"),
-                    targetType = button.payload["targetType"] ?: "appName",
-                    pid = button.payload["pid"]?.toIntOrNull(),
-                    windowTitle = button.payload["windowTitle"],
-                    axWindowIndex = button.payload["axWindowIndex"]?.toIntOrNull(),
-                    windowCount = button.payload["windowCount"]?.toIntOrNull(),
-                ),
+                button.toCloseRequest(),
             ).apps,
         )
     }
@@ -187,6 +170,10 @@ class AgentGatewayImpl(
                 throw ControlDeskError.Unauthorized()
             }
             throw ControlDeskError.Generic("Erro do agente (${error.response.status.value})")
+        } catch (error: CancellationException) {
+            // Host changes and screen refreshes intentionally cancel stale requests.
+            // Preserve structured concurrency and avoid reporting them as agent failures.
+            throw error
         } catch (error: Throwable) {
             if (error !is ControlDeskError) {
                 ControlDeskLog.gateway.e(error) { "agent request failed: ${error.message}" }

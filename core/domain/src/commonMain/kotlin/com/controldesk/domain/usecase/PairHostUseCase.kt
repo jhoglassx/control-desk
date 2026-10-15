@@ -36,17 +36,19 @@ class PairHostUseCase(
             val hosts = preferences.getHosts()
             val id = "$trimmedHost:$portInt"
             val existing = hosts.find { it.id == id }
-            val paired = PairedHost(
+            val paired = existing?.copy(
+                name = trimmedName,
+                osType = osType,
+                token = token,
+            ) ?: PairedHost(
                 id = id,
                 name = trimmedName,
                 host = trimmedHost,
                 port = portInt,
                 osType = osType,
-                sortOrder = existing?.sortOrder ?: hosts.size,
+                sortOrder = hosts.size,
                 token = token,
-                buttons = existing?.buttons ?: DefaultButtonTemplates.forNewHost(),
-                pinnedApps = existing?.pinnedApps.orEmpty(),
-                appOrder = existing?.appOrder.orEmpty(),
+                buttons = DefaultButtonTemplates.forNewHost(),
             )
             preferences.saveHost(paired)
             paired

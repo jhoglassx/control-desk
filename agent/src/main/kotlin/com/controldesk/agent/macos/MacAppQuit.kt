@@ -13,7 +13,12 @@ object MacAppQuit {
     )
     private val helpers = listOf(" helper", "/helper", "crashpad", "renderer", "gpu", "plugin-container")
 
-    fun quit(request: AppCloseRequest) {
+    fun quit(incoming: AppCloseRequest) {
+        val request = incoming.stableWindowId?.let { id ->
+            val window = MacWindowTarget.resolve(id, incoming.pid)
+            incoming.copy(target = window.appName, axWindowIndex = window.axWindowIndex, windowTitle = window.windowTitle,
+                windowCount = window.windowCount)
+        } ?: incoming
         val app = request.target.trim()
         if (app.isEmpty() || app in blocked) return
         val bundle = MacAppIconResolver.pathFor(app)
@@ -26,7 +31,7 @@ object MacAppQuit {
             }.toList()
         }
         val action = closeAction(request, matchingProcesses.size)
-        if (action == CloseAction.IGNORE) return
+        check(action != CloseAction.IGNORE) { "Não foi possível identificar a janela para fechar. Atualize a lista." }
         if (action == CloseAction.CLOSE_WINDOW) {
             closeWindow(request)
             MacWindowLister.refreshNow()
@@ -46,23 +51,45 @@ object MacAppQuit {
 
     private fun closeWindow(request: AppCloseRequest) {
         val index = request.axWindowIndex?.takeIf { it > 0 }
-        val title = request.windowTitle.orEmpty()
-        if (index == null && title.isBlank()) return
-        val selector = index?.let { "window $it" }
-            ?: "first window whose name is \"${Shell.escape(title)}\""
-        Shell.osascript(
-            """
-            tell application "System Events"
-                tell (first application process whose unix id is ${request.pid})
-                    try
-                        close $selector
-                    end try
-                end tell
-            end tell
-            """.trimIndent(),
-            timeoutMs = 1_000,
-        )
+        val title = request.windowTitle?.trim()?.takeIf { it.isNotEmpty() }
+        require(index != null || title != null) { "A janela não tem identificação para ser fechada" }
+        val pid = requireNotNull(request.pid?.takeIf { it > 0 }) { "Não foi possível identificar o processo da janela" }
+        val script = closeWindowScript(pid, index, title, resolvedById = request.stableWindowId != null)
+        val result = Shell.osascript(script, timeoutMs = 3_000)
+        check(result == CLOSE_WINDOW_SUCCESS) {
+            result.ifBlank { "O macOS não confirmou o fechamento da janela" }
+        }
     }
+
+    internal fun closeWindowScript(pid: Int, index: Int?, title: String?, resolvedById: Boolean = false): String {
+        val safeTitle = title?.takeIf { it.isNotBlank() }
+            ?.replace('\n', ' ')
+            ?.replace('\r', ' ')
+            ?.let(Shell::escape)
+        val selectWindow = when {
+            resolvedById && index != null && index > 0 -> buildString {
+                append("set targetWindow to window $index of targetProcess")
+                if (safeTitle != null) append("\nif name of targetWindow is not \"$safeTitle\" then error \"A janela mudou; atualize a lista\"")
+            }
+            safeTitle != null -> """
+                set matchingWindows to (every window of targetProcess whose name is "$safeTitle")
+                if (count of matchingWindows) is not 1 then error "Janela não encontrada ou título ambíguo"
+                set targetWindow to item 1 of matchingWindows
+            """.trimIndent()
+            index != null && index > 0 -> "set targetWindow to window $index of targetProcess"
+            else -> error("A janela não tem identificação para ser fechada")
+        }
+        return """
+            tell application "System Events"
+                set targetProcess to first application process whose unix id is $pid
+                $selectWindow
+                click (first button of targetWindow whose subrole is "AXCloseButton")
+                return "$CLOSE_WINDOW_SUCCESS"
+            end tell
+        """.trimIndent()
+    }
+
+    private const val CLOSE_WINDOW_SUCCESS = "closed"
 
     internal fun matchesMainApp(command: String, app: String, bundle: String?, exe: String?): Boolean {
         if (command.isBlank()) return false
@@ -87,10 +114,7 @@ object MacAppQuit {
 
         if (request.pid?.let { it > 0 } == true) {
             return when {
-                windowCount != null && windowCount > 1 ->
-                    if (hasWindowIdentity) CloseAction.CLOSE_WINDOW else CloseAction.IGNORE
-                windowCount == 1 -> CloseAction.TERMINATE_PROCESS
-                windowCount == null && hasWindowIdentity -> CloseAction.CLOSE_WINDOW
+                hasWindowIdentity -> CloseAction.CLOSE_WINDOW
                 else -> CloseAction.IGNORE
             }
         }

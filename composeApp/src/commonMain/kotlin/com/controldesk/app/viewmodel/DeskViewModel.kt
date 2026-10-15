@@ -2,14 +2,19 @@ package com.controldesk.app.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.controldesk.data.ShortcutWindowBinder
+import com.controldesk.data.DockShortcutProjector
 import com.controldesk.data.RunningAppsGridBuilder
 import com.controldesk.data.RealtimeUnavailableException
 import com.controldesk.domain.error.ControlDeskError
+import com.controldesk.domain.model.ApplicationIdentity
 import com.controldesk.domain.model.ActionType
+import com.controldesk.domain.model.AppTileSize
 import com.controldesk.domain.model.AgentRealtimeEvent
 import com.controldesk.domain.model.AudioState
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
+import com.controldesk.domain.model.PinnedAppShortcut
 import com.controldesk.domain.model.RealtimeConnectionState
 import com.controldesk.domain.repository.AgentGateway
 import com.controldesk.domain.repository.AgentRealtime
@@ -45,7 +50,10 @@ class DeskViewModel(
     private val _uiState = MutableStateFlow(DeskUiState())
     val uiState: StateFlow<DeskUiState> = _uiState.asStateFlow()
 
+    private var realtimeHostId: String? = null
+    private val windowsByHost = mutableMapOf<String, Map<String, List<GridButton>>>()
     private val buttonsCache = mutableMapOf<String, List<GridButton>>()
+    private val lastAppliedTileSizeLog = mutableMapOf<String, String>()
     private val audioCache = mutableMapOf<String, AudioState>()
     private val listHintCache = mutableMapOf<String, String?>()
     private var memoryIcons: Map<String, String> = emptyMap()
@@ -91,13 +99,19 @@ class DeskViewModel(
                     _uiState.value = DeskUiState()
                     return@collect
                 }
-                val previousId = _uiState.value.selectedHost?.id
-                val index = sorted.indexOfFirst { it.id == previousId }.takeIf { it >= 0 } ?: 0
+                val previousHost = _uiState.value.selectedHost
+                val index = sorted.indexOfFirst { it.id == previousHost?.id }.takeIf { it >= 0 } ?: 0
+                val selectedHost = sorted[index]
                 _uiState.update { it.copy(hosts = sorted, selectedHostIndex = index) }
-                loadHost(sorted[index], showLoading = previousId == null)
+                if (previousHost == null || previousHost.connectionChangedFrom(selectedHost)) {
+                    loadHost(selectedHost, showLoading = previousHost == null)
+                }
             }
         }
     }
+
+    private fun PairedHost.connectionChangedFrom(other: PairedHost): Boolean =
+        id != other.id || host != other.host || port != other.port || token != other.token
 
     fun refreshHosts() {
         jobsScope.launch {
@@ -117,7 +131,7 @@ class DeskViewModel(
         closingPlaceholders.clear()
         bindActiveTracking(host.id)
         restoreCache(host)
-        _uiState.update { it.copy(selectedHostIndex = index) }
+        _uiState.update { it.copy(selectedHostIndex = index, windowSelection = null) }
         loadHost(host, showLoading = buttonsCache[host.id].isNullOrEmpty())
     }
 
@@ -132,6 +146,8 @@ class DeskViewModel(
 
     fun onIntent(intent: DeskIntent) {
         when (intent) {
+            DeskIntent.DismissWindowSelection -> _uiState.update { it.copy(windowSelection = null) }
+            is DeskIntent.SelectWindow -> selectWindow(intent.windowId)
             is DeskIntent.SetReorganizingApps -> _uiState.update {
                 it.copy(
                     isReorganizingApps = intent.enabled,
@@ -161,19 +177,136 @@ class DeskViewModel(
                     )
                 } else state
             }
-            DeskIntent.FinishAppReorderDrag -> _uiState.update {
-                it.copy(
-                    selectedAppIdForReorder = null,
-                    selectedAppDragOffsetX = 0f,
-                    selectedAppDragOffsetY = 0f,
-                    selectedAppDragStartIndex = null,
-                    selectedAppDragCellWidth = 0f,
-                    selectedAppDragCellHeight = 0f,
-                )
-            }
+            DeskIntent.FinishAppReorderDrag -> finishAppReorderDrag()
+            is DeskIntent.PreviewAppGridPositions -> previewAppGridPositions(intent.positions)
             is DeskIntent.PreviewReorderApp -> previewReorderApp(intent.appId, intent.targetIndex)
             is DeskIntent.ReorderApps -> reorderApps(intent.orderedIds)
+            is DeskIntent.ResizeAppTile -> resizeAppTile(intent.buttonId)
         }
+    }
+
+    private fun finishAppReorderDrag() {
+        val state = _uiState.value
+        val host = state.selectedHost?.let { persistGridLayout(it, state.buttons) }
+        _uiState.update {
+            it.copy(
+                selectedAppIdForReorder = null,
+                selectedAppDragOffsetX = 0f,
+                selectedAppDragOffsetY = 0f,
+                selectedAppDragStartIndex = null,
+                selectedAppDragCellWidth = 0f,
+                selectedAppDragCellHeight = 0f,
+                hosts = if (host == null) it.hosts else it.hosts.map { saved ->
+                    if (saved.id == host.id) host else saved
+                },
+            )
+        }
+        host?.let { jobsScope.launch { hostPreferences.saveHost(it) } }
+    }
+
+    private fun previewAppGridPositions(positions: Map<String, Int>) {
+        val host = _uiState.value.selectedHost ?: return
+        val updatedHost = host.copy(appGridPositions = positions)
+        _uiState.update { state ->
+            state.copy(hosts = state.hosts.map { if (it.id == host.id) updatedHost else it })
+        }
+    }
+
+    private fun resizeAppTile(buttonId: String) {
+        val state = _uiState.value
+        val host = state.selectedHost?.let { persistGridLayout(it, state.buttons) } ?: return
+        val sizes = listOf(1 to 1, 2 to 1, 2 to 2, 1 to 2)
+        val currentButton = state.buttons.firstOrNull { it.id == buttonId } ?: return
+        val sizeKeys = tileSizeKeys(currentButton)
+        val windowKeys = tileSizeKeys(currentButton)
+        val currentSize = currentButton.tileSpanColumns() to currentButton.tileSpanRows()
+        val nextSize = sizes[(sizes.indexOf(currentSize) + 1).mod(sizes.size)]
+        ControlDeskLog.app.i {
+            "[app-layout] resize host=${host.id} tile=$buttonId label=\"${currentButton.label}\" " +
+                "title=\"${currentButton.payload["windowTitle"].orEmpty()}\" pid=${currentButton.payload["pid"]} " +
+                "stableWindowId=${currentButton.payload["stableWindowId"]} keys=${sizeKeys.joinToString()} " +
+                "from=${currentSize.first}x${currentSize.second} to=${nextSize.first}x${nextSize.second}"
+        }
+        val updatedHost = host.copy(
+            appTileSizes = host.appTileSizes + sizeKeys.associateWith {
+                AppTileSize(nextSize.first, nextSize.second)
+            },
+        )
+        val updatedButtons = state.buttons.map { button ->
+            if (button.id != currentButton.id && tileSizeKeys(button).none(windowKeys::contains)) button
+            else button.copy(payload = button.payload + mapOf(
+                "spanColumns" to nextSize.first.toString(),
+                "spanRows" to nextSize.second.toString(),
+            ))
+        }
+        buttonsCache[host.id] = updatedButtons
+        _uiState.update { state ->
+            state.copy(
+                buttons = if (state.selectedHost?.id == host.id) updatedButtons else state.buttons,
+                cachedButtons = state.cachedButtons + (host.id to updatedButtons),
+                hosts = state.hosts.map { if (it.id == host.id) updatedHost else it },
+            )
+        }
+        jobsScope.launch {
+            runCatching { hostPreferences.saveHost(updatedHost) }
+                .onSuccess {
+                    ControlDeskLog.app.i {
+                        "[app-layout] persisted resize host=${host.id} keys=${sizeKeys.joinToString()} " +
+                            "size=${nextSize.first}x${nextSize.second}"
+                    }
+                }
+                .onFailure { error ->
+                    ControlDeskLog.app.e(error) {
+                        "[app-layout] failed to persist resize host=${host.id} keys=${sizeKeys.joinToString()}"
+                    }
+                }
+        }
+    }
+
+    /** Saves a complete compact grid order so future app snapshots cannot choose a new default order. */
+    private fun persistGridLayout(host: PairedHost, buttons: List<GridButton>): PairedHost {
+        val positions = host.appGridPositions.toMutableMap()
+        val identities = host.appLayoutIdentities.toMutableMap()
+        var nextPosition = (positions.values.maxOrNull() ?: -1) + 1
+        buttons.forEach { button ->
+            if (button.id !in positions) positions[button.id] = nextPosition++
+            identities[button.id] = appLayoutIdentity(button)
+        }
+        val currentOrder = buttons.sortedBy { positions[it.id] ?: Int.MAX_VALUE }.map(GridButton::id)
+        val order = currentOrder + host.appOrder.filterNot { it in currentOrder }
+        return host.copy(appOrder = order, appGridPositions = positions, appLayoutIdentities = identities)
+    }
+
+    /** Keeps a Dock shortcut in the closed window's grid slot and carries its size forward. */
+    private fun persistClosedDockShortcutLayout(
+        host: PairedHost,
+        buttons: List<GridButton>,
+        closed: GridButton,
+        placeholder: GridButton?,
+    ): PairedHost {
+        val layout = persistGridLayout(host, buttons)
+        if (placeholder == null || placeholder.id == closed.id) return layout
+
+        val positions = layout.appGridPositions.toMutableMap()
+        val closedPosition = positions.remove(closed.id)
+        if (closedPosition != null && placeholder.id !in positions) positions[placeholder.id] = closedPosition
+
+        val sizes = layout.appTileSizes.toMutableMap()
+        val closedSizeKeys = tileSizeKeys(closed)
+        val placeholderSizeKey = tileSizeKey(placeholder)
+        if (placeholderSizeKey !in closedSizeKeys) {
+            closedSizeKeys.firstNotNullOfOrNull(sizes::remove)?.let { sizes[placeholderSizeKey] = it }
+        }
+        val order = layout.appOrder.map { if (it == closed.id) placeholder.id else it }.distinct()
+        val identities = layout.appLayoutIdentities.toMutableMap()
+        identities.remove(closed.id)
+        identities[placeholder.id] = appLayoutIdentity(placeholder)
+        return layout.copy(
+            appOrder = order,
+            appGridPositions = positions,
+            appTileSizes = sizes,
+            appLayoutIdentities = identities,
+        )
     }
 
     private fun reorderApps(orderedIds: List<String>) {
@@ -216,6 +349,36 @@ class DeskViewModel(
     }
 
     fun onButtonClick(button: GridButton) {
+        if (requestWindowSelection(button, close = false)) return
+        executeButtonClick(button)
+    }
+
+    private fun requestWindowSelection(button: GridButton, close: Boolean): Boolean {
+        val host = _uiState.value.selectedHost ?: return false
+        val windows = windowsByHost[host.id]?.get(button.id).orEmpty()
+        if (windows.size < 2) return false
+        _uiState.update { it.copy(windowSelection = WindowSelection(host.id, button.id, button.label, windows, close)) }
+        return true
+    }
+
+    private fun selectWindow(windowId: String) {
+        val selection = _uiState.value.windowSelection ?: return
+        _uiState.update { it.copy(windowSelection = null) }
+        if (_uiState.value.selectedHost?.id != selection.hostId) return
+        val window = windowsByHost[selection.hostId]?.get(selection.shortcutId)?.singleOrNull { it.id == windowId }
+        val shortcut = _uiState.value.buttons.singleOrNull { it.id == selection.shortcutId }
+        if (window == null || shortcut == null) {
+            _uiState.update { it.copy(feedback = "Essa janela não está mais disponível. Atualize a lista.") }
+            return
+        }
+        val selected = shortcut.copy(
+            payload = (shortcut.payload - RUNNING_WINDOW_PAYLOAD_KEYS - "projectPath") + window.payload,
+            actionType = window.actionType,
+        )
+        if (selection.close) executeAppClose(selected) else executeButtonClick(selected)
+    }
+
+    private fun executeButtonClick(button: GridButton) {
         val host = _uiState.value.selectedHost ?: return
         if (isClosing(button)) return
         armPinnedFocus(button)
@@ -259,6 +422,11 @@ class DeskViewModel(
     }
 
     fun onAppClose(button: GridButton) {
+        if (requestWindowSelection(button, close = true)) return
+        executeAppClose(button)
+    }
+
+    private fun executeAppClose(button: GridButton) {
         val host = _uiState.value.selectedHost ?: return
         val target = button.payload["target"]?.takeIf { it.isNotBlank() } ?: return
         if (target in BLOCKED_QUIT) {
@@ -281,14 +449,21 @@ class DeskViewModel(
         }
         val key = button.id
         closingUntil[key] = TimeSource.Monotonic.markNow() + CLOSE_HOLD_MS.milliseconds
-        if (button.isDockPinned) {
-            closingPlaceholders[key] = dockPlaceholder(button)
-        } else {
-            closingPlaceholders.remove(key)
+        val placeholder = button.takeIf { it.isDockPinned }?.let(::dockPlaceholder)
+        if (placeholder != null) closingPlaceholders[key] = placeholder else closingPlaceholders.remove(key)
+        val state = _uiState.value
+        val updatedHost = state.selectedHost?.let { selected ->
+            persistClosedDockShortcutLayout(selected, state.buttons, button, placeholder)
         }
-        _uiState.update { state ->
-            state.copy(buttons = replaceClosedApp(state.buttons, button))
+        _uiState.update { current ->
+            current.copy(
+                buttons = replaceClosedApp(current.buttons, button),
+                hosts = if (updatedHost == null) current.hosts else current.hosts.map { saved ->
+                    if (saved.id == updatedHost.id) updatedHost else saved
+                },
+            )
         }
+        updatedHost?.let { jobsScope.launch { hostPreferences.saveHost(it) } }
         jobsScope.launch {
             try {
                 val apps = if (isRealtimeConnected()) {
@@ -300,6 +475,8 @@ class DeskViewModel(
                 } else {
                     agentGateway.closeApp(host, button)
                 }
+                closingUntil.remove(key)
+                closingPlaceholders.remove(key)
                 applyAgentApps(host, apps)
                 if (apps.isEmpty() && !isRealtimeConnected()) refreshAppsSilent(host)
             } catch (error: Throwable) {
@@ -481,11 +658,17 @@ class DeskViewModel(
     private fun handleLoadFailure(host: PairedHost, error: Throwable, showLoading: Boolean) {
         val message = error.message ?: ControlDeskError.AGENT_OFFLINE
         ControlDeskLog.app.e(error) { "loadHost failed host=${host.id}: $message" }
+        if (buttonsCache[host.id].isNullOrEmpty() &&
+            (host.applicationShortcuts.isNotEmpty() || host.pinnedApps.isNotEmpty())
+        ) {
+            publishButtons(host, emptyList(), preferMerge = false)
+            listHintCache[host.id] = message
+        }
         val hasCache = !buttonsCache[host.id].isNullOrEmpty()
         if (hasCache) {
             startRealtime(host)
             _uiState.update {
-                it.copy(isLoadingApps = false, feedback = if (showLoading) message else it.feedback)
+                it.copy(isLoadingApps = false, listHint = message, feedback = if (showLoading) message else it.feedback)
             }
             return
         }
@@ -501,8 +684,6 @@ class DeskViewModel(
             )
         }
     }
-
-    private var realtimeHostId: String? = null
 
     private fun startRealtime(host: PairedHost) {
         if (realtimeHostId == host.id &&
@@ -561,8 +742,10 @@ class DeskViewModel(
         }
     }
 
-    private suspend fun applyAgentApps(host: PairedHost, apps: List<com.controldesk.domain.model.RunningApp>) {
-        if (apps.isEmpty()) return
+    private suspend fun applyAgentApps(
+        host: PairedHost,
+        apps: List<com.controldesk.domain.model.RunningApp>,
+    ) {
         val buttons = RunningAppsGridBuilder.build(apps, memoryIcons)
         publishButtons(host, buttons, preferMerge = false)
         persistNewIcons(buttons)
@@ -588,7 +771,7 @@ class DeskViewModel(
         val favorites = currentHost.pinnedApps.sortedBy { it.order }.mapIndexed { index, app ->
             GridButton(
                 id = "favorite-${app.id.hashCode()}",
-                label = app.name,
+                label = app.shortcutLabel(),
                 actionType = ActionType.REMOTE_LAUNCH,
                 payload = buildMap {
                     put("target", app.name)
@@ -600,18 +783,27 @@ class DeskViewModel(
                 row = index / 4,
                 col = index % 4,
                 iconBase64 = app.iconBase64,
+                isActive = false,
+                isVisible = false,
                 isDockPinned = true,
                 isFavoriteShortcut = true,
             )
         }
-        val appButtons = incoming.filterNot { it.id.startsWith("favorite-") }
-        val discoveredApps = favorites + appButtons
-        val stableHost = updateAppOrder(currentHost, discoveredApps, buttonsCache[host.id].orEmpty())
-        val withFavorites = reorderButtons(discoveredApps, stableHost.appOrder)
+        val runtimeButtons = DockShortcutProjector.runtimeWindows(incoming.filterNot { it.id.startsWith("favorite-") })
+        val activeWindowId = runtimeButtons.firstOrNull { it.isActive }?.id
+        val normalizedActivity = runtimeButtons.map { it.copy(isActive = it.id == activeWindowId) }
+        val projection = DockShortcutProjector.project(currentHost, normalizedActivity)
+        val appButtons = projection.runtime
+        val binding = ShortcutWindowBinder.bind(favorites, projection.buttons, appButtons, projection.windows)
+        windowsByHost[host.id] = binding.windows
+        val visible = binding.buttons
+        val stableHost = projection.host.copy(
+            appOrder = projection.host.appOrder + visible.map { it.id }.filterNot { it in projection.host.appOrder },
+        )
+        if (stableHost != currentHost) jobsScope.launch { hostPreferences.saveHost(stableHost) }
+        val withFavorites = reorderButtons(applyAppTileSizes(visible, stableHost), stableHost.appOrder)
         confirmClosedApps(withFavorites)
-        val stabilized = stabilizeActiveState(host.id, withFavorites)
-        val withoutDuplicateShortcuts = mergePinnedShortcuts(stabilized)
-        val withPin = applyPinnedFocus(withoutDuplicateShortcuts)
+        val withPin = applyPinnedFocus(withFavorites)
         val hiddenWhileClosing = applyClosingFilter(withPin)
         buttonsCache[host.id] = hiddenWhileClosing
         val activeId = hiddenWhileClosing.firstOrNull { it.isActive }?.id
@@ -644,120 +836,60 @@ class DeskViewModel(
         }
     }
 
-    private fun mergePinnedShortcuts(buttons: List<GridButton>): List<GridButton> {
-        val matchedRunningIds = mutableSetOf<String>()
-        val shortcuts = buttons.filter(GridButton::isFavoriteShortcut)
-        val matchingInstances = mutableMapOf<String, GridButton>()
-        shortcuts.forEach { shortcut ->
-            val shortcutTarget = shortcut.payload["target"].orEmpty()
-            val boundShortcutPids = matchingInstances.values
-                .mapNotNull { it.payload["pid"] }
-                .toSet()
-            val candidates = buttons
-                .asSequence()
-                .filterNot(GridButton::isFavoriteShortcut)
-                .filterNot { it.id in matchedRunningIds }
-                .filter { candidate ->
-                    val sameBundle = candidate.payload["bundlePath"]?.equals(
-                        shortcut.payload["bundlePath"],
-                        ignoreCase = true,
-                    ) == true
-                    sameBundle || candidate.payload["target"].equals(shortcutTarget, ignoreCase = true)
+    private fun applyAppTileSizes(buttons: List<GridButton>, host: PairedHost): List<GridButton> =
+        buttons.map { button ->
+            val explicitKey = tileSizeKeys(button).firstOrNull { it in host.appTileSizes }
+            val sourceKey = explicitKey
+            val size = sourceKey?.let(host.appTileSizes::get) ?: AppTileSize()
+            val sizeText = "${size.columns.coerceIn(1, 2)}x${size.rows.coerceIn(1, 2)}"
+            val logKey = "${host.id}:${button.id}"
+            val logSignature = "$sourceKey:$sizeText:${button.payload["stableWindowId"]}:${button.payload["windowTitle"]}"
+            if ((sourceKey != null || lastAppliedTileSizeLog.containsKey(logKey)) &&
+                lastAppliedTileSizeLog.put(logKey, logSignature) != logSignature
+            ) {
+                val stableWindowId = button.payload["stableWindowId"]?.takeIf(String::isNotBlank)
+                val appIdentity = button.layoutAppIdentity().orEmpty()
+                ControlDeskLog.app.i {
+                    "[app-layout] apply host=${host.id} tile=${button.id} label=\"${button.label}\" " +
+                        "title=\"${button.payload["windowTitle"].orEmpty()}\" pid=${button.payload["pid"]} " +
+                        "stableWindowId=${button.payload["stableWindowId"]} source=${sourceKey ?: "default"} size=$sizeText " +
+                        "instancesForApp=${button.payload["instanceCount"] ?: "1"} savedKeys=${host.appTileSizes.keys.filter { key ->
+                            (appIdentity.isNotBlank() && key.contains(appIdentity, ignoreCase = true)) ||
+                                (stableWindowId != null && key.contains(stableWindowId))
+                        }.joinToString()}"
                 }
-                .toList()
-            val unboundInstances = candidates.filterNot { candidate ->
-                candidate.payload["pid"]?.let { it in boundShortcutPids } == true
             }
-            val running = (unboundInstances.ifEmpty { candidates })
-                .maxByOrNull { candidate ->
-                    (if (candidate.isActive) 4 else 0) +
-                        (if (candidate.isVisible) 2 else 0) +
-                        (if (!candidate.isDockPlaceholder()) 1 else 0)
-                }
-            if (running != null) {
-                matchingInstances[shortcut.id] = running
-                matchedRunningIds += running.id
-            }
+            button.copy(payload = button.payload + mapOf(
+                "spanColumns" to size.columns.coerceIn(1, 2).toString(),
+                "spanRows" to size.rows.coerceIn(1, 2).toString(),
+            ))
         }
-        return buttons
-            .filterNot { it.id in matchedRunningIds }
-            .map { button ->
-                val running = matchingInstances[button.id] ?: return@map button
-                val windowPayload = running.payload.filterKeys { it in RUNNING_WINDOW_PAYLOAD_KEYS }
-                button.copy(
-                    label = running.label,
-                    payload = button.payload + windowPayload,
-                    iconBase64 = button.iconBase64 ?: running.iconBase64,
-                    isActive = running.isActive,
-                    isVisible = running.isVisible,
-                    monitorIndex = running.monitorIndex,
-                    isDockPinned = running.isDockPinned,
-                )
-            }
-    }
 
-    private fun updateAppOrder(
-        host: PairedHost,
-        incoming: List<GridButton>,
-        previousButtons: List<GridButton>,
-    ): PairedHost {
-        val incomingById = incoming.associateBy(GridButton::id)
-        val previousById = previousButtons.associateBy(GridButton::id)
-        val claimedIds = mutableSetOf<String>()
-        val reconciledOrder = host.appOrder.map { savedId ->
-            if (savedId in incomingById) {
-                claimedIds += savedId
-                savedId
-            } else {
-                val previous = previousById[savedId]
-                val replacement = previous?.takeUnless(GridButton::isFavoriteShortcut)
-                    ?.let { oldButton -> findReplacementOrderId(oldButton, incoming, claimedIds) }
-                if (replacement != null) {
-                    claimedIds += replacement
-                    replacement
-                } else savedId
-            }
-        }.distinct()
-        val updatedOrder = reconciledOrder + incoming.map(GridButton::id).filterNot { it in reconciledOrder }
-        if (updatedOrder == host.appOrder) return host
-        return host.copy(appOrder = updatedOrder).also { updatedHost ->
-            jobsScope.launch { hostPreferences.saveHost(updatedHost) }
-        }
-    }
+    private fun tileSizeKeys(button: GridButton): List<String> = listOf(tileSizeKey(button))
 
-    private fun findReplacementOrderId(
-        previous: GridButton,
-        incoming: List<GridButton>,
-        claimedIds: Set<String>,
-    ): String? {
-        val previousTarget = previous.payload["target"]?.takeIf(String::isNotBlank)
-        val previousBundlePath = previous.payload["bundlePath"]?.takeIf(String::isNotBlank)
-        if (previousTarget == null && previousBundlePath == null) return null
-        val candidates = incoming.filter { candidate ->
-            val sameBundle = previousBundlePath != null && candidate.payload["bundlePath"]
-                .equals(previousBundlePath, ignoreCase = true)
-            val sameTarget = previousTarget != null && candidate.payload["target"]
-                .equals(previousTarget, ignoreCase = true)
-            !candidate.isFavoriteShortcut && candidate.id !in claimedIds &&
-                (sameBundle || sameTarget) &&
-                candidate.payload["browser"] == previous.payload["browser"]
-        }
-        if (candidates.isEmpty()) return null
-        val previousWindowTitle = previous.payload["windowTitle"] ?: previous.payload["value"]
-        val previousPid = previous.payload["pid"]
-        val previousBrowserWindow = previous.payload["browserWindowIndex"]
-        val previousWindowIndex = previous.payload["windowIndex"]
-        return candidates.maxByOrNull { candidate ->
-            var score = if (candidate.isActive) 1 else 0
-            if (previousBundlePath != null && candidate.payload["bundlePath"]
-                    .equals(previousBundlePath, ignoreCase = true)
-            ) score += 32
-            if (previousWindowTitle != null && previousWindowTitle == (candidate.payload["windowTitle"] ?: candidate.payload["value"])) score += 16
-            if (previousPid != null && previousPid == candidate.payload["pid"]) score += 8
-            if (previousBrowserWindow != null && previousBrowserWindow == candidate.payload["browserWindowIndex"]) score += 4
-            if (previousWindowIndex != null && previousWindowIndex == candidate.payload["windowIndex"]) score += 2
-            score
-        }?.id
+    private fun tileSizeKey(button: GridButton): String =
+        button.payload["pinnedAppId"]?.let { "pinned:$it" } ?: "card:${button.id}"
+
+    private fun appLayoutIdentity(button: GridButton): String =
+        button.payload["pinnedAppId"]?.let { "pinned:$it" } ?: "app:${button.layoutAppIdentity()}"
+
+    private fun GridButton.layoutAppIdentity(): String? = sequenceOf(
+        payload["bundlePath"],
+        payload["target"],
+    ).mapNotNull { it?.trim()?.takeIf(String::isNotBlank) }
+        .firstOrNull()
+        ?.lowercase()
+
+    private fun GridButton.tileSpanColumns(): Int = payload["spanColumns"]?.toIntOrNull()?.coerceIn(1, 2) ?: 1
+
+    private fun GridButton.tileSpanRows(): Int = payload["spanRows"]?.toIntOrNull()?.coerceIn(1, 2) ?: 1
+
+    private fun PinnedAppShortcut.shortcutLabel(): String {
+        val projectName = projectPath?.trim()?.takeIf(String::isNotBlank)
+            ?.substringAfterLast('/')?.substringAfterLast('\\')
+            ?.takeIf(String::isNotBlank)
+            ?: return name
+        return if (name.contains(projectName, ignoreCase = true)) name else "$name · $projectName"
     }
 
     private fun reorderButtons(buttons: List<GridButton>, persistedOrder: List<String>): List<GridButton> {
@@ -767,55 +899,6 @@ class DeskViewModel(
             .sortedWith(compareBy<IndexedValue<GridButton>> { orderById[it.value.id] ?: Int.MAX_VALUE }.thenBy { it.index })
             .map { it.value }
     }
-
-    private fun stabilizeActiveState(hostId: String, incoming: List<GridButton>): List<GridButton> {
-        val incomingActiveId = incoming.firstOrNull { it.isActive && !it.isDockPlaceholder() }?.id
-        var current = currentActiveIdByHost[hostId]
-        var last = lastIncomingActiveIdByHost[hostId]
-        var streak = incomingActiveStreakByHost[hostId] ?: 0
-        if (activeTrackingHostId == hostId) {
-            current = currentActiveId
-            last = lastIncomingActiveId
-            streak = incomingActiveStreak
-        }
-
-        val highlightId = when {
-            incomingActiveId != null && incomingActiveId == current -> incomingActiveId
-            incomingActiveId == null -> {
-                last = null
-                streak = 0
-                current = null
-                null
-            }
-            else -> {
-                if (incomingActiveId == last) streak += 1 else {
-                    last = incomingActiveId
-                    streak = 1
-                }
-                if (streak >= ACTIVE_CONFIRM_POLLS) {
-                    current = incomingActiveId
-                    incomingActiveId
-                } else {
-                    current
-                }
-            }
-        }
-
-        currentActiveIdByHost[hostId] = current
-        lastIncomingActiveIdByHost[hostId] = last
-        incomingActiveStreakByHost[hostId] = streak
-        if (activeTrackingHostId == hostId || _uiState.value.selectedHost?.id == hostId) {
-            currentActiveId = current
-            lastIncomingActiveId = last
-            incomingActiveStreak = streak
-        }
-        return normalizeActiveHighlight(incoming, highlightId)
-    }
-
-    private fun normalizeActiveHighlight(buttons: List<GridButton>, activeId: String?): List<GridButton> =
-        buttons.map { button ->
-            button.copy(isActive = activeId != null && !button.isDockPlaceholder() && button.id == activeId)
-        }
 
     private fun bindActiveTracking(hostId: String) {
         if (activeTrackingHostId == hostId) return
@@ -833,6 +916,10 @@ class DeskViewModel(
     private fun applyPinnedFocus(buttons: List<GridButton>): List<GridButton> {
         val pinId = pinnedButtonId ?: return buttons
         if (pinnedUntil?.hasPassedNow() != false) {
+            clearPinnedFocus()
+            return buttons
+        }
+        if (buttons.firstOrNull { it.id == pinId }?.isDockPlaceholder() == true) {
             clearPinnedFocus()
             return buttons
         }
@@ -896,12 +983,28 @@ class DeskViewModel(
     }
 
     private fun dockPlaceholder(button: GridButton): GridButton {
+        if (button.isFavoriteShortcut || button.payload["applicationShortcutId"] != null) {
+            return button.copy(
+                payload = button.payload - RUNNING_WINDOW_PAYLOAD_KEYS,
+                isActive = false,
+                isVisible = false,
+                monitorIndex = 0,
+                isDockPinned = true,
+            )
+        }
         val target = button.payload.getValue("target")
+        val payload = buildMap {
+            put("target", target)
+            put("targetType", "appName")
+            button.payload["bundlePath"]?.let { put("bundlePath", it) }
+            button.payload["spanColumns"]?.let { put("spanColumns", it) }
+            button.payload["spanRows"]?.let { put("spanRows", it) }
+        }
         return GridButton(
-            id = "app-$target-dock",
+            id = ApplicationIdentity.dockShortcutId(button.payload["bundlePath"], target),
             label = target,
             actionType = ActionType.REMOTE_LAUNCH,
-            payload = mapOf("target" to target, "targetType" to "appName"),
+            payload = payload,
             row = button.row,
             col = button.col,
             iconBase64 = button.iconBase64,
@@ -916,6 +1019,9 @@ class DeskViewModel(
         if (id.endsWith("-dock")) return true
         return isDockPinned && !isVisible && payload["windowNumber"] == null && payload["windowIndex"] == null
     }
+
+    private fun GridButton.isPendingDockLaunch(): Boolean =
+        id == pinnedButtonId && pinnedUntil?.hasPassedNow() == false && isDockPlaceholder()
 
     private fun matchesPinned(button: GridButton): Boolean {
         if (button.id == pinnedButtonId) return true
@@ -1095,14 +1201,7 @@ class DeskViewModel(
     }
 
     private companion object {
-        val RUNNING_WINDOW_PAYLOAD_KEYS = setOf(
-            "windowTitle",
-            "windowNumber",
-            "windowIndex",
-            "axWindowIndex",
-            "pid",
-            "windowCount",
-        )
+        val RUNNING_WINDOW_PAYLOAD_KEYS = ShortcutWindowBinder.runtimePayloadKeys
         const val AUTO_REFRESH_MS = 150L
         const val FALLBACK_POLL_MS = 5_000L
         const val AUDIO_REFRESH_MS = 300L
