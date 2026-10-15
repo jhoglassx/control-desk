@@ -1,7 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-val agentVersion = "1.1.14"
+val agentVersion = "1.1.15"
 
 plugins {
     alias(libs.plugins.kotlinJvm)
@@ -60,14 +60,43 @@ compose.desktop {
                 bundleID = "com.controldesk.agent"
                 infoPlist {
                     extraKeysRawXml = """
+                        <key>NSCameraUsageDescription</key>
+                        <string>Configurar controles nativos da câmera selecionada pelo usuário, sem gravar ou transmitir vídeo.</string>
+                        <key>NSCameraUseContinuityCameraDeviceType</key><true/>
                         <key>LSUIElement</key>
                         <false/>
                     """.trimIndent()
                 }
             }
-            appResourcesRootDir.set(project.file("package/resources"))
+            appResourcesRootDir.set(layout.buildDirectory.dir("agentResources"))
         }
     }
+}
+
+val buildMacCameraHelper = tasks.register<Exec>("buildMacCameraHelper") {
+    onlyIf { System.getProperty("os.name").lowercase().contains("mac") }
+    inputs.dir("native/macos")
+    val output = layout.buildDirectory.file("native/macos/control-desk-camera")
+    outputs.file(output)
+    doFirst { output.get().asFile.parentFile.mkdirs() }
+    commandLine("xcrun", "clang", "-fobjc-arc", "-fblocks", "-mmacosx-version-min=11.0",
+        "-arch", "arm64", "-arch", "x86_64", "-framework", "Foundation", "-framework", "AVFoundation",
+        file("native/macos/CameraControl.m").absolutePath,
+        "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist", "-Xlinker",
+        file("native/macos/CameraControl-Info.plist").absolutePath, "-o", output.get().asFile.absolutePath)
+}
+val prepareAgentResources = tasks.register<Sync>("prepareAgentResources") {
+    dependsOn(buildMacCameraHelper)
+    from("package/resources")
+    from(layout.buildDirectory.file("native/macos/control-desk-camera")) { into("macos") }
+    from("native/macos/camera-entitlements.plist") { into("macos") }
+    into(layout.buildDirectory.dir("agentResources"))
+}
+tasks.matching { it.name == "createDistributable" || it.name == "prepareAppResources" || it.name == "run" || it.name == "test" }.configureEach {
+    dependsOn(prepareAgentResources)
+}
+tasks.test {
+    systemProperty("controldesk.camera.helper", layout.buildDirectory.file("native/macos/control-desk-camera").get().asFile.absolutePath)
 }
 
 val signAgentMacApp = tasks.register<Exec>("signAgentMacApp") {
@@ -96,6 +125,7 @@ tasks.register<Exec>("packageInstallerDmg") {
     val appDir = layout.buildDirectory.dir("compose/binaries/main/app/ControlDeskAgent.app")
     val stageDir = layout.buildDirectory.dir("installer-stage")
     val outFile = layout.buildDirectory.file("compose/binaries/main/dmg/ControlDeskAgent-$agentVersion.dmg")
+    inputs.dir(appDir)
     inputs.dir(file("package/dmg"))
     outputs.file(outFile)
     commandLine("bash", file("package/dmg/build-dmg.sh").absolutePath)

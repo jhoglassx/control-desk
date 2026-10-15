@@ -12,6 +12,6 @@ class MacDeviceInventoryTest {
         assertTrue(catalog.diagnostics.isEmpty(), catalog.diagnostics.toString())
         assertTrue(catalog.devices.isNotEmpty())
         assertEquals(catalog.devices.size, catalog.devices.map { it.id }.distinct().size)
-        assertTrue(catalog.devices.filter { it.kind == "CAMERA" }.all { it.capabilities.isEmpty() && it.enabled == null })
+        assertTrue(catalog.devices.filter { it.kind == "CAMERA" }.all { "SET_ENABLED" !in it.capabilities && it.enabled == null && it.settings["authorization"] != null })
     }
 }

@@ -229,3 +229,10 @@ Uma atualização podia substituir o app em Aplicativos enquanto o LaunchAgent c
 A partir de `1.1.14`, `/health` e `/setup/health` incluem `buildId`, calculado no início do processo a partir de todos os JARs da aplicação. O instalador calcula a mesma assinatura dos arquivos instalados e reinicia o serviço se a compilação divergir ou o serviço antigo não anunciar identidade, mesmo com versão igual. A verificação final também compara a identidade. Não altera pareamentos.
 
 A configuração mostra a compilação e avisa quando difere do serviço. Erro 404 no diagnóstico passa a orientar reabrir o app instalado para sincronizar; não é apresentado como falha de permissão de câmera.
+
+
+## Câmera nativa e painel de controles (1.1.15)
+
+Atualize o agente e o mobile para esta entrega. O primeiro uso solicita Acessibilidade e, após essa etapa, autorização de câmera quando ainda não decidida. Confirme os diálogos no Mac; o instalador não pode conceder essas permissões. Em **Dispositivos e permissões**, use **Autorizar controles da câmera** para tentar novamente; se negado, habilite **Control Desk Camera** em Privacidade e Segurança → Câmera.
+
+O inventário não inicia captura. Modos de foco, exposição e balanço de branco são oferecidos somente conforme AVFoundation/driver e autorização. Não há botão de bloqueio global da câmera no macOS. O helper nativo acompanha o app, sem dependências de compilação no computador do usuário. Veja [dispositivos e atalhos](device-shortcuts.md#painel-de-controles-e-câmera-nativa--1115).

@@ -51,6 +51,7 @@ import com.controldesk.domain.model.GridButton
 @OptIn(ExperimentalMaterial3Api::class)
 fun DeskScreen(
     uiState: DeskUiState,
+    onDeviceIntent: (com.controldesk.app.viewmodel.DeskIntent) -> Unit = {},
     onSelectWindow: (String) -> Unit = {},
     onDismissWindowSelection: () -> Unit = {},
     onPairHost: () -> Unit,
@@ -76,6 +77,10 @@ fun DeskScreen(
     onClearFeedback: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (uiState.devicePanel != null) {
+        DeviceControlsScreen(uiState, onDeviceIntent, onClearFeedback)
+        return
+    }
     uiState.windowSelection?.let { selection ->
         AlertDialog(
             onDismissRequest = onDismissWindowSelection,

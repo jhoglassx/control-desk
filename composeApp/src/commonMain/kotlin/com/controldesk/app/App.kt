@@ -95,6 +95,7 @@ fun App() {
                 onResizeAppTile = { buttonId -> deskViewModel.onIntent(DeskIntent.ResizeAppTile(buttonId)) },
                 onRefresh = deskViewModel::refreshRunningApps,
                 onSelectHost = deskViewModel::selectHost,
+                onDeviceIntent = deskViewModel::onIntent,
                 onAppClick = deskViewModel::onButtonClick,
                 onAppClose = deskViewModel::onAppClose,
                 onVolumeChange = deskViewModel::onVolumeLevelChange,

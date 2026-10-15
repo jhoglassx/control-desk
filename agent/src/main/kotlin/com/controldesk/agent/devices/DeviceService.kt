@@ -24,8 +24,15 @@ class DeviceService(private val adapters: List<DeviceAdapter>) {
         return DeviceCatalogResponse(devices, errors)
     }
 
-    @Synchronized
+    private val deviceLocks = java.util.concurrent.ConcurrentHashMap<String, Any>()
+
     fun execute(request: DeviceActionRequest): DeviceActionResponse {
+        require(request.deviceId.isNotBlank()) { "Selecione um dispositivo" }
+        check(catalog().devices.any { it.id == request.deviceId }) { "Dispositivo indisponível; nenhum outro foi selecionado." }
+        return synchronized(deviceLocks.computeIfAbsent(request.deviceId) { Any() }) { executeVerified(request) }
+    }
+
+    private fun executeVerified(request: DeviceActionRequest): DeviceActionResponse {
         require(request.deviceId.isNotBlank()) { "Selecione um dispositivo" }
         val device = catalog().devices.singleOrNull { it.id == request.deviceId }
             ?: error("Dispositivo indisponível. Atualize a lista; nenhum outro dispositivo foi selecionado.")
@@ -34,6 +41,7 @@ class DeviceService(private val adapters: List<DeviceAdapter>) {
             "SET_ENABLED", "SET_MUTED" -> requireNotNull(request.booleanValue) { "Informe o estado desejado" }
             "SET_LEVEL" -> require(request.level != null && request.level in 0..100) { "Nível deve estar entre 0 e 100" }
             "SET_DEFAULT" -> Unit
+            in MacCameraAdapter.NATIVE_ACTIONS -> Unit
             else -> error("Ação desconhecida")
         }
         val adapter = adapters.single { it.id == device.adapter }
@@ -51,6 +59,15 @@ class DeviceService(private val adapters: List<DeviceAdapter>) {
         "SET_MUTED" -> device.muted == request.booleanValue
         "SET_LEVEL" -> device.level?.let { kotlin.math.abs(it - request.level!!) <= 1 } == true
         "SET_DEFAULT" -> device.isDefault == true
+        "REQUEST_CAMERA_ACCESS" -> device.settings["authorization"] == "authorized"
+        in MacCameraAdapter.NATIVE_ACTIONS -> {
+            val key = when {
+                request.action.startsWith("FOCUS_") -> "focusMode"
+                request.action.startsWith("EXPOSURE_") -> "exposureMode"
+                else -> "whiteBalanceMode"
+            }
+            device.settings[key] == request.action.substringAfterLast('_').lowercase()
+        }
         else -> false
     }
 

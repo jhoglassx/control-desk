@@ -20,11 +20,13 @@ data class ControlShortcut(
     val deviceOperation: String? = null,
     val deviceLevel: Int = 50,
 ) {
+    val opensDevicePanel: Boolean get() = destination == ShortcutDestination.DEVICE && deviceOperation == OPEN_CONTROLS
+
     fun validationError(): String? = when {
         name.isBlank() -> "Informe um nome para o atalho."
         destination == ShortcutDestination.DEVICE -> when {
             deviceId.isNullOrBlank() -> "Selecione um dispositivo detectado pelo agente."
-            DeviceOperation.entries.none { it.name == deviceOperation } -> "Selecione uma ação disponível."
+            deviceOperation != OPEN_CONTROLS && DeviceOperation.entries.none { it.name == deviceOperation } -> "Selecione uma ação disponível."
             deviceOperation == "SET_LEVEL" && deviceLevel !in 0..100 -> "Nível deve estar entre 0 e 100."
             else -> null
         }
@@ -63,6 +65,7 @@ data class ControlShortcut(
     )
 
     companion object {
+        const val OPEN_CONTROLS = "OPEN_CONTROLS"
         fun defaults() = listOf(
             ControlShortcut("system-volume", "Saída de áudio", ControlShortcutKind.VOLUME),
             ControlShortcut("system-microphone", "Microfone", ControlShortcutKind.MICROPHONE),

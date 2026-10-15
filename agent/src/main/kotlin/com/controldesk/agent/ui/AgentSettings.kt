@@ -47,6 +47,9 @@ fun launchAgentSettings(port: Int, exitProcessOnClose: Boolean = true) {
         var deviceCatalog by remember { mutableStateOf<com.controldesk.protocol.DeviceCatalogResponse?>(null) }
         var deviceCheckError by remember { mutableStateOf<String?>(null) }
         var checkingDevices by remember { mutableStateOf(false) }
+        var cameraPermissionTarget by remember { mutableStateOf<String?>(null) }
+        var cameraPermissionRequested by remember { mutableStateOf(false) }
+        var cameraPermissionBusy by remember { mutableStateOf(false) }
         var deviceCheckRevision by remember { mutableStateOf(0) }
         var setup by remember { mutableStateOf<SetupResponse?>(null) }
         var status by remember { mutableStateOf("Iniciando…") }
@@ -79,6 +82,24 @@ fun launchAgentSettings(port: Int, exitProcessOnClose: Boolean = true) {
             deviceCatalog = result.getOrNull()
             deviceCheckError = result.exceptionOrNull()?.message
             checkingDevices = false
+        }
+        LaunchedEffect(deviceCatalog, accessibility) {
+            val camera = deviceCatalog?.devices?.firstOrNull {
+                it.settings["authorization"] == "notDetermined" && "REQUEST_CAMERA_ACCESS" in it.capabilities
+            }
+            if (camera != null && accessibility != false && !cameraPermissionRequested) {
+                cameraPermissionRequested = true
+                cameraPermissionTarget = camera.id
+            }
+        }
+        LaunchedEffect(cameraPermissionTarget) {
+            val target = cameraPermissionTarget ?: return@LaunchedEffect
+            cameraPermissionBusy = true
+            val result = withContext(Dispatchers.IO) { requestSetupCameraAccess(port, target) }
+            deviceCheckError = result.exceptionOrNull()?.message
+            cameraPermissionTarget = null
+            cameraPermissionBusy = false
+            deviceCheckRevision++
         }
         Window(
             onCloseRequest = ::exitApplication,
@@ -172,10 +193,14 @@ fun launchAgentSettings(port: Int, exitProcessOnClose: Boolean = true) {
                             Text("Dispositivos e permissões", fontWeight = FontWeight.SemiBold)
                             Text("A primeira abertura solicita Acessibilidade no Mac. A confirmação da chave é feita por você nos Ajustes. As permissões e capacidades dos dispositivos são verificadas abaixo.", style = MaterialTheme.typography.bodySmall)
                             Text(when {
-                                System.getProperty("os.name").lowercase().contains("mac") -> "Listar câmeras não inicia captura nem precisa solicitar acesso de captura. O macOS não expõe bloqueio global de câmera neste adaptador; conceder mais permissões não habilita essa ação."
+                                System.getProperty("os.name").lowercase().contains("mac") -> "O controle nativo usa AVFoundation e solicita acesso à câmera após Acessibilidade. Foco, exposição e balanço de branco dependem do hardware/driver. Nenhuma captura é iniciada e não há bloqueio global de câmera."
                                 System.getProperty("os.name").lowercase().contains("win") -> "Para habilitar/desabilitar câmeras, feche e inicie o agente como administrador (Executar como administrador). Confirme o UAC do Windows."
                                 else -> "Use a sessão do seu usuário com acesso ao servidor de áudio e permissão de escrita no dispositivo de vídeo. Instale v4l-utils e pactl quando indicados; mudanças de grupo podem exigir nova sessão."
                             }, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            if (cameraPermissionBusy) Text("Confirme o acesso à câmera no diálogo do macOS. Nenhuma captura será iniciada.", style = MaterialTheme.typography.bodySmall)
+                            deviceCatalog?.devices?.firstOrNull { "REQUEST_CAMERA_ACCESS" in it.capabilities }?.let { camera ->
+                                OutlinedButton(enabled = !cameraPermissionBusy, onClick = { cameraPermissionTarget = camera.id }) { Text("Autorizar controles da câmera") }
+                            }
                             if (checkingDevices) Text("Verificando dispositivos…", style = MaterialTheme.typography.bodySmall)
                             deviceCheckError?.let { Text("Não foi possível verificar: $it", color = Color(0xFF92400E), style = MaterialTheme.typography.bodySmall) }
                             deviceCatalog?.let { catalog ->
@@ -270,5 +295,26 @@ private fun fetchSetupDevices(port: Int): Result<com.controldesk.protocol.Device
         check(status == 200) { "O agente não confirmou o diagnóstico de dispositivos (HTTP $status)." }
         val text = connection.inputStream.bufferedReader().use { it.readText() }
         json.decodeFromString<com.controldesk.protocol.DeviceCatalogResponse>(text)
+    } finally { connection.disconnect() }
+}
+
+
+private fun requestSetupCameraAccess(port: Int, deviceId: String): Result<Unit> = runCatching {
+    val connection = URI("http://127.0.0.1:$port/setup/camera-access").toURL().openConnection() as HttpURLConnection
+    try {
+        connection.requestMethod = "POST"
+        connection.connectTimeout = 1_000
+        connection.readTimeout = 95_000
+        connection.doOutput = true
+        connection.setRequestProperty("Content-Type", "application/json")
+        val payload = com.controldesk.protocol.AgentJson.encodeToString(com.controldesk.protocol.DeviceActionRequest(deviceId, "REQUEST_CAMERA_ACCESS"))
+        connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+        val status = connection.responseCode
+        if (status !in 200..299) {
+            val text = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            val reason = runCatching { json.parseToJsonElement(text).jsonObject["message"]?.jsonPrimitive?.content }.getOrNull()
+            error(reason ?: "Confirme a permissão de câmera no Mac e verifique novamente.")
+        }
+        connection.inputStream.use { it.readBytes() }
     } finally { connection.disconnect() }
 }

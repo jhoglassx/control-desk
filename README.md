@@ -41,4 +41,7 @@ O último comando abre o agente e sua janela de configuração. A opção desati
 
 O mobile mantém launchers persistentes por aplicativo, com ícones reais, tamanho e ordem salvos por computador. As janelas são instâncias selecionáveis por título e monitor; abrir ou fechar uma janela não substitui o launcher. Favoritos de projeto recebem somente as janelas correspondentes. Para instalação atualizada, consulte [a revisão geral](docs/review.md) e [o catálogo de features](docs/feature-status.md).
 
-Microfone e saída de áudio podem ser organizados e redimensionados junto aos apps. O cadastro também oferece atalhos de câmera/dispositivo por aplicativo ou URL, executados pelo agente. O agente 1.1.14 também lista dispositivos e oferece controles nativos conforme as capacidades do sistema; veja [atalhos de dispositivos](docs/device-shortcuts.md).
+Microfone e saída de áudio podem ser organizados e redimensionados junto aos apps. O cadastro também oferece atalhos de câmera/dispositivo por aplicativo ou URL, executados pelo agente. O agente 1.1.15 também lista dispositivos e oferece controles nativos conforme as capacidades do sistema; veja [atalhos de dispositivos](docs/device-shortcuts.md).
+
+
+Câmeras e dispositivos podem usar **Abrir todos os controles**: um único atalho abre o painel Material 3 de capacidades e estados confirmados, com ações diretas opcionais. No Mac, a versão 1.1.15 inclui autorização e modos nativos de foco, exposição e balanço de branco conforme o driver; não oferece bloqueio global nem captura. Consulte [documentação de dispositivos](docs/device-shortcuts.md).

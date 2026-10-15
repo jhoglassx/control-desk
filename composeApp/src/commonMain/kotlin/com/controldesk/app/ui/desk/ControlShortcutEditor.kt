@@ -22,6 +22,15 @@ internal fun ControlShortcutKind.displayName(): String = when (this) {
     ControlShortcutKind.WEBSITE -> "Site ou painel web"
 }
 internal fun DeviceOperation.displayName(): String = when (this) {
+    DeviceOperation.FOCUS_LOCKED -> "Travar foco atual"
+    DeviceOperation.FOCUS_AUTO -> "Focar automaticamente"
+    DeviceOperation.FOCUS_CONTINUOUS -> "Foco automático contínuo"
+    DeviceOperation.EXPOSURE_LOCKED -> "Travar exposição atual"
+    DeviceOperation.EXPOSURE_AUTO -> "Ajustar exposição automaticamente"
+    DeviceOperation.EXPOSURE_CONTINUOUS -> "Exposição automática contínua"
+    DeviceOperation.WHITE_BALANCE_LOCKED -> "Travar balanço de branco atual"
+    DeviceOperation.WHITE_BALANCE_AUTO -> "Ajustar balanço de branco"
+    DeviceOperation.WHITE_BALANCE_CONTINUOUS -> "Balanço de branco automático contínuo"
     DeviceOperation.ENABLE -> "Habilitar câmera / liberar privacidade"
     DeviceOperation.DISABLE -> "Desabilitar câmera / bloquear privacidade"
     DeviceOperation.TOGGLE_ENABLED -> "Alternar disponibilidade da câmera"
@@ -37,7 +46,7 @@ internal fun ControlShortcutEditor(state: PinnedAppsUiState, onIntent: (PinnedAp
     val draft = state.editingControl ?: return
     val audio = draft.kind == ControlShortcutKind.VOLUME || draft.kind == ControlShortcutKind.MICROPHONE
     val native = draft.destination == ShortcutDestination.DEVICE
-    val saving = state.isSavingControl
+    val saving = state.isSavingControl || state.requestingCameraAccess
     val device = state.deviceCatalog.devices.singleOrNull { it.id == draft.deviceId }
     LazyColumn(
         Modifier.fillMaxSize().background(DeskColors.ScreenGradient).padding(20.dp),
@@ -101,7 +110,7 @@ internal fun ControlShortcutEditor(state: PinnedAppsUiState, onIntent: (PinnedAp
                 ListItem(headlineContent = { Text(candidate.name) },
                     supportingContent = { Text(candidate.notice ?: if (candidate.isDefault == true) "Dispositivo padrão" else candidate.kind.name) },
                     trailingContent = {
-                        TextButton(enabled = !saving, onClick = { onIntent(PinnedAppsIntent.UpdateControl(draft.copy(deviceId = candidate.id, deviceOperation = null))) }) {
+                        TextButton(enabled = !saving, onClick = { onIntent(PinnedAppsIntent.UpdateControl(draft.copy(deviceId = candidate.id, deviceOperation = ControlShortcut.OPEN_CONTROLS))) }) {
                             Text(if (candidate.id == draft.deviceId) "Selecionado" else "Escolher")
                         }
                     })
@@ -109,7 +118,18 @@ internal fun ControlShortcutEditor(state: PinnedAppsUiState, onIntent: (PinnedAp
             item {
                 if (!state.isLoadingDevices && state.devicesError == null && devices.isEmpty()) Text("Nenhum dispositivo desta categoria encontrado.", color = DeskColors.TextMuted)
                 if (device != null) {
-                    Text("Ação para ${device.name}", color = DeskColors.TextPrimary)
+                    Text("Ao tocar no atalho", color = DeskColors.TextPrimary)
+                    FilterChip(selected = draft.opensDevicePanel, enabled = !saving,
+                        onClick = { onIntent(PinnedAppsIntent.UpdateControl(draft.copy(deviceOperation = ControlShortcut.OPEN_CONTROLS))) },
+                        label = { Text("Abrir todos os controles (recomendado)") })
+                    Text("Um único card abre uma tela com os controles disponíveis. Você também pode escolher uma ação direta abaixo.", color = DeskColors.TextMuted)
+                    Text("Ações diretas para ${device.name}", color = DeskColors.TextPrimary)
+                    if (DeviceCapability.REQUEST_CAMERA_ACCESS in device.capabilities) {
+                        Text("Confirme o acesso no computador para consultar os controles completos da câmera.", color = DeskColors.Warning)
+                        Button(enabled = !saving, onClick = { onIntent(PinnedAppsIntent.AuthorizeCamera(device.id)) }) {
+                            Text(if (state.requestingCameraAccess) "Aguardando confirmação no Mac…" else "Autorizar câmera no Mac")
+                        }
+                    }
                     if (device.capabilities.isEmpty()) Text("Dispositivo identificado, mas sem ações de controle disponíveis neste sistema ou sem permissão.", color = DeskColors.Warning)
                     DeviceOperation.entries.filter { it.capability in device.capabilities }.forEach { operation ->
                         FilterChip(selected = draft.deviceOperation == operation.name, enabled = !saving,

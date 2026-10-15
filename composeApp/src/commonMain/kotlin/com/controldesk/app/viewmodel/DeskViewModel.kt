@@ -138,7 +138,7 @@ class DeskViewModel(
         closingPlaceholders.clear()
         bindActiveTracking(host.id)
         restoreCache(host)
-        _uiState.update { it.copy(selectedHostIndex = index, windowSelection = null) }
+        _uiState.update { it.copy(selectedHostIndex = index, windowSelection = null, devicePanel = null) }
         loadHost(host, showLoading = buttonsCache[host.id].isNullOrEmpty())
     }
 
@@ -153,6 +153,13 @@ class DeskViewModel(
 
     fun onIntent(intent: DeskIntent) {
         when (intent) {
+            DeskIntent.DismissDevicePanel -> _uiState.update { it.copy(devicePanel = null) }
+            DeskIntent.RefreshDevicePanel -> _uiState.value.devicePanel?.let { panel ->
+                _uiState.value.hosts.firstOrNull { it.id == panel.hostId }?.let { host -> jobsScope.launch { refreshDevices(host) } }
+            }
+            DeskIntent.AuthorizePanelCamera -> authorizePanelCamera()
+            is DeskIntent.UpdateDevicePanelLevel -> _uiState.update { it.copy(devicePanel = it.devicePanel?.copy(level = intent.level.coerceIn(0, 100))) }
+            is DeskIntent.ExecuteDevicePanelAction -> executeDevicePanelAction(intent.operation)
             DeskIntent.DismissWindowSelection -> _uiState.update { it.copy(windowSelection = null) }
             is DeskIntent.SelectWindow -> selectWindow(intent.windowId)
             is DeskIntent.SetReorganizingApps -> _uiState.update {
@@ -357,6 +364,14 @@ class DeskViewModel(
 
     fun onButtonClick(button: GridButton) {
         if (button.actionType == ActionType.REMOTE_DEVICE) {
+            if (button.payload["deviceOperation"] == com.controldesk.domain.model.ControlShortcut.OPEN_CONTROLS) {
+                val host = _uiState.value.selectedHost ?: return
+                val deviceId = button.payload["deviceId"] ?: return
+                val device = _uiState.value.deviceCatalogs[host.id]?.devices?.singleOrNull { it.id == deviceId }
+                _uiState.update { it.copy(devicePanel = DevicePanelSelection(host.id, deviceId, button.label, device?.level ?: 50)) }
+                jobsScope.launch { refreshDevices(host) }
+                return
+            }
             executeDeviceShortcut(button)
             return
         }
@@ -372,6 +387,33 @@ class DeskViewModel(
         }
         if (requestWindowSelection(button, close = false)) return
         executeButtonClick(button)
+    }
+
+    private fun executeDevicePanelAction(operation: com.controldesk.domain.model.DeviceOperation) {
+        val state = _uiState.value
+        val panel = state.devicePanel ?: return
+        if (panel.hostId != state.selectedHost?.id) return
+        executeDeviceShortcut(GridButton("device-panel", panel.name, ActionType.REMOTE_DEVICE,
+            payload = mapOf("deviceId" to panel.deviceId, "deviceOperation" to operation.name, "deviceLevel" to panel.level.toString())))
+    }
+
+    private fun authorizePanelCamera() {
+        val state = _uiState.value
+        val panel = state.devicePanel ?: return
+        val host = state.selectedHost?.takeIf { it.id == panel.hostId } ?: return
+        val key = "${host.id}:${panel.deviceId}"
+        if (key in state.executingDeviceIds) return
+        _uiState.update { it.copy(executingDeviceIds = it.executingDeviceIds + key) }
+        jobsScope.launch {
+            try {
+                val device = agentGateway.loadDevices(host).devices.singleOrNull { it.id == panel.deviceId }
+                check(com.controldesk.domain.model.DeviceCapability.REQUEST_CAMERA_ACCESS in device?.capabilities.orEmpty()) { "Autorização indisponível; verifique os Ajustes do Mac." }
+                agentGateway.executeDeviceCommand(host, com.controldesk.domain.model.DeviceCommand(panel.deviceId, com.controldesk.domain.model.DeviceCapability.REQUEST_CAMERA_ACCESS))
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (error: Throwable) { _uiState.update { it.copy(feedback = error.message ?: "Confirme a permissão no Mac") } }
+            finally { _uiState.update { it.copy(executingDeviceIds = it.executingDeviceIds - key) } }
+            refreshDevices(host)
+        }
     }
 
     private fun executeDeviceShortcut(button: GridButton) {

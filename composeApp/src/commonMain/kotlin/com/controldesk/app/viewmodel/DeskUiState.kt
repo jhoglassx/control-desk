@@ -5,6 +5,11 @@ import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
 
 sealed interface DeskIntent {
+    data object DismissDevicePanel : DeskIntent
+    data object RefreshDevicePanel : DeskIntent
+    data object AuthorizePanelCamera : DeskIntent
+    data class ExecuteDevicePanelAction(val operation: com.controldesk.domain.model.DeviceOperation) : DeskIntent
+    data class UpdateDevicePanelLevel(val level: Int) : DeskIntent
     data object DismissWindowSelection : DeskIntent
     data class SelectWindow(val windowId: String) : DeskIntent
     data class SetReorganizingApps(val enabled: Boolean) : DeskIntent
@@ -18,6 +23,7 @@ sealed interface DeskIntent {
 }
 
 data class DeskUiState(
+    val devicePanel: DevicePanelSelection? = null,
     val deviceCatalogs: Map<String, com.controldesk.domain.model.DeviceCatalog> = emptyMap(),
     val deviceErrors: Map<String, String> = emptyMap(),
     val executingDeviceIds: Set<String> = emptySet(),
@@ -59,6 +65,7 @@ data class DeskUiState(
                 hostId in deviceErrors -> "Estado indisponível"
                 catalog == null -> "Consultando agente…"
                 device == null -> "Desconectado / indisponível"
+                device.settings["authorization"] in setOf("notDetermined", "denied", "restricted") -> "Autorize a câmera no Mac"
                 device.enabled == false -> "Câmera bloqueada"
                 device.muted == true -> "Mudo"
                 device.isDefault == true -> "Dispositivo padrão"
@@ -79,3 +86,6 @@ data class WindowSelection(
     val windows: List<GridButton>,
     val close: Boolean,
 )
+
+
+data class DevicePanelSelection(val hostId: String, val deviceId: String, val name: String, val level: Int = 50)

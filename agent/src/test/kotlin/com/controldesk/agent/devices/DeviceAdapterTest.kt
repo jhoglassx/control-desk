@@ -4,14 +4,36 @@ import com.controldesk.protocol.DeviceActionRequest
 import kotlin.test.*
 
 class DeviceAdapterTest {
-    @Test fun macCameraDiscoveryDoesNotStartCaptureAndOffersNoFakePowerAction() {
+    @Test fun macCameraDiscoveryReadsNativeModesWithoutInventingPowerControl() {
         val commands = mutableListOf<List<String>>()
-        val adapter = MacCameraAdapter { commands += it; """{"SPCameraDataType":[{"spcamera_unique-id":"real-device-uid","_name":"Built-in Camera"}]}""" }
+        val adapter = MacCameraAdapter(helper = { java.io.File("/bundled/camera-helper") }, runner = DeviceCommandRunner {
+            commands += it
+            """[{"id":"real-device-uid","name":"Camera","capabilities":["FOCUS_LOCKED","FOCUS_CONTINUOUS","SET_ENABLED"],"settings":{"authorization":"authorized","focusMode":"continuous"}}]"""
+        })
         val camera = adapter.discover().single()
         assertTrue(camera.id.endsWith(":real-device-uid"))
-        assertTrue(camera.capabilities.isEmpty())
+        assertEquals(listOf("FOCUS_LOCKED", "FOCUS_CONTINUOUS"), camera.capabilities)
         assertNull(camera.enabled)
-        assertFalse(commands.single().last().contains("startRunning"))
+        assertEquals("continuous", camera.settings["focusMode"])
+        assertEquals("discover", commands.single().last())
+    }
+    @Test fun missingNativeHelperIsReportedSeparatelyFromHardwareSupport() {
+        val adapter = MacCameraAdapter(helper = { null }, runner = DeviceCommandRunner {
+            """{"SPCameraDataType":[{"spcamera_unique-id":"uid","_name":"Camera"}]}"""
+        })
+        val camera = adapter.discover().single()
+        assertTrue(camera.capabilities.isEmpty())
+        assertEquals("unavailable", camera.settings["authorization"])
+        assertTrue(camera.notice!!.contains("Módulo AVFoundation ausente"))
+    }
+    @Test fun nativeCameraCommandsAlwaysCarryTheExactUidAndValidateAction() {
+        val commands = mutableListOf<List<String>>()
+        val adapter = MacCameraAdapter(helper = { java.io.File("/bundled/camera-helper") }, runner = DeviceCommandRunner { commands += it; "[]" })
+        val camera = com.controldesk.protocol.DeviceInfo("macos.camera:uid-2", "Camera", "CAMERA", "macos.camera")
+        adapter.execute(camera, DeviceActionRequest(camera.id, "EXPOSURE_LOCKED"))
+        assertEquals(listOf("/bundled/camera-helper", "execute", "uid-2", "EXPOSURE_LOCKED"), commands.single())
+        assertFails { adapter.execute(camera, DeviceActionRequest(camera.id, "SET_ENABLED", false)) }
+        assertEquals(1, commands.size)
     }
     @Test fun windowsCapabilitiesReflectPrivilegesAndDisabledState() {
         val adapter = WindowsCameraAdapter { error("Not executed") }

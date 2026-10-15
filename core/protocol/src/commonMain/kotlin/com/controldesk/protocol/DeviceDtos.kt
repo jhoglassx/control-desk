@@ -14,6 +14,7 @@ data class DeviceInfo(
     val level: Int? = null,
     val isDefault: Boolean? = null,
     val notice: String? = null,
+    val settings: Map<String, String> = emptyMap(),
 )
 
 @Serializable

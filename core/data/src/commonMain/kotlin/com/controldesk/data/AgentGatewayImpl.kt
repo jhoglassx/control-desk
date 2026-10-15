@@ -65,7 +65,7 @@ class AgentGatewayImpl(
         val kind = com.controldesk.domain.model.DeviceKind.entries.singleOrNull { it.name == info.kind } ?: return null
         return com.controldesk.domain.model.ConnectedDevice(info.id, info.name, kind, info.adapter,
             info.capabilities.mapNotNull { value -> com.controldesk.domain.model.DeviceCapability.entries.singleOrNull { it.name == value } },
-            info.enabled, info.muted, info.level, info.isDefault, info.notice)
+            info.enabled, info.muted, info.level, info.isDefault, info.notice, info.settings)
     }
 
     override suspend fun fetchHealth(host: PairedHost): Boolean? = mapErrors {

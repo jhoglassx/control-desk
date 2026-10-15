@@ -8,6 +8,7 @@ import com.controldesk.domain.model.PinnedAppShortcut
 data class PinnedAppsUiState(
     val deviceCatalog: com.controldesk.domain.model.DeviceCatalog = com.controldesk.domain.model.DeviceCatalog(),
     val isLoadingDevices: Boolean = false,
+    val requestingCameraAccess: Boolean = false,
     val devicesError: String? = null,
     val editingControl: ControlShortcut? = null,
     val controlError: String? = null,
@@ -23,6 +24,7 @@ data class PinnedAppsUiState(
 
 sealed interface PinnedAppsIntent {
     data object LoadDevices : PinnedAppsIntent
+    data class AuthorizeCamera(val deviceId: String) : PinnedAppsIntent
     data class EditControl(val shortcut: ControlShortcut) : PinnedAppsIntent
     data class UpdateControl(val shortcut: ControlShortcut) : PinnedAppsIntent
     data object SaveControl : PinnedAppsIntent

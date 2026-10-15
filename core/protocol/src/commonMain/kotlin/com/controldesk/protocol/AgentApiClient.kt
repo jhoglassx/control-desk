@@ -23,7 +23,7 @@ class AgentApiClient(
     suspend fun deviceAction(baseUrl: String, token: String, request: DeviceActionRequest): DeviceActionResponse =
         httpClient.post("$baseUrl/devices/actions") {
             bearerAuth(token)
-            timeout { requestTimeoutMillis = 30_000 }
+            timeout { requestTimeoutMillis = 95_000 }
             contentType(ContentType.Application.Json)
             setBody(request)
         }.body()

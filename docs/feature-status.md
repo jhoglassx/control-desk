@@ -55,4 +55,7 @@ A [revisão de identidade](shortcut-identity-review.md) descreve a migração pa
 
 ## Atualização: controles na grade
 
-Microfone e saída de áudio compartilham movimento, tamanho e persistência com os aplicativos. O cadastro de controles inclui câmera/dispositivo por aplicativo ou URL, executados pelo agente. As alternativas de app/URL abrem o painel configurado. O agente 1.1.14 também oferece descoberta e controles nativos por capacidade, com limites por sistema. Veja [device-shortcuts.md](device-shortcuts.md).
+Microfone e saída de áudio compartilham movimento, tamanho e persistência com os aplicativos. O cadastro de controles inclui câmera/dispositivo por aplicativo ou URL, executados pelo agente. As alternativas de app/URL abrem o painel configurado. O agente 1.1.15 também oferece descoberta e controles nativos por capacidade, com limites por sistema. Veja [device-shortcuts.md](device-shortcuts.md).
+
+
+Câmeras e dispositivos podem usar **Abrir todos os controles**: um único atalho abre o painel Material 3 de capacidades e estados confirmados, com ações diretas opcionais. No Mac, a versão 1.1.15 inclui autorização e modos nativos de foco, exposição e balanço de branco conforme o driver; não oferece bloqueio global nem captura. Consulte [documentação de dispositivos](device-shortcuts.md).

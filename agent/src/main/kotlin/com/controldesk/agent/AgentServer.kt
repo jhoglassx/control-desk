@@ -147,6 +147,15 @@ class AgentServer(
                     }
                     call.respondDto(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { executor.devices() })
                 }
+                post("/setup/camera-access") {
+                    if (!call.isLocalhost()) {
+                        call.respondText("""{"ok":false}""", ContentType.Application.Json, HttpStatusCode.Forbidden)
+                        return@post
+                    }
+                    val body = call.receive<com.controldesk.protocol.DeviceActionRequest>()
+                    require(body.action == "REQUEST_CAMERA_ACCESS") { "Esta rota apenas solicita autorização de câmera." }
+                    call.respondDto(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { executor.executeDeviceAction(body) })
+                }
                 post("/setup/new-pin") {
                     if (!call.isLocalhost()) {
                         call.respondText(

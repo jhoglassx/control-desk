@@ -24,6 +24,7 @@ class PinnedAppsViewModel(
     fun onIntent(intent: PinnedAppsIntent) {
         when (intent) {
             PinnedAppsIntent.LoadDevices -> loadDevices()
+            is PinnedAppsIntent.AuthorizeCamera -> authorizeCamera(intent.deviceId)
             is PinnedAppsIntent.EditControl -> {
                 _uiState.update { it.copy(editingControl = intent.shortcut, controlError = null) }
                 loadDevices()
@@ -64,6 +65,22 @@ class PinnedAppsViewModel(
         }
     }
 
+    private fun authorizeCamera(id: String) {
+        val host = activeHost ?: return
+        if (_uiState.value.requestingCameraAccess) return
+        val device = _uiState.value.deviceCatalog.devices.singleOrNull { it.id == id } ?: return
+        if (com.controldesk.domain.model.DeviceCapability.REQUEST_CAMERA_ACCESS !in device.capabilities) return
+        _uiState.update { it.copy(requestingCameraAccess = true, controlError = null) }
+        viewModelScope.launch {
+            try {
+                agentGateway.executeDeviceCommand(host, com.controldesk.domain.model.DeviceCommand(id, com.controldesk.domain.model.DeviceCapability.REQUEST_CAMERA_ACCESS))
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (error: Throwable) { _uiState.update { it.copy(controlError = error.message ?: "Confirme o acesso à câmera no Mac.") } }
+            finally { _uiState.update { it.copy(requestingCameraAccess = false) } }
+            loadDevices()
+        }
+    }
+
     private fun loadDevices() {
         val host = activeHost ?: return
         devicesJob?.cancel()
@@ -86,7 +103,7 @@ class PinnedAppsViewModel(
         if (shortcut.destination == com.controldesk.domain.model.ShortcutDestination.DEVICE) {
             val device = _uiState.value.deviceCatalog.devices.singleOrNull { it.id == shortcut.deviceId }
             val operation = com.controldesk.domain.model.DeviceOperation.entries.singleOrNull { it.name == shortcut.deviceOperation }
-            if (device == null || operation?.capability !in device.capabilities) {
+            if (device == null || (!shortcut.opensDevicePanel && operation?.capability !in device.capabilities)) {
                 _uiState.update { it.copy(controlError = "Atualize a lista e selecione um dispositivo e uma ação disponíveis.") }
                 return
             }

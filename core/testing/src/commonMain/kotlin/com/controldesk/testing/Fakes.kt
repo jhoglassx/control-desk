@@ -49,6 +49,16 @@ class FakeAgentGateway(
             com.controldesk.domain.model.DeviceCapability.SET_MUTED -> device.copy(muted = command.booleanValue)
             com.controldesk.domain.model.DeviceCapability.SET_LEVEL -> device.copy(level = command.level)
             com.controldesk.domain.model.DeviceCapability.SET_DEFAULT -> device.copy(isDefault = true)
+            com.controldesk.domain.model.DeviceCapability.REQUEST_CAMERA_ACCESS -> device.copy(settings = device.settings + ("authorization" to "authorized"))
+            else -> {
+                val action = command.action.name
+                val key = when {
+                    action.startsWith("FOCUS_") -> "focusMode"
+                    action.startsWith("EXPOSURE_") -> "exposureMode"
+                    else -> "whiteBalanceMode"
+                }
+                device.copy(settings = device.settings + (key to action.substringAfterLast('_').lowercase()))
+            }
         }
         devices = devices.copy(devices = devices.devices.map { if (it.id == updated.id) updated else it })
         return updated

@@ -165,4 +165,53 @@ class ControlShortcutsViewModelTest {
         assertEquals(1, gateway.deviceCommands.size)
         assertTrue(vm.uiState.value.feedback.orEmpty().contains("indisponível"))
     }
+    @Test fun devicePanelShortcutSavesWithoutActionsAndOpeningDoesNotExecuteCommand() = runTest(dispatcher) {
+        val camera = ConnectedDevice("camera-uid", "Camera", DeviceKind.CAMERA, "native")
+        val shortcut = ControlShortcut("camera-panel", "Camera", ControlShortcutKind.CAMERA, ShortcutDestination.DEVICE,
+            deviceId = camera.id, deviceOperation = ControlShortcut.OPEN_CONTROLS)
+        val prefs = FakeHostPreferences(listOf(host()))
+        val gateway = FakeAgentGateway().apply { devices = DeviceCatalog(listOf(camera)) }
+        val editor = PinnedAppsViewModel(gateway, prefs)
+        editor.onIntent(PinnedAppsIntent.LoadInstalledApps(host()))
+        runCurrent()
+        editor.onIntent(PinnedAppsIntent.EditControl(shortcut))
+        runCurrent()
+        editor.onIntent(PinnedAppsIntent.SaveControl)
+        runCurrent()
+        assertNull(editor.uiState.value.controlError)
+        assertEquals(shortcut, prefs.getHosts().single().controlShortcuts.last())
+        val vm = DeskViewModel(prefs, gateway, FakeAgentRealtime(), ExecuteGridButtonUseCase(gateway), FakeIconCache(), coroutineScope = backgroundScope)
+        runCurrent()
+        vm.onButtonClick(shortcut.toButton())
+        runCurrent()
+        assertEquals(camera.id, vm.uiState.value.devicePanel?.deviceId)
+        assertTrue(gateway.deviceCommands.isEmpty())
+        vm.onIntent(DeskIntent.DismissDevicePanel)
+        assertNull(vm.uiState.value.devicePanel)
+    }
+
+    @Test fun panelActionUsesExactDeviceAndKeepsShortcutWhenDisconnected() = runTest(dispatcher) {
+        val camera = ConnectedDevice("chosen", "USB", DeviceKind.CAMERA, "native", listOf(DeviceCapability.FOCUS_LOCKED))
+        val other = camera.copy(id = "other")
+        val shortcut = ControlShortcut("panel", "USB", ControlShortcutKind.CAMERA, ShortcutDestination.DEVICE,
+            deviceId = camera.id, deviceOperation = ControlShortcut.OPEN_CONTROLS)
+        val configured = host().copy(controlShortcuts = listOf(shortcut), appOrder = listOf(shortcut.id),
+            appTileSizes = mapOf("card:${shortcut.id}" to AppTileSize(2, 2)))
+        val gateway = FakeAgentGateway().apply { devices = DeviceCatalog(listOf(camera, other)) }
+        val vm = DeskViewModel(FakeHostPreferences(listOf(configured)), gateway, FakeAgentRealtime(),
+            ExecuteGridButtonUseCase(gateway), FakeIconCache(), coroutineScope = backgroundScope)
+        runCurrent()
+        vm.onButtonClick(shortcut.toButton())
+        vm.onIntent(DeskIntent.ExecuteDevicePanelAction(DeviceOperation.FOCUS_LOCKED))
+        runCurrent()
+        assertEquals(camera.id, gateway.deviceCommands.single().deviceId)
+        gateway.devices = DeviceCatalog(listOf(other))
+        vm.onIntent(DeskIntent.RefreshDevicePanel)
+        runCurrent()
+        assertEquals(camera.id, vm.uiState.value.devicePanel?.deviceId)
+        val button = vm.uiState.value.workspaceButtonsFor(configured.id).single()
+        assertEquals(shortcut.id, button.id)
+        assertEquals("2", button.payload["spanRows"])
+    }
+
 }

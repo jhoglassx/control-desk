@@ -51,4 +51,42 @@ class DeviceServiceTest {
         assertFails { DeviceService(listOf(adapter)).execute(DeviceActionRequest("cam-1", "SET_ENABLED", false)) }
         assertEquals(1, adapter.calls)
     }
+    @Test fun cameraModesAreConfirmedUsingFreshNativeSettings() {
+        var mode = "continuous"
+        val adapter = object : DeviceAdapter {
+            override val id = "native-camera"
+            override fun discover() = listOf(DeviceInfo("uid", "Camera", "CAMERA", id,
+                listOf("EXPOSURE_LOCKED"), settings = mapOf("exposureMode" to mode, "authorization" to "authorized")))
+            override fun execute(device: DeviceInfo, request: DeviceActionRequest) { mode = "locked" }
+        }
+        val result = DeviceService(listOf(adapter)).execute(DeviceActionRequest("uid", "EXPOSURE_LOCKED"))
+        assertTrue(result.confirmed)
+        assertEquals("locked", result.device.settings["exposureMode"])
+    }
+    @Test fun permissionPromptDoesNotBlockCommandsForAnotherDevice() {
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val granted = java.util.concurrent.atomic.AtomicBoolean(false)
+        val muted = java.util.concurrent.atomic.AtomicBoolean(false)
+        val adapter = object : DeviceAdapter {
+            override val id = "native"
+            override fun discover() = listOf(
+                DeviceInfo("cam", "Camera", "CAMERA", id, listOf("REQUEST_CAMERA_ACCESS"), settings = mapOf("authorization" to if (granted.get()) "authorized" else "notDetermined")),
+                DeviceInfo("mic", "Microphone", "AUDIO_INPUT", id, listOf("SET_MUTED"), muted = muted.get()))
+            override fun execute(device: DeviceInfo, request: DeviceActionRequest) {
+                if (device.id == "cam") { entered.countDown(); release.await(3, java.util.concurrent.TimeUnit.SECONDS); granted.set(true) }
+                else muted.set(request.booleanValue == true)
+            }
+        }
+        val service = DeviceService(listOf(adapter))
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val camera = pool.submit<DeviceActionResponse> { service.execute(DeviceActionRequest("cam", "REQUEST_CAMERA_ACCESS")) }
+            assertTrue(entered.await(1, java.util.concurrent.TimeUnit.SECONDS))
+            val audio = pool.submit<DeviceActionResponse> { service.execute(DeviceActionRequest("mic", "SET_MUTED", true)) }
+            assertTrue(audio.get(1, java.util.concurrent.TimeUnit.SECONDS).confirmed)
+            release.countDown()
+            assertTrue(camera.get(1, java.util.concurrent.TimeUnit.SECONDS).confirmed)
+        } finally { release.countDown(); pool.shutdownNow() }
+    }
 }

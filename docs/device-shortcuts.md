@@ -1,13 +1,13 @@
 # Dispositivos e ações pelo agente
 
-Atualizado em 15/10/2026. Requer **agente 1.1.14** (`deviceCatalogVersion=1`) e o APK desta entrega.
+Atualizado em 15/10/2026. Requer **agente 1.1.15** (`deviceCatalogVersion=1`) e o APK desta entrega.
 
 ## Fluxo implementado
 
 1. Na tela principal, toque em **+ / Adicionar atalho** → **Adicionar controle ou dispositivo**.
 2. Escolha câmera, microfone, saída de áudio ou outro dispositivo.
 3. Escolha **Dispositivo detectado pelo agente** e aguarde a descoberta.
-4. Selecione o dispositivo e uma ação suportada. Um dispositivo sem capacidades aparece para consulta, com a limitação explicada; não é possível salvar uma ação inexistente.
+4. Selecione o dispositivo. O padrão recomendado é **Abrir todos os controles**: o card abre uma tela dedicada de controles Material 3. Alternativamente, escolha uma ação direta suportada. Mesmo sem ações, é possível salvar o painel para consultar disponibilidade e permissões.
 5. Defina o nome e salve. Reordenação e tamanhos 1×1, 2×1, 2×2 e 1×2 continuam disponíveis.
 
 O caminho completo é **mobile → API autenticada do agente → adaptador nativo → dispositivo**. Não há acesso direto do celular ao periférico e não é necessário integrar cada aplicativo para os controles nativos suportados.
@@ -18,14 +18,14 @@ As alternativas **Abrir aplicativo** e **Abrir painel web** permanecem disponív
 
 | Sistema / categoria | Descoberta | Ações |
 |---|---|---|
-| macOS / câmeras | `system_profiler SPCameraDataType`, usando o UID do dispositivo | Consulta. Sem chave pública global de bloquear/liberar câmera neste adaptador; nenhuma sessão de captura é iniciada |
+| macOS / câmeras | Módulo AVFoundation empacotado, usando UID; inventário de fallback via `system_profiler` | Modos de foco, exposição e balanço de branco que o driver declarar configuráveis, após autorização. Sem bloqueio global ou sessão de captura |
 | macOS / áudio | CoreAudio via JNA, com UID e direção entrada/saída | Selecionar padrão; mute e nível quando a propriedade principal existir e for gravável |
 | Windows / câmeras | PnP: classe Camera e dispositivos Image associados ao serviço USB Video | Habilitar/desabilitar quando o agente já tiver privilégios administrativos e o dispositivo não apresentar outro erro |
 | Windows / áudio | Endpoints MMDevice presentes via PnP | Consulta. Controle Core Audio de endpoints Windows ainda pendente |
 | Linux / câmeras | `/sys/class/video4linux` e `v4l2-ctl` | Bloquear/liberar privacidade somente quando o driver expõe `privacy` gravável |
 | Linux / áudio | `pactl`, PulseAudio ou compatibilidade PulseAudio do PipeWire | Selecionar padrão, mute e nível por entrada/saída; fontes monitor são excluídas |
 
-Não existe suporte automático a todo periférico USB/Bluetooth ou a todo parâmetro de câmera. O catálogo cobre as categorias acima. Zoom, foco, exposição, protocolos de câmeras IP, plugins de fabricantes e captura em OBS/Teams/Zoom continuam fora desta entrega. O registro de adaptadores permite acrescentá-los sem codificar regras por fabricante no mobile.
+Não existe suporte automático a todo periférico USB/Bluetooth ou a todo parâmetro de câmera. O catálogo cobre as categorias acima. Zoom e valores manuais contínuos de foco/exposição, protocolos de câmeras IP, plugins de fabricantes e captura em OBS/Teams/Zoom continuam fora desta entrega. Os modos nativos de foco/exposição/balanço de branco no Mac dependem das capacidades e permissões de cada câmera. O registro de adaptadores permite acrescentá-los sem codificar regras por fabricante no mobile.
 
 No Windows, desabilitar o dispositivo afeta o sistema e alguns drivers exigem reinício. O agente não solicita elevação silenciosa. No Linux, privacidade não significa remover/desligar eletricamente o dispositivo. No macOS, não se apresenta uma câmera detectada como “ligada” ou “capturando”: disponibilidade não é captura.
 
@@ -55,7 +55,7 @@ Ações de transporte: `SET_ENABLED`, `SET_MUTED`, `SET_LEVEL` (0–100), `SET_D
 
 ## Instalação e permissões
 
-- Atualize o agente para **1.1.14**. O build do DMG não atualiza a cópia já instalada. Preserve o pareamento atual; não desinstale o mobile para atualizar.
+- Atualize o agente para **1.1.15**. O build do DMG não atualiza a cópia já instalada. Preserve o pareamento atual; não desinstale o mobile para atualizar.
 - No Mac, CoreAudio e o inventário de câmeras usam APIs/ferramentas do sistema, sem instalar compiladores ou pacotes extras. Acessibilidade continua necessária para controle de janelas, mas não representa autorização global de câmera.
 - Windows requer PowerShell/PnpDevice. A capacidade de habilitar/desabilitar só é anunciada quando o processo já é administrador. O instalador Windows ainda não faz parte do projeto.
 - Linux requer `v4l-utils` para controles V4L2 e `pactl` com um servidor de áudio compatível. Permissões da sessão, grupo de vídeo e driver continuam aplicáveis. Não há fallback para comandos simulados de dispositivo.
@@ -75,7 +75,7 @@ Referências: [CoreAudio](https://developer.apple.com/documentation/coreaudio/ka
 
 ## Onboarding de permissões
 
-Na primeira abertura, o agente consulta o inventário e mostra **Dispositivos e permissões**, com diagnóstico e botão de nova verificação. O fluxo de Acessibilidade continua sendo solicitado automaticamente no Mac, com confirmação manual obrigatória do sistema. A lista de câmeras não inicia captura e não pede acesso de captura sem necessidade.
+Na primeira abertura, o agente consulta o inventário e mostra **Dispositivos e permissões**, com diagnóstico e botão de nova verificação. O fluxo de Acessibilidade continua sendo solicitado automaticamente no Mac, com confirmação manual obrigatória do sistema. A lista de câmeras não inicia captura. Para consultar e configurar modos nativos, o onboarding solicita autorização de câmera após Acessibilidade quando o estado é ainda não decidido; o usuário confirma no diálogo do macOS. Se negado, o botão de autorização abre os Ajustes.
 
 A rota local `GET /setup/devices` permite esse diagnóstico antes de parear um telefone; é bloqueada para clientes fora de localhost. A API remota `/devices` e os comandos continuam exigindo token. No Windows/Linux, permissões administrativas/grupos não são elevadas silenciosamente. Consulte [instalação e permissões](agent-install.md#permissões-na-primeira-abertura-agente-1114).
 
@@ -98,3 +98,20 @@ O teste opt-in `CONTROL_DESK_TEST_NATIVE_DEVICES=1 ./gradlew :agent:test --tests
 Após atualizar este Mac com `:agent:installMacos`, `/health` confirmou **1.1.14**, `deviceCatalogVersion=1` e identidade de compilação; `/setup/devices` retornou **200**, uma câmera, uma entrada e uma saída de áudio, sem diagnósticos de erro. O checksum do arquivo de tokens permaneceu igual. Nenhuma ação de alteração de dispositivo foi executada em hardware real.
 
 A nova assinatura ad hoc voltou a exigir confirmação de Acessibilidade pelo usuário; o instalador abriu os Ajustes automaticamente. Essa autorização continua pendente na última verificação, embora o catálogo de dispositivos funcione. Para distribuição com preservação de permissões entre atualizações, continua necessário configurar assinatura persistente adequada.
+
+
+## Painel de controles e câmera nativa — 1.1.15
+
+O atalho **Abrir todos os controles** guarda `OPEN_CONTROLS`, mas abrir o painel não envia uma ação ao dispositivo. A tela apresenta estado confirmado, autorização, foco, exposição e balanço de branco; áudio apresenta mute, nível e padrão conforme capacidades. Ações diretas continuam opcionais. Controles ausentes têm explicação; desconectar não remove o card nem altera tamanho/posição. Voltar retorna ao grid e mudar de computador fecha o painel.
+
+O contrato adiciona `settings` (mapa opcional) com `authorization`, `focusMode`, `exposureMode` e `whiteBalanceMode`. Ações nativas: `FOCUS_LOCKED/AUTO/CONTINUOUS`, `EXPOSURE_LOCKED/AUTO/CONTINUOUS` e `WHITE_BALANCE_LOCKED/AUTO/CONTINUOUS`. `REQUEST_CAMERA_ACCESS` solicita autorização separadamente. A rota `POST /setup/camera-access` aceita somente essa solicitação e somente localhost; a rota remota continua autenticada. Requisições aguardam até 95 segundos pelo diálogo. Comandos são serializados por dispositivo, sem bloquear o áudio de outro dispositivo durante a autorização.
+
+O módulo `control-desk-camera` é compilado durante o build e incluído no app; o usuário final não precisa de Xcode. Inclui descrição de uso e entitlement de câmera. A entrada de privacidade pode aparecer como **Control Desk Camera**; confirme o diálogo no Mac. Se já negado, autorize em Ajustes → Privacidade e Segurança → Câmera. Uma assinatura persistente é necessária para distribuição previsível entre atualizações. Autorizar não garante controles que o driver não implementa.
+
+Validação 1.1.15: testes verificam UID exato, capacidades, confirmação de modo, concorrência entre dispositivos, painel sem comando ao abrir, salvamento sem capacidades e manutenção do card desconectado. A descoberta real encontrou uma câmera com autorização `notDetermined`; nenhuma mudança de modo nem captura foi executada. O teste em hardware autorizado e a validação visual no telefone permanecem pendentes. O registro anterior de instalação 1.1.14 acima é histórico.
+
+O empacotamento 1.1.15 também restaura a permissão executável do helper antes da assinatura e considera o conteúdo do `.app` como entrada do DMG, evitando reutilizar instaladores antigos após alterações no serviço.
+
+A suíte final (`:agent:test`, `:core:protocol:allTests`, `:core:domain:allTests`, `:core:data:allTests`, `:composeApp:allTests`) e os builds do APK e APK instrumentado concluíram com sucesso. Os testes comuns rodaram em iOS ARM64; iOS x64 foi ignorado pelo ambiente. O APK instrumentado foi compilado, sem execução no telefone.
+
+O DMG 1.1.15 foi regenerado com sucesso; a assinatura profunda foi verificada e o helper empacotado executou descoberta real. A atualização não foi instalada automaticamente neste Mac nesta etapa.
