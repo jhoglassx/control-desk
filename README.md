@@ -39,4 +39,4 @@ O último comando abre o agente e sua janela de configuração. A opção desati
 - [Configuração iOS](docs/ios-setup.md)
 - [Roadmap](docs/roadmap.md)
 
-O agente macOS coleta títulos de janela para distinguir instâncias do mesmo app; no celular, cards exibem o que está aberto, distribuem-se em colunas iguais e usam ícones reais dos aplicativos. Para instalação atualizada, consulte [a revisão geral](docs/review.md) e [o catálogo de features](docs/feature-status.md).
+O mobile mantém launchers persistentes por aplicativo, com ícones reais, tamanho e ordem salvos por computador. As janelas são instâncias selecionáveis por título e monitor; abrir ou fechar uma janela não substitui o launcher. Favoritos de projeto recebem somente as janelas correspondentes. Para instalação atualizada, consulte [a revisão geral](docs/review.md) e [o catálogo de features](docs/feature-status.md).

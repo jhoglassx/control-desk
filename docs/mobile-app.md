@@ -113,7 +113,7 @@ Conjunto flutuante no canto inferior direito, sem fundo opaco:
 
 **Monitor:** `M1` / `M2` é badge suspenso no canto superior direito, **dentro** do card (overlay, fora da pilha de conteúdo). Apps só da Dock (`monitorIndex=0`) não mostram badge.
 
-**Texto:** título da janela; se não houver título, usa o nome do app. Assim duas janelas do Android Studio, por exemplo `projeto-a` e `projeto-b`, aparecem como cards distintos. O ícone do `.app` identifica o programa; ao tocar, o comando ainda usa o nome do app e os dados da janela para focar a instância correta.
+**Texto:** o launcher padrão pode refletir o título da janela associada, com nome do app como fallback; favoritos preservam sua configuração. Várias janelas do mesmo aplicativo permanecem em um launcher, com seleção de instância por título e monitor. O ícone real do `.app` identifica o programa.
 
 Landscape (`compact`): ícone, título da janela e badge M{n}.
 
@@ -256,68 +256,37 @@ Todos os jobs da tela usam o escopo padrão `viewModelScope`, cancelado quando o
 | `AUDIO_REFRESH_MS` | 300 ms | Poll áudio (job separado da lista de janelas) |
 | `AUDIO_DRAG_HOLD_MS` | 500 ms | Bloqueia fetch áudio após ajuste do usuário |
 | `BURST_REFRESH_MS` | 80 ms | Intervalo burst HTTP após clique quando o WebSocket está desconectado |
-| `BURST_REFRESH_COUNT` | 4 | Repetições do burst |
+| `BURST_REFRESH_COUNT` | 3 | Repetições do burst |
 | `PINNED_FOCUS_MAX_MS` | 1200 ms | Timeout highlight otimista |
 | `ACTIVE_CONFIRM_POLLS` | 1 | Aceita o app ativo no primeiro poll |
-| `FOCUS_CONFIRM_POLLS` | 3 | Polls após foco bem-sucedido |
 | `HOST_SWITCH_SETTLE_MS` | 0 ms | Após trocar host |
 | `MISSING_ICON_CHECK_EVERY` | 5 ticks | Check ícones faltando; loop 150 ms sem WS / 5 s com WS |
 
 ### 5.7 Clique em botão (`onButtonClick`)
 
-1. `armPinnedFocus(button)` — guarda buttonId, windowNumber, appName+title
-2. UI otimista: clicado `isActive=true`, outros `false`
-3. `startBurstRefresh()` — 1 + 3 polls rápidos
-4. `executeGridButton(button, host)`
-5. **Sucesso:** delay `FOCUS_SETTLE_MS` + 3× refresh com `FOCUS_SETTLE_MS`
-6. **Falha:** `clearPinnedFocus()`, snackbar com erro
+1. Resolve o launcher e suas janelas na associação atual. Com várias instâncias, publica `WindowSelection` no estado MVI.
+2. Valida novamente a janela escolhida; se desapareceu, informa erro sem substituir por outra.
+3. Aplica foco otimista e envia o comando pelo transporte disponível, usando `AppCommandMapping`.
+4. Atualiza os dados após a ação. Timeout após envio não causa repetição automática por HTTP.
+5. O catálogo e as preferências de layout permanecem independentes do estado de execução.
 
-### 5.7.1 Encerrar app (`onAppClose`)
+### 5.7.1 Encerrar janela
 
-1. Lê `payload.target`; Finder/sistema → snackbar, sem HTTP
-2. Tile só da Dock (já fechado) → no-op
-3. UI otimista: janelas daquele `target` viram o atalho da Dock (esmaecido); o ícone **não some**
-4. `POST /apps/close` em background (SIGTERM no processo; o agente ignora a janela antiga por ~2 s)
-5. **Não** dispara clique/foco; toque longo e toque curto são exclusivos
-6. Poll com janela stale **não** recoloca o app como ativo; só o atalho da Dock
-7. **Falha:** solta o hold + snackbar
+O launcher permanece no grid. Com várias instâncias, o estado MVI oferece a lista de janelas com título/monitor; a escolha envia ID Quartz e PID por HTTP ou WebSocket. O agente revalida a janela antes de usar Accessibility. Fechar a última janela deixa o launcher inativo, com a mesma identidade e layout. Erros de resolução/execução aparecem no feedback.
 
-### 5.7 Pinned focus
+### 5.8 Identidade e estado ativo
 
-Mantém tile clicado como "Em uso" até:
+`DockShortcutProjector` associa janelas a `PairedHost.applicationShortcuts`. O ID do launcher permanece através de mudanças de título, índice, PID e ID Quartz. `appOrder`, `appGridPositions` e `appTileSizes` são lidos por esse ID; favoritos usam seu ID próprio. Não há reconciliação contínua de posição por título/PID.
 
-- Agent confirma `isActive` no poll, ou
-- Timeout 8 s, ou
-- Falha na ação
+O agente macOS (`windowListerVersion` 25) informa a janela ativa e o monitor. A seleção pode mostrar várias janelas do mesmo app sem acrescentar cards à grade. Abas de navegador não substituem as janelas nativas na seleção do launcher. Detalhes e limitações estão em [shortcut-identity-review.md](shortcut-identity-review.md).
 
-**Match:** `buttonId`, ou `windowNumber` no payload, ou `target + windowTitle`.
+### 5.9 Snapshots e ícones
 
-### 5.8 Estabilização de lista (`stabilizeActiveState`)
-
-O app ativo é rastreado **por host**. Trocar de PC (swipe) não reaproveita o `currentActiveId` do Mac anterior.
-
-Quando janela ativa muda no poll do **mesmo** PC:
-
-- Aceita o novo `incomingActiveId` no primeiro poll (`ACTIVE_CONFIRM_POLLS = 1`)
-- Se o agente não marcar ninguém (`incomingActiveId == null`) e o id anterior **não está** nesta lista, limpa o destaque (não força o ativo do outro PC)
-- Se o id anterior ainda está na lista, mantém o highlight até o próximo poll com flag
-
-No agente macOS (`windowListerVersion` 22), `isActive` usa o app da frente do `NSWorkspace` e a janela `AXMain` visível — não só `windows[0]` do System Events. Cada card também recebe o PID, índice AX e total de janelas da instância: fechar um app com múltiplas janelas fecha somente a janela selecionada; apps em processos separados são encerrados pelo PID correspondente.
-
-### 5.9 Merge de botões (`preferMerge=true`)
-
-- Atualiza botões existentes por `id`
-- Adiciona novos apps
-- Preserva ícones anteriores se novo poll não traz ícone
-- Se `preferMerge && apps.isEmpty()` → mantém lista atual (não limpa em poll vazio)
+O merge conserva ícones de itens presentes quando a atualização não inclui ícones. Um snapshot vazio limpa o estado de execução; o catálogo persistido mantém os launchers inativos. Ícones recebidos ficam associados ao catálogo para apresentação após o app fechar.
 
 ### 5.10 Falha ao carregar apps
 
-| Situação | Comportamento |
-|----------|---------------|
-| Primeira carga (`showLoading`) | Lista vazia, `listHint = erro`, snackbar |
-| Poll silencioso com cache | Mantém cache; não snackbar |
-| Sem cache | Para auto-refresh, lista vazia + hint |
+Com cache, a UI conserva os launchers e exibe a falha. Após reiniciar sem conexão, o catálogo persistido também é restaurado, sem atribuir estado de janela ativa. Sem catálogo ou favoritos, a tela mostra o erro e o fluxo de pareamento disponível.
 
 ### 5.11 Hint lista vazia
 
@@ -339,7 +308,7 @@ Executado no **data layer**, consumido pelo ViewModel.
 
 **Ordenação:** posição na Dock (`dockIndex`); apps não fixados depois, por nome. Foco **não** muda a posição do tile.
 
-**ID estável:** `windowNumber` → `axWindowIndex` → `windowIndex` → hash título. Dock fechado: `app-{appName}-dock`.
+**Identidades distintas:** o launcher usa `ApplicationShortcut.id`, persistido por host. O runtime usa ID Quartz quando disponível e identificadores temporários de fallback. PID, título e índice AX não são chaves de tamanho/ordem. `ApplicationCatalogResolver` promove aliases não ambíguos ao bundle e consolida duplicatas antigas; `ShortcutWindowBinder` atribui cada janela uma vez, com prioridade projeto → favorito genérico → launcher padrão.
 
 **Grid lógica:** `row = index/3`, `col = index%3` (para futuro editor; UI usa adaptive grid).
 

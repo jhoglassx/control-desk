@@ -15,6 +15,7 @@ Painel remoto estilo Stream Deck — **Kotlin Multiplatform** (Android + iOS) + 
 | **[architecture.md](architecture.md)** | Arquitetura e comportamento implementado |
 | **[review.md](review.md)** | Revisão geral, riscos e próximas etapas |
 | **[feature-status.md](feature-status.md)** | Catálogo de features implementadas, parciais e futuras |
+| **[shortcut-identity-review.md](shortcut-identity-review.md)** | Identidade dos launchers, migração, associação exclusiva de janelas e evidências de testes |
 | **[pinned-apps.md](pinned-apps.md)** | Apps fixos, reordenação e projetos/pastas associados |
 | **[spec.md](spec.md)** | Especificação geral — agente, API, arquitetura, regras de negócio |
 | **[mobile-app.md](mobile-app.md)** | App mobile — telas, ViewModels, pareamento, UX |
@@ -68,7 +69,7 @@ CONTROL_DESK_SKIP_INSTALL=1 ./gradlew :agent:runDistributable
 
 Detalhes: [agent-install.md](agent-install.md), [mobile-app.md](mobile-app.md).
 
-Se os ícones da grade ficarem vazios, atualize agente e app mobile para descartar os caches anteriores. O agente extrai o ícone `.icns` real do bundle macOS; o mobile substitui imagens em cache. A grade distribui células igualmente pela largura útil, mostra o título da janela em até duas linhas e usa o nome do app como fallback.
+Se os ícones da grade ficarem vazios, atualize agente e app mobile para descartar os caches anteriores. O agente extrai o ícone `.icns` real do bundle macOS; o mobile substitui imagens em cache. A grade distribui células igualmente pela largura útil, mantém launchers persistentes com títulos em até duas linhas. Janelas do mesmo aplicativo são selecionadas por título e monitor; favoritos preservam o destino configurado.
 
 Na tela de pareamento, **Buscar Macs na rede** usa mDNS/Bonjour para preencher nome, host e porta; o usuário ainda informa o PIN exibido no agente. O PIN expira após 10 minutos e o servidor bloqueia novas tentativas por cinco minutos depois de cinco PINs inválidos do mesmo endereço. Em Configurações do agente, “Desconectar todos os dispositivos pareados” revoga os tokens globalmente.
 

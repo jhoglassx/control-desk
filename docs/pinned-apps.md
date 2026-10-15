@@ -1,37 +1,37 @@
 # Apps fixos e projetos
 
-Estado em 14/10/2026. Todos os cards de apps exibidos na tela principal podem ser reorganizados juntos por arraste. A tela dedicada de configuração mostra o ícone real do app quando o macOS consegue extraí-lo do bundle; o catálogo resolve e armazena o ícone na primeira consulta, inclusive para apps ainda não abertos.
+Estado em 15/10/2026.
 
-## Como usar
+## Uso
 
-1. Na tela principal, toque em **↕ Reorganizar apps** no topo.
-2. Segure qualquer parte do card e arraste para a posição desejada. O card selecionado acompanha o dedo e fica à frente; os outros cards abrem espaço conforme ele cruza as posições. Apps abertos, cards favoritos e cards da Dock participam da mesma ordenação.
-3. Toque em **✓ Concluir reorganização** para voltar ao uso normal dos cards.
-4. A ordem é salva automaticamente por Mac. Atualizações da lista preservam posições existentes; apps que aparecerem depois são acrescentados ao final até que o usuário os reorganize.
-5. Para adicionar um atalho de inicialização ou associar um projeto/caminho, toque no botão **+** do topo. Na seção **Fixados**, escolha **Escolher projeto ou arquivo** e navegue pelas pastas do Mac.
-6. Toque em um card de app fixo para abrir o app e o projeto/documento/pasta configurado.
+- Cada aplicativo tem um launcher persistente no grid. Abrir/fechar janelas mantém o card, seu tamanho e sua ordem.
+- Toque no aplicativo para abrir ou focar. Com várias instâncias, escolha a janela na lista; ela exibe título e monitor. O card indica a quantidade de janelas.
+- Segure o card para fechar. Com várias instâncias, escolha qual janela fechar. O launcher permanece disponível após fechar a última janela.
+- Toque em **↕ Reorganizar apps** e arraste qualquer parte do card. Toque no tamanho para alternar **1×1**, **2×1**, **2×2**, **1×2**. Conclua em **✓**.
+- O primeiro ajuste salva a organização dos cards atuais. Novos aplicativos entram ao final e as atualizações do agente não mudam a ordem escolhida.
+- Toque em **+** para adicionar um favorito. Use **Escolher projeto ou arquivo** para navegar pelo Mac e configurar o destino.
+- Favoritos de projeto têm identidade e tamanho próprios. O caminho configurado permanece mesmo quando outras janelas do mesmo app são abertas. Uma janela pertence a um único atalho: o projeto tem prioridade, e o launcher padrão recebe somente as janelas restantes. Sem janela restante, ele fica inativo e continua disponível para abrir o aplicativo.
 
-Os cards fixos e dinâmicos compartilham a mesma ordem persistida. Quando um app fixo também está aberto, o card favorito representa uma de suas janelas e preserva título, monitor e estado ativo; janelas adicionais do mesmo app continuam como cards próprios. Um atalho sem caminho configurado apenas abre o aplicativo.
+## Implementação
 
-## Como funciona
+`DockShortcutProjector` projeta janelas temporárias sobre `PairedHost.applicationShortcuts`. O catálogo, a ordem e os tamanhos ficam no arquivo local de hosts com backup. O tamanho é salvo pelo ID persistente do launcher ou pelo ID do favorito, nunca pelo título da janela.
 
-- A configuração é persistida no arquivo de hosts do celular como `pinnedApps`, dentro do Mac pareado. Aplicativos, caminhos e ordem são configurações locais do celular e não são enviados para nuvem.
-- O botão de reorganização, a seleção, o deslocamento e a prévia de posição do card seguem o estado MVI da tela; a nova ordem é persistida ao soltar. O campo `appOrder` preserva IDs ausentes e reconcilia a identidade quando um app passa de item da Dock para janela aberta, evitando que essa mudança de estado o envie para o fim da grade.
-- O agente oferece `GET /apps/installed` autenticado para listar `.app` em `/Applications`, `/System/Applications` e `~/Applications`, incluindo o ícone real.
-- O agente oferece `POST /files/browse` autenticado para navegar dentro da pasta do usuário no Mac; entradas ocultas são filtradas e caminhos fora dela são recusados.
-- O atalho usa a rota de lançamento existente com `bundlePath` e `projectPath`. No macOS, o agente executa `open -a <app> <caminho>` para pedir ao Launch Services que abra o projeto ou documento no app correspondente.
-- O caminho precisa ser válido e acessível ao usuário do macOS que executa o agente. O Android Studio trata a pasta do projeto como alvo de abertura e pode trazer uma instância/janela própria conforme as preferências do IDE.
-- O agente valida que o bundle é uma pasta `.app` existente e que o caminho configurado existe antes de lançar.
+O ViewModel mantém a seleção de instância em estado MVI. Os comandos HTTP/WebSocket compartilham o mapeamento, enviando o ID da janela escolhida. Uma janela que desapareceu não é substituída automaticamente por outra na execução do comando.
 
-## Limites da primeira versão
+Preferências antigas são migradas na descoberta do app. Quando havia vários cards de janela para o mesmo aplicativo, eles passam a um launcher com uma lista de instâncias. A migração conserva as chaves antigas e prioriza uma configuração com tamanho personalizado. Consulte [a revisão técnica](shortcut-identity-review.md) para os critérios e limites.
 
-- A lista de apps é fornecida pelo agente macOS; agentes Windows/Linux ainda não têm catálogo nativo.
-- O navegador exibe até 200 itens por pasta e limita a navegação à pasta do usuário do macOS.
-- Atalhos são independentes por instalação do app e por computador pareado; ainda não há sincronização entre celulares.
-- Caminhos removidos ou apps desinstalados falham com uma mensagem e podem ser atualizados no editor.
+O catálogo de apps usa `GET /apps/installed` autenticado; o navegador de arquivos usa `POST /files/browse` e limita a navegação à pasta do usuário. O lançamento usa `open -a <bundle> <projeto/documento/pasta>`. O agente valida a existência dos caminhos antes de lançar.
 
-## Próximos refinamentos
+## Limites
 
-1. Exibir atalhos favoritos em uma seção visual própria, separada da lista de janelas ativas.
-2. Renomear atalhos e permitir mais de um atalho do mesmo app com projetos diferentes (ex.: Android Studio — sample-android-app e Android Studio — outro projeto).
-3. Adicionar confirmação visual do resultado do lançamento.
+- O catálogo e controle nativos de janelas estão implementados no agente macOS; Windows/Linux ainda precisam de integração nativa.
+- O navegador mostra até 200 entradas por pasta.
+- Os atalhos são locais por celular e computador pareado; não há sincronização entre celulares.
+- Um bundle movido para outro caminho pode gerar outro launcher.
+- A identificação do projeto aberto ainda depende do título fornecido pelo aplicativo.
+
+## Diagnóstico
+
+No Android, filtre o Logcat por `[app-layout]`: os eventos indicam ID persistente, chave do tamanho, título e ID da janela associada.
+
+No Mac, `[window-identity]` em `~/.control-desk/agent.log` registra alterações na associação Accessibility/Quartz. Logs incluem títulos de janelas e devem ser revisados antes do compartilhamento.

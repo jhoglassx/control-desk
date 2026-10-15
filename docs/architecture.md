@@ -1,6 +1,6 @@
 # Arquitetura e estado atual
 
-Revisão do checkout em 13/10/2026. Este documento descreve os módulos e o fluxo; o catálogo por estado está em [feature-status.md](feature-status.md), as próximas entregas no [roadmap](roadmap.md) e riscos em [review.md](review.md).
+Revisão do checkout em 15/10/2026. Este documento descreve os módulos e o fluxo; o catálogo por estado está em [feature-status.md](feature-status.md), as próximas entregas no [roadmap](roadmap.md) e riscos em [review.md](review.md).
 
 ## Módulos
 
@@ -28,7 +28,7 @@ Kotlin 2.1.21, Compose Multiplatform 1.8.2, Ktor 3.1.3 e Koin 4.1.0 são versõe
 
 ## Plataformas
 
-O macOS tem integração com janelas, Dock, foco, encerramento de apps, Chrome e áudio. A listagem é por janela e inclui seu título; o app mobile mostra esse título para distinguir projetos/janelas do mesmo aplicativo, com o nome do app como fallback. IDs incorporam PID e identidade da janela para manter instâncias separadas. A listagem é cadenciada a 1 s e os ícones pendentes são resolvidos em worker separado; a chegada de ícones invalida a assinatura do WebSocket para atualizar os clientes conectados. Acessibilidade é necessária para operações de janelas e o estado é consultado no próprio processo via `AXIsProcessTrusted`; automações AppleScript podem exigir autorização adicional do macOS. Windows/Linux delegam a `LoggingPlatformExecutor`: Safari/Notes e níveis de áudio simulados.
+O macOS tem integração com janelas, Dock, foco, encerramento de apps, Chrome e áudio. A listagem nativa é por janela. O mobile projeta essas instâncias sobre launchers persistentes por aplicativo; títulos e monitores aparecem na seleção da janela. IDs de janela identificam comandos; IDs de launcher identificam ordem e tamanho. Consulte [a revisão de identidade](shortcut-identity-review.md). A listagem é cadenciada a 1 s e os ícones pendentes são resolvidos em worker separado; a chegada de ícones invalida a assinatura do WebSocket para atualizar os clientes conectados. Acessibilidade é necessária para operações de janelas e o estado é consultado no próprio processo via `AXIsProcessTrusted`; automações AppleScript podem exigir autorização adicional do macOS. Windows/Linux delegam a `LoggingPlatformExecutor`: Safari/Notes e níveis de áudio simulados.
 
 Android tem launcher próprio e modo painel. O PIN administrativo fixo `8741` abre as configurações nesse modo; ele é distinto do PIN de seis dígitos do agente e não constitui autenticação do protocolo. iOS contém fontes Swift e `Info.plist`, sem `.xcodeproj` ou `.xcworkspace` no repositório; consulte [ios-setup.md](ios-setup.md).
 
@@ -61,7 +61,7 @@ Cliente: reconexão após 500 ms; timeout de comando de 2.500 ms. Estado `Connec
 
 ## Dados e operação
 
-Android salva `control_desk_hosts.json` e `control_desk_icon_cache_v2.json` no `filesDir`; iOS usa Documents. Hosts incluem token e botões. O agente salva `agent_tokens.txt`, `agent_pin.txt`, logs e ícones versionados em `~/.control-desk/`. Tokens são armazenados em texto simples/JSON, sem camada de criptografia implementada. A grade mobile monta linhas explícitas cujas células têm pesos iguais; a última linha mantém espaços vazios para preservar o alinhamento das colunas.
+Android salva `control_desk_hosts.json` e `control_desk_icon_cache_v2.json` no `filesDir`; iOS usa Documents. Hosts incluem token e botões. O agente salva `agent_tokens.txt`, `agent_pin.txt`, logs e ícones versionados em `~/.control-desk/`. Tokens são armazenados em texto simples/JSON, sem camada de criptografia implementada. A grade mobile usa um layout compacto com spans 1×1, 2×1, 2×2 e 1×2, conservando ordem e tamanho por ID persistente do launcher.
 
 O app macOS empacotado instala/atualiza LaunchAgent e abre configurações por padrão. `--headless` executa sem janela; `--settings` solicita configurações e `--no-settings` as suprime. Variáveis relevantes:
 
@@ -74,4 +74,10 @@ O app macOS empacotado instala/atualiza LaunchAgent e abre configurações por p
 | `CONTROL_DESK_SKIP_INSTALL` | Evitar instalação automática do app empacotado |
 | `CONTROL_DESK_NO_RESPAWN` | Desativar respawn em desenvolvimento (`1`) |
 
-O pacote, `/health` e o TXT mDNS usam a versão `1.1.1`. O DMG contém app, atalho Applications e LEIA-ME; não inclui `docs/`. Os logs JVM Warn/Error podem ser enviados ao Firestore quando há configuração Firebase no classpath; a comunicação de controle na LAN não elimina essa telemetria.
+O pacote, `/health` e o TXT mDNS usam a versão `1.1.12`. O DMG contém app, atalho Applications e LEIA-ME; não inclui `docs/`. Os logs JVM Warn/Error podem ser enviados ao Firestore quando há configuração Firebase no classpath; a comunicação de controle na LAN não elimina essa telemetria.
+
+## Identidade e associação de instâncias
+
+O fluxo de publicação é `RunningAppsGridBuilder` → `ApplicationCatalogResolver` / `DockShortcutProjector` → `ShortcutWindowBinder` → aplicação de tamanho/ordem → estado MVI. O catálogo resolve aliases de nome para bundles somente sem ambiguidade. O binder atribui cada janela uma vez, priorizando projeto, favorito genérico e launcher padrão. Tanto o destaque quanto a seleção de instâncias usam essa atribuição.
+
+`WindowSelection` guarda o destino da seleção de foco/fechamento; o ViewModel valida a janela contra a associação atual antes do envio. `AppCommandMapping` produz o mesmo contrato HTTP/WebSocket. O agente reconsulta a identidade de janela antes da ação. Consulte [a revisão de identidade](shortcut-identity-review.md) para migração, testes e limites.

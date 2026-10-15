@@ -30,7 +30,7 @@ Especificação completa: **[README.md](README.md)** (índice) e **[spec.md](spe
 
 O `.dmg` sai em:
 
-`agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.7.dmg`
+`agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.12.dmg`
 
 O agente compilado é compatível com o runtime Java 17 incluído neste pacote; o usuário não precisa instalar Java.
 
@@ -53,7 +53,7 @@ Para builds que precisam preservar Acessibilidade, configure uma identidade conf
 
 **Ajustes → Privacidade e Segurança → Acessibilidade** → marque **ControlDeskAgent**.
 
-Sem isso, a lista de apps/janelas fica vazia no celular.
+Sem essa permissão, a detecção e o controle nativos de janelas ficam indisponíveis. Launchers salvos e itens do Dock podem continuar visíveis; sua presença não confirma que Acessibilidade esteja autorizada.
 
 Na instalação e ao abrir a janela do agente, o app abre **Privacidade e Segurança → Acessibilidade** e solicita a autorização ao macOS. O sistema exige que a pessoa confirme a chave: se **ControlDeskAgent** já estiver na lista, ligue-a; se não estiver, use `+` e escolha **ControlDeskAgent** em Aplicativos. Volte à janela do agente para confirmar o status. O app deve estar instalado em **Aplicativos**, não iniciado da Lixeira ou diretamente do DMG.
 

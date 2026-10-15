@@ -45,13 +45,13 @@ agent            Ktor server + PlatformExecutor por SO
 | Modo | Como ativar | Comportamento esperado |
 |------|-------------|------------------------|
 | **Headless (padrão produção)** | `CONTROL_DESK_HEADLESS=1` (LaunchAgent) | Servidor Ktor, mDNS, PIN no log — **sem janela** |
-| **Instalar/atualizar (GUI app)** | Abrir `ControlDeskAgent.app` | Sincroniza instalação em background e **encerra** (sem janela) |
+| **Instalar/atualizar (GUI app)** | Abrir `ControlDeskAgent.app` | Instala/atualiza o serviço e abre a janela de configurações |
 | **Dev (`./gradlew :agent:run`)** | Sem `.app`, ou `CONTROL_DESK_SKIP_INSTALL=1` | Servidor **neste processo** + janela PIN/IP. **Cmd+Q / Fechar** encerra a UI (sai do Dock) e respawna o agente **headless**. `CONTROL_DESK_NO_RESPAWN=1` desliga o respawn |
 | **Configurações (opcional)** | `Abrir configurações.command`, `--settings` ou `CONTROL_DESK_OPEN_SETTINGS=1` | Instala se necessário + janela PIN/IP (consulta serviço local) |
 
 **Regra de negócio — instalação padrão:**
 
-1. **Padrão:** **Instalar em segundo plano.command** — instala ou atualiza serviço headless, sem janela.
+1. **Padrão:** arraste o app para Aplicativos e abra-o: instala/atualiza o serviço e mostra PIN, versão e permissões. **Instalar em segundo plano.command** é a alternativa sem janela.
 2. **Instância única:** sempre `/Applications/ControlDeskAgent.app` + um LaunchAgent `com.controldesk.agent`.
 3. **Atualização:** nova versão no DMG **substitui** a instalada (compara `CFBundleShortVersionString`) e reinicia o serviço.
 4. **Não duplicar:** nunca múltiplos LaunchAgents nem múltiplos apps — `launchctl bootout` antes de `bootstrap`.
@@ -74,7 +74,7 @@ agent            Ktor server + PlatformExecutor por SO
 | `CONTROL_DESK_PORT` | `8741` | Porta HTTP |
 | `CONTROL_DESK_BIND` | `0.0.0.0` | Bind (LAN + emulador) |
 | `CONTROL_DESK_HEADLESS` | `1` no LaunchAgent | Serviço sem UI |
-| `CONTROL_DESK_OPEN_SETTINGS` | `0` (padrão no .app) | `1` ou `--settings` abre janela |
+| `CONTROL_DESK_OPEN_SETTINGS` | Abertura habilitada no .app | `0` ou `--no-settings` suprime a janela |
 | `CONTROL_DESK_SKIP_INSTALL` | — | `1` = dev, não altera instalação |
 | `CONTROL_DESK_NO_RESPAWN` | — | `1` = Ctrl+C no `:agent:run` **não** deixa daemon |
 
@@ -137,7 +137,7 @@ agent            Ktor server + PlatformExecutor por SO
 
 - Tipo: `_controldesk._tcp.local.`
 - Nome: `ControlDesk-{ComputerName do macOS}` (fallback para hostname)
-- TXT: `version=1.1.1`
+- TXT: `version=1.1.12`
 - Falha no mDNS **não** impede o agente de rodar
 - Android (NSD) e iOS (Bonjour) procuram `_controldesk._tcp` na tela de pareamento; selecionando um resultado, host e porta são preenchidos. A entrada manual continua disponível.
 
@@ -220,8 +220,8 @@ Antes do servidor, no Mac:
 
 ## 5. API do agente (protocolo v1)
 
-**Versão health:** `1.1.1`
-**windowListerVersion:** `20`
+**Versão health:** `1.1.12`
+**windowListerVersion:** `25`
 
 ### 5.1 Endpoints implementados
 
@@ -245,9 +245,9 @@ Antes do servidor, no Mac:
 
 Ver `core/protocol/.../AgentDtos.kt`.
 
-**AppLaunchRequest:** `target`, `targetType` (default `appName`), `windowTitle?`, `windowIndex?`, `windowNumber?`
+**AppLaunchRequest:** `target`, `targetType` (default `appName`), `windowTitle?`, `windowIndex?`, `windowNumber?`, `bundlePath?`, `projectPath?`, `pid?`, `axWindowIndex?`, `stableWindowId?`
 
-**AppCloseRequest:** `target`, `targetType` (default `appName`)
+**AppCloseRequest:** `target`, `targetType` (default `appName`), `pid?`, `windowTitle?`, `axWindowIndex?`, `windowCount?`, `stableWindowId?`
 
 **BrowserTabSwitchRequest:** `browser`, `action` (`next`/`prev`/`select`), `value?`, `windowIndex?`, `focusFirst` (default `true`)
 
@@ -275,11 +275,11 @@ Ver `core/protocol/.../AgentDtos.kt`.
 
 **Processos ignorados:** ControlDeskAgent, AutoFill, coreauthd, loginwindow, Wallpaper, Dock, Spotlight, etc. **Finder entra na grade.**
 
-**Chrome:** janelas substituídas por **abas individuais** na grade.
+**Chrome:** o transporte inclui janelas nativas e abas. A seleção de instâncias do launcher prefere janelas nativas; abas não acrescentam cards ao grid persistente.
 
 **Dock:** apps fixados em `com.apple.dock.plist` (`persistent-apps`) entram na lista mesmo sem janela (`isDockPinned=true`, `isVisible=false`, `dockIndex` = posição na Dock). Leitura via `plutil -extract ... xml1` (JSON falha por causa do bookmark binário). Toque abre/foca (`open -a`); não duplica app que já tem janela.
 
-**Labels:** `"{app} · {título}"` ou `#{index}` para duplicatas; `" · min"` se minimizado.
+**Labels:** títulos pertencem aos dados temporários de janela. O grid final usa launchers persistentes; a seleção de instâncias apresenta título e monitor. Favoritos mantêm nome e destino configurados.
 
 **Ordenação:** posição na Dock; apps que não estão fixados depois, por nome. **Não** reordena quando um app fica ativo — só muda o destaque.
 
@@ -294,7 +294,7 @@ Ver `core/protocol/.../AgentDtos.kt`.
 
 ### 6.3.1 macOS — encerrar app
 
-- `POST /apps/close` → SIGTERM no processo principal (`ProcessHandle.destroy` / `killall`); sem osascript. Helpers (Chrome Helper, etc.) não são alvo.
+- `POST /apps/close` → com identidade de janela, revalida ID/PID e fecha via `AXCloseButton`. Janela ausente ou ambígua gera erro; não se escolhe outra instância. Há fallback legado de encerramento de processo para solicitações sem identidade de janela.
 - Bloqueados: Finder, Dock, SystemUIServer, agente, loginwindow, Spotlight, etc.
 
 ### 6.4 macOS — navegador
@@ -346,7 +346,7 @@ Resumo:
 | **Pair** | Nome, IP, porta, PIN; defaults `10.0.2.2` / `8741` |
 | **Sincronização** | WebSocket preferencial; fallback HTTP apps 150 ms / áudio 300 ms; burst 80 ms |
 | **Clique app** | Foco otimista + `REMOTE_LAUNCH` ou `REMOTE_BROWSER_TAB` |
-| **Toque longo no app** | Encerra o app (`POST /apps/close`); janelas viram atalhos da Dock quando aplicável |
+| **Toque longo no app** | Fecha a janela (`POST /apps/close`); com várias instâncias, oferece seleção. O launcher conserva tamanho e posição |
 | **Mixer** | Knobs Volume/Mic: giro 0–100, toque mute |
 | **Persistência** | `control_desk_hosts.json` (Android/iOS); token no JSON |
 | **Remover host** | Só local; não revoga token no agente |
@@ -394,7 +394,7 @@ Documento completo: **[interaction-rules.md](interaction-rules.md)**.
 ./gradlew :composeApp:assembleDebug    # APK Android
 ```
 
-DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.1.dmg`
+DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.12.dmg`
 
 ### 9.2 Fluxo do usuário (produção)
 
@@ -482,4 +482,4 @@ DMG: `agent/build/compose/binaries/main/dmg/ControlDeskAgent-1.1.1.dmg`
 
 ## 14. Canal em tempo real
 
-`/ws?token=…` autentica pelo token de pareamento, envia snapshots de apps e áudio e aceita comandos com `id` para correlação. Veja o contrato e os intervalos atuais em [architecture.md](architecture.md). `/health` e o anúncio mDNS expõem a versão do agente (`1.1.1`).
+`/ws?token=…` autentica pelo token de pareamento, envia snapshots de apps e áudio e aceita comandos com `id` para correlação. Veja o contrato e os intervalos atuais em [architecture.md](architecture.md). `/health` e o anúncio mDNS expõem a versão do agente (`1.1.12`).

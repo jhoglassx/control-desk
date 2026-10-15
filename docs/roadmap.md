@@ -1,6 +1,6 @@
 # Control Desk — Roadmap
 
-Estado revisto em 14/10/2026. Código existente descrito em [architecture.md](architecture.md); evidências dos problemas em [review.md](review.md).
+Estado revisto em 15/10/2026. Código existente descrito em [architecture.md](architecture.md); evidências dos problemas em [review.md](review.md).
 
 Para o inventário feature a feature, consulte [feature-status.md](feature-status.md).
 
@@ -10,7 +10,8 @@ Para o inventário feature a feature, consulte [feature-status.md](feature-statu
 - Controle macOS de apps/janelas, Dock, Chrome, volume e microfone.
 - LaunchAgent, janela de configurações e empacotamento DMG.
 - UI Compose, pareamento, múltiplos hosts, mixer, cache de ícones e ações otimistas.
-- Apps fixos locais por computador: catálogo macOS, ordenação de atalhos e caminho opcional de projeto/documento/pasta ao iniciar.
+- Launchers persistentes por computador, grade compacta com reordenação e tamanhos 1×1, 2×1, 2×2 e 1×2; favoritos com destino de projeto/documento/pasta.
+- Reparo de duplicatas nome/bundle e associação exclusiva de janelas, com seleção de instâncias para foco/fechamento. Abrir/fechar não muda identidade ou tamanho do launcher.
 - Polling HTTP quando o WebSocket não está conectado.
 - Anúncio mDNS pelo agente.
 - Descoberta mDNS no app Android/iOS, com seleção do agente e preenchimento de host/porta.
@@ -38,7 +39,7 @@ Próxima feature de produto recomendada: permitir vários atalhos do mesmo app p
 - Pareamento por QR.
 - Menu nativo macOS e gestão de dispositivos pareados.
 - Múltiplos atalhos do mesmo app para projetos diferentes, com nomes personalizados.
-- Editor de botões/layouts e novos comandos de browser/hotkeys.
+- Editor de ações e perfis de layout; novos comandos de browser/hotkeys. A grade atual já permite arrastar e redimensionar launchers.
 - Controle nativo Windows/Linux e respectivos instaladores/auto-start.
 - TLS na LAN e armazenamento protegido dos tokens.
 
