@@ -5,6 +5,8 @@
 
 # IDE
 .idea/
+# VS Code Java/Kotlin extension build output (also holds copies of google-services.json)
+bin/
 *.iml
 *.ipr
 *.iws
