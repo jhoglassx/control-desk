@@ -8,20 +8,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.controldesk.app.panel.LocalPanelMode
@@ -37,7 +35,6 @@ fun DeskHeader(
     host: PairedHost?,
     isCurrentPage: Boolean,
     pageIndex: Int,
-    onRefresh: () -> Unit,
     onManageHosts: () -> Unit,
     onPairHost: () -> Unit,
     onAdminAccessRequest: () -> Unit = onManageHosts,
@@ -57,68 +54,63 @@ fun DeskHeader(
             DeskColors.Warning to "Re-parear"
         else -> DeskColors.Live to "Online"
     }
-    Column(modifier.fillMaxWidth()) {
+    Column(modifier.wrapContentWidth(Alignment.End)) {
         Row(
-            Modifier
-                .fillMaxWidth()
-                .background(DeskColors.Surface, RoundedCornerShape(14.dp))
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.align(Alignment.End),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(8.dp).background(dot, CircleShape))
-            Spacer(Modifier.width(8.dp))
             Column(
                 Modifier
-                    .weight(1f)
                     .combinedClickable(
                         onClick = {},
                         onLongClick = if (panelMode) onAdminAccessRequest else null,
                     ),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).background(dot, CircleShape))
+                    Spacer(Modifier.width(7.dp))
                     Text(
                         host?.name ?: "Control Desk",
-                        color = DeskColors.TextPrimary,
-                        fontSize = 15.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(status, color = DeskColors.TextMuted, fontSize = 11.sp, maxLines = 1)
-                }
-                if (host != null) {
-                    Text(
-                        "${host.host}:${host.port}",
-                        color = DeskColors.TextMuted,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 10.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        color = DeskColors.TextPrimary.copy(alpha = 0.72f),
+                        fontSize = 13.sp,
                     )
                 }
-            }
-            TextButton(onClick = onRefresh, enabled = !uiState.isLoadingApps && isCurrentPage) {
-                Text("↻", color = if (uiState.isLoadingApps) DeskColors.TextMuted else DeskColors.TextPrimary, fontSize = 18.sp)
             }
             if (!panelMode) {
-                TextButton(onClick = onManageHosts) { Text("Hosts", color = DeskColors.TextPrimary, fontSize = 13.sp) }
+                TextButton(onClick = onManageHosts) { Text("Hosts", color = DeskColors.TextPrimary, fontSize = 12.sp) }
                 TextButton(onClick = onPairHost) { Text("+", color = DeskColors.Accent, fontSize = 20.sp) }
             }
         }
-        if (uiState.hosts.size > 1) {
-            Spacer(Modifier.height(8.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+        Row(
+            modifier = Modifier.align(Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (host != null) {
+                Text(
+                    "${host.host}:${host.port}",
+                    color = DeskColors.TextMuted.copy(alpha = 0.72f),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 9.sp,
+                )
+            }
+            if (status != "Online") {
+                if (host != null) Spacer(Modifier.width(8.dp))
+                Text(
+                    text = status,
+                    color = dot.copy(alpha = 0.8f),
+                    fontSize = 9.sp,
+                    textAlign = TextAlign.End,
+                )
+            }
+            if (uiState.hosts.size > 1) {
+                Spacer(Modifier.width(8.dp))
                 uiState.hosts.forEachIndexed { index, _ ->
                     Box(
                         Modifier
-                            .padding(horizontal = 3.dp)
-                            .size(if (index == pageIndex) 8.dp else 6.dp)
+                            .padding(horizontal = 3.dp, vertical = 4.dp)
+                            .size(if (index == pageIndex) 7.dp else 5.dp)
                             .background(
-                                if (index == pageIndex) DeskColors.Accent else DeskColors.TextMuted.copy(alpha = 0.45f),
+                                if (index == pageIndex) DeskColors.Accent else DeskColors.TextMuted.copy(alpha = 0.55f),
                                 CircleShape,
                             ),
                     )

@@ -15,6 +15,7 @@ data class GridButton(
     val isVisible: Boolean = true,
     val monitorIndex: Int = 0,
     val isDockPinned: Boolean = false,
+    val isFavoriteShortcut: Boolean = false,
 )
 
 @Serializable
@@ -27,6 +28,38 @@ data class PairedHost(
     val sortOrder: Int,
     val token: String,
     val buttons: List<GridButton> = emptyList(),
+    val pinnedApps: List<PinnedAppShortcut> = emptyList(),
+    val appOrder: List<String> = emptyList(),
+    val applicationShortcuts: List<ApplicationShortcut> = emptyList(),
+    val controlShortcuts: List<ControlShortcut> = ControlShortcut.defaults(),
+    val appTileSizes: Map<String, AppTileSize> = emptyMap(),
+    val appGridPositions: Map<String, Int> = emptyMap(),
+    val appLayoutIdentities: Map<String, String> = emptyMap(),
+)
+
+@Serializable
+data class AppTileSize(val columns: Int = 1, val rows: Int = 1)
+
+@Serializable
+data class PinnedAppShortcut(
+    val id: String,
+    val name: String,
+    val bundlePath: String,
+    val iconBase64: String? = null,
+    val projectPath: String? = null,
+    val order: Int = 0,
+)
+
+data class MacFileEntry(
+    val name: String,
+    val path: String,
+    val isDirectory: Boolean,
+)
+
+data class MacFileListing(
+    val path: String,
+    val parentPath: String? = null,
+    val entries: List<MacFileEntry> = emptyList(),
 )
 
 data class AudioState(
@@ -44,6 +77,8 @@ data class RunningApp(
     val windowIndex: Int? = null,
     val axWindowIndex: Int? = null,
     val windowNumber: Int? = null,
+    val stableWindowId: String? = null,
+    val windowCount: Int? = null,
     val iconBase64: String? = null,
     val isActive: Boolean = false,
     val isVisible: Boolean = true,
@@ -52,4 +87,17 @@ data class RunningApp(
     val monitorIndex: Int = 0,
     val isDockPinned: Boolean = false,
     val dockIndex: Int = -1,
+    val bundlePath: String? = null,
+)
+
+/** Persistent launcher identity. Runtime window IDs never replace this ID. */
+@Serializable
+data class ApplicationShortcut(
+    val id: String,
+    val applicationKey: String,
+    val name: String,
+    val target: String,
+    val bundlePath: String? = null,
+    val iconBase64: String? = null,
+    val aliases: List<String> = emptyList(),
 )

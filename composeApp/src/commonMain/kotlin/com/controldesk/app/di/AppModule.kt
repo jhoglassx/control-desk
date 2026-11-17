@@ -2,6 +2,7 @@ package com.controldesk.app.di
 
 import com.controldesk.app.viewmodel.DeskViewModel
 import com.controldesk.app.viewmodel.PairHostViewModel
+import com.controldesk.app.viewmodel.PinnedAppsViewModel
 import com.controldesk.data.AgentGatewayImpl
 import com.controldesk.data.AgentRealtimeClient
 import com.controldesk.domain.repository.AgentRealtime
@@ -29,7 +30,8 @@ fun appModule(): Module = module {
     single { ExecuteGridButtonUseCase(get()) }
     single { PairHostUseCase(get(), get()) }
     viewModel { DeskViewModel(get(), get(), get(), get(), get()) }
-    viewModel { PairHostViewModel(get(), get()) }
+    viewModel { PinnedAppsViewModel(get(), get()) }
+    viewModel { PairHostViewModel(get(), get(), get()) }
 }
 
 expect fun platformModule(): Module

@@ -27,6 +27,12 @@
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>O Control Desk procura agentes Mac na sua rede local para facilitar o pareamento.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_controldesk._tcp</string>
+    </array>
     <key>UILaunchScreen</key>
     <dict/>
     <key>UIRequiredDeviceCapabilities</key>

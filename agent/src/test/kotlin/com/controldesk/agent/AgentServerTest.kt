@@ -2,6 +2,7 @@ package com.controldesk.agent
 
 import com.controldesk.protocol.AppCloseRequest
 import com.controldesk.protocol.AppLaunchRequest
+import com.controldesk.protocol.BrowseFilesRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -24,7 +25,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class AgentServerTest {
+open class AgentServerTest {
     protected lateinit var tmp: File
     protected lateinit var server: AgentServer
     protected lateinit var auth: AgentAuthStore
@@ -59,6 +60,17 @@ class AgentServerTest {
     }
 
     @Test
+    fun localSetupHealthReturnsCurrentPin() {
+        runBlocking {
+            val response = client.get("http://127.0.0.1:18741/setup/health")
+            assertEquals(HttpStatusCode.OK, response.status)
+            val body = response.bodyAsText()
+            assertTrue(body.contains(auth.currentPin()!!))
+            assertTrue(body.contains("\"agentVersion\":\"${AgentVersion.VALUE}\""))
+        }
+    }
+
+    @Test
     fun pairIssuesToken() {
         runBlocking {
             val pin = auth.currentPin() ?: auth.activatePin()
@@ -72,10 +84,34 @@ class AgentServerTest {
     }
 
     @Test
+    fun deviceRoutesRequireAuthenticationAndNeverSimulateControl() = runBlocking {
+        assertEquals(HttpStatusCode.Unauthorized, client.get("http://127.0.0.1:18741/devices").status)
+        val request = com.controldesk.protocol.DeviceActionRequest("camera", "SET_ENABLED", false)
+        assertEquals(HttpStatusCode.Unauthorized, client.post("http://127.0.0.1:18741/devices/actions") {
+            contentType(ContentType.Application.Json); setBody(request)
+        }.status)
+        val localSetup = client.get("http://127.0.0.1:18741/setup/devices")
+        assertEquals(HttpStatusCode.OK, localSetup.status)
+        val token = auth.pair(auth.currentPin() ?: auth.activatePin())!!
+        val catalog = client.get("http://127.0.0.1:18741/devices") { bearerAuth(token) }
+        assertEquals(HttpStatusCode.OK, catalog.status)
+        assertTrue(catalog.bodyAsText().contains("indisponível"))
+        val action = client.post("http://127.0.0.1:18741/devices/actions") {
+            bearerAuth(token); contentType(ContentType.Application.Json); setBody(request)
+        }
+        assertEquals(HttpStatusCode.InternalServerError, action.status)
+    }
+
+    @Test
     fun protectedRouteRequiresToken() {
         runBlocking {
             val unauthorized = client.get("http://127.0.0.1:18741/apps/running")
             assertEquals(HttpStatusCode.Unauthorized, unauthorized.status)
+            val browseUnauthorized = client.post("http://127.0.0.1:18741/files/browse") {
+                contentType(ContentType.Application.Json)
+                setBody(BrowseFilesRequest())
+            }
+            assertEquals(HttpStatusCode.Unauthorized, browseUnauthorized.status)
             val pin = auth.currentPin() ?: auth.activatePin()
             val pair = client.post("http://127.0.0.1:18741/pair") {
                 contentType(ContentType.Application.Json)
@@ -84,6 +120,13 @@ class AgentServerTest {
             val token = Regex("\"token\"\\s*:\\s*\"([^\"]+)\"").find(pair)?.groupValues?.get(1)!!
             val ok = client.get("http://127.0.0.1:18741/apps/running") { bearerAuth(token) }
             assertEquals(HttpStatusCode.OK, ok.status)
+            val browseOk = client.post("http://127.0.0.1:18741/files/browse") {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(BrowseFilesRequest())
+            }
+            assertEquals(HttpStatusCode.OK, browseOk.status)
+            assertTrue(browseOk.bodyAsText().contains("entries"))
             val again = client.post("http://127.0.0.1:18741/pair") {
                 contentType(ContentType.Application.Json)
                 setBody("""{"pin":"$pin"}""")

@@ -20,9 +20,14 @@ fun main(args: Array<String>) {
 
     if (isMac) {
         System.setProperty("apple.awt.application.name", "Control Desk Agent")
-        // Headless / LaunchAgent: sem ícone no Dock. A janela de PIN só aparece no processo de configurações.
+        // Apenas o serviço realmente headless fica oculto; o app aberto pelo usuário deve aparecer no Dock.
         System.setProperty("apple.awt.UIElement", if (headless) "true" else "false")
         MacAccessibility.warnIfNeeded()
+        // O serviço em background apenas consulta TCC; o pedido deve vir do app visível
+        // na sessão do usuário, para o macOS exibir a solicitação de Acessibilidade.
+        if (!headless && !MacAccessibility.isTrusted()) {
+            MacAccessibility.requestAccess()
+        }
         MacWindowLister.warmUp()
         MacChromeTabs.warmUp()
         MacAppIconResolver.warmUp()
@@ -34,10 +39,12 @@ fun main(args: Array<String>) {
             val ok = MacBackgroundService.ensureInstalledAndUpdated()
             if (!ok) {
                 ControlDeskLog.agent.e { "Instalação falhou — veja ~/.control-desk/install.log" }
+                launchAgentSettings(port, exitProcessOnClose = true)
+                return
             }
         }
         if (openSettings) {
-            launchAgentSettings(port, exitProcessOnClose = true)
+            launchAgentSettings(port, exitProcessOnClose = false)
         }
         return
     }
@@ -46,7 +53,7 @@ fun main(args: Array<String>) {
         Thread { runHeadlessService(port) }.start()
         Thread.sleep(250)
         ControlDeskLog.agent.i { "Abrindo janela de configurações…" }
-        ControlDeskLog.agent.i { "Cmd+Q / Fechar encerra a janela e deixa o agente em segundo plano (sem Dock)." }
+        ControlDeskLog.agent.i { "Cmd+Q / Fechar encerra a janela de configuração." }
         launchAgentSettings(port, exitProcessOnClose = true)
         return
     }

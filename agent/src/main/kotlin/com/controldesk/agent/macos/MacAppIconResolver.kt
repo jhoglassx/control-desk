@@ -22,6 +22,11 @@ object MacAppIconResolver {
         paths[appName] = bundlePath
     }
 
+    fun resolveForBundle(appName: String, bundlePath: String): String? {
+        remember(appName, bundlePath)
+        return iconFor(appName) ?: resolveNow(appName)
+    }
+
     fun pathFor(appName: String): String? = paths[appName]
 
     fun iconFor(appName: String): String? {
@@ -47,7 +52,7 @@ object MacAppIconResolver {
         iconFor(appName)?.let { return it }
         val bundle = paths[appName] ?: lookupBundle(appName) ?: return null
         paths[appName] = bundle
-        val png = fromWorkspace(bundle) ?: fromIcns(bundle) ?: return null
+        val png = fromIcns(bundle) ?: fromWorkspace(bundle) ?: return null
         val encoded = Base64.getEncoder().encodeToString(png.readBytes())
         memory[appName] = encoded
         png.copyTo(diskFile(appName), overwrite = true)

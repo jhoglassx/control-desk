@@ -28,7 +28,11 @@ class AgentWebSocketTest : AgentServerTest() {
         val token = pairToken()
         val session = client.webSocketSession("ws://127.0.0.1:18741/ws?token=$token")
         val snapshot = withTimeout(2_000) {
-            readNextMessage(session)
+            var message = readNextMessage(session)
+            while (message.type != WsMessageType.APPS) {
+                message = readNextMessage(session)
+            }
+            message
         }
         assertEquals(WsMessageType.APPS, snapshot.type)
         assertTrue(snapshot.apps.isNotEmpty())
@@ -55,6 +59,45 @@ class AgentWebSocketTest : AgentServerTest() {
         assertEquals(WsMessageType.ACK, ack.type)
         assertTrue(ack.apps.isNotEmpty())
         session.close()
+    }
+
+    @Test
+    fun executorFailureReturnsCorrelatedErrorAndKeepsSessionOpen() = runBlocking {
+        server.stop()
+        val executor = object : PlatformExecutor by LoggingPlatformExecutor() {
+            override fun launchApp(request: AppLaunchRequest) {
+                error("Launch denied")
+            }
+        }
+        server = AgentServer(18741, auth, executor, bind = "127.0.0.1")
+        server.start()
+        val token = pairToken()
+        val session = client.webSocketSession("ws://127.0.0.1:18741/ws?token=$token")
+        try {
+            session.send(Frame.Text(AgentJson.encodeToString(
+                WsClientMessage(type = WsMessageType.LAUNCH, id = "denied",
+                    launch = AppLaunchRequest(target = "Safari")),
+            )))
+            val error = withTimeout(2_000) {
+                var message = readNextMessage(session)
+                while (message.id != "denied") message = readNextMessage(session)
+                message
+            }
+            assertEquals(WsMessageType.ERROR, error.type)
+            assertEquals(false, error.ok)
+            assertEquals("Launch denied", error.message)
+            session.send(Frame.Text(AgentJson.encodeToString(
+                WsClientMessage(type = WsMessageType.PING, id = "still-open"),
+            )))
+            val pong = withTimeout(2_000) {
+                var message = readNextMessage(session)
+                while (message.id != "still-open") message = readNextMessage(session)
+                message
+            }
+            assertEquals(WsMessageType.PONG, pong.type)
+        } finally {
+            session.close()
+        }
     }
 
     private suspend fun readNextMessage(session: io.ktor.websocket.WebSocketSession): WsServerMessage {

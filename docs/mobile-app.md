@@ -1,3 +1,5 @@
+> Atualização de 13/10/2026: o transporte preferencial é WebSocket. Para constantes atuais e limitações, consulte [architecture.md](architecture.md) e [review.md](review.md).
+
 # Control Desk — App mobile (Android / iOS)
 
 Regras de negócio e comportamentos esperados do **composeApp**.  
@@ -17,22 +19,26 @@ O app mobile é o **painel remoto**: pareia com o agente desktop na LAN e contro
 | DI | Koin (`AppModule`) |
 | HTTP | Ktor client via `AgentApiClient` / `AgentGatewayImpl` |
 
-**Fora de escopo v1:** descoberta mDNS, QR, editor drag-and-drop, sub-páginas, sync na nuvem.
+**Fora de escopo v1:** pareamento por QR, editor drag-and-drop, sub-páginas, sync na nuvem.
 
 ---
 
 ## 2. Navegação e telas
 
-Definida em `App.kt` — enum `AppScreen { Desk, Pair }`.
+Na tela Pair, “Buscar Macs na rede” executa descoberta mDNS (NSD no Android, Bonjour no iOS) por até oito segundos. Selecionar um agente preenche nome, host e porta; o usuário ainda informa o PIN de conexão temporário exibido pelo agente no Mac. No modo painel, o cartão de primeira configuração informa que o PIN administrativo inicial do app é `8741`, explica quando será pedido e diferencia os dois PINs. A entrada manual continua disponível.
+
+Definida em `App.kt` — enum `AppScreen { Desk, Pair, PinnedApps }`.
 
 | Tela | Composable | Entrada |
 |------|------------|---------|
 | **Desk** | `DeskScreen` | Padrão ao abrir o app |
-| **Pair** | `PairHostScreen` | Botões `+`, `Hosts`, ou CTA no estado vazio |
+| **Pair** | `PairHostScreen` | Ação de configurações/hosts ou CTA no estado vazio |
+| **PinnedApps** | `PinnedAppsScreen` | Botão **+** na Desk |
 
 **Transições:**
 
 - Desk → Pair: `onPairHost` / `onManageHosts`
+- Desk → PinnedApps: `onManagePinnedApps`
 - Pair → Desk: `← Voltar` ou após pareamento bem-sucedido
 - Após parear: `deskViewModel.refreshHosts()` + volta ao Desk
 
@@ -56,28 +62,28 @@ Componente: `EmptyDeskState`
 
 ### 3.2 Com hosts pareados
 
-Layout estilo Steam Deck (topbar + grade de tiles quadrados). Deitado (`maxWidth > maxHeight`) usa tiles maiores e omite o título da seção.
+Layout estilo Steam Deck, com tiles quadrados. Deitado (`maxWidth > maxHeight`) usa tiles maiores e omite o título da seção.
 
-1. **DeskHeader** — topbar compacta (host, status, ações)
-2. **WorkspacePanel** — grade: tiles **Volume** e **Mic**, depois os apps (`weight(1f)`)
+- **WorkspacePanel** ocupa a área principal com Volume, Mic e os apps.
+- **DeskHeader** é um conjunto flutuante e transparente no canto inferior direito, com o nome/status do host e os controles próximos, sem reservar uma faixa do layout.
+- A grade mantém espaço rolável ao final para o controle flutuante não esconder o último card.
 
-Com **mais de um PC pareado**, a home inteira é um pager horizontal: deslizar para o lado troca de computador (header + grade).
+Com **mais de um PC pareado**, um gesto horizontal no conteúdo seleciona outro host, mantendo o painel de host no canto inferior direito.
 
 **Snackbar:** exibe `uiState.feedback` (erros de ação ou carga); `clearFeedback()` após mostrar.
 
 ### 3.3 DeskHeader
 
-Topbar de uma linha (sem card grande):
+Conjunto flutuante no canto inferior direito, sem fundo opaco:
 
 | Elemento | Comportamento |
 |----------|---------------|
 | Dot + nome do host | Status (Online / Sincronizando / Re-parear) |
 | IP:porta | Linha menor, monospace |
-| **↻** | `refreshRunningApps()` |
-| **Hosts** | Abre Pair |
-| **+** | Abre Pair |
+| **Configurações** | Abre Pair para gerenciar hosts |
+| **+** | Abre a tela dedicada de apps fixos |
 
-**Chips de host:** removidos. Com `hosts.size > 1`, **deslizar a home inteira** (HorizontalPager) troca de PC. Pontos abaixo do header indicam a página.
+**Chips de host:** removidos. Com `hosts.size > 1`, um gesto horizontal no conteúdo seleciona outro host; os pontos abaixo das ações indicam a página.
 
 | Condição | Dot | Label |
 |----------|-----|-------|
@@ -92,7 +98,7 @@ Topbar de uma linha (sem card grande):
 
 **Seção:** "Apps no Mac" (subtitle dinâmico).
 
-**Layout:** `LazyVerticalGrid` com `FixedSize` calculado para **4 colunas no portrait**; na rotação o card **não cresce**, só cabem mais colunas. Tiles quadrados (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**.
+**Layout:** grade adaptativa (`LazyVerticalGrid`) com cards de dimensões iguais e espaçamento uniforme. Tiles quadrados (`aspectRatio(1f)`). Primeiros itens: **Volume** e **Mic**. O ícone acompanha o tamanho do card; o texto pode ocupar até duas linhas. Pull-to-refresh atualiza apps sem deixar um indicador preso na tela.
 
 **Subtitle:** `{N} apps · {focused} em uso · M1: n · M2: n · {dock} na Dock · {hidden} ocultos`
 
@@ -107,17 +113,19 @@ Topbar de uma linha (sem card grande):
 
 **Monitor:** `M1` / `M2` é badge suspenso no canto superior direito, **dentro** do card (overlay, fora da pilha de conteúdo). Apps só da Dock (`monitorIndex=0`) não mostram badge.
 
-**Texto:** título da janela (não o nome do app). Se a janela não tem título, cai no nome do app. O ícone do `.app` já identifica o programa.
+**Texto:** o launcher padrão pode refletir o título da janela associada, com nome do app como fallback; favoritos preservam sua configuração. Várias janelas do mesmo aplicativo permanecem em um launcher, com seleção de instância por título e monitor. O ícone real do `.app` identifica o programa.
 
 Landscape (`compact`): ícone, título da janela e badge M{n}.
 
 **Clique:** `onAppClick(button)` → `DeskViewModel.onButtonClick` (abre/foca).
 
-**Toque longo:** `onAppClose(button)` → `DeskViewModel.onAppClose` (encerra o app). Tiles daquele app somem na hora; o poll recoloca o ícone da Dock se estiver fixado. Finder e processos de sistema não fecham.
+**Toque longo:** `onAppClose(button)` → `DeskViewModel.onAppClose`; seleciona a instância quando há várias e fecha a janela identificada. O launcher conserva posição e tamanho. Controles de dispositivo não fecham processos por esse gesto.
 
-### 3.6 Tiles de sistema (`VolumeAppTile`, `MicAppTile`)
+### 3.6 Controles de áudio e dispositivos
 
-Knobs rotativos na mesma grade dos apps, **sem card nem título** — só o disco com o % no centro. Giro horário aumenta; anti-horário diminui; toque muta (anel vermelho).
+`ControlShortcut` persiste os controles por host. `workspaceButtonsFor` reúne controles e apps na mesma grade; `AppLauncherTile` fornece o card e gestos de edição, com `AudioShortcutContent` para os knobs. Microfone e saída podem ser movidos, redimensionados, renomeados e removidos. Giro horário aumenta; anti-horário diminui; toque muta. Em edição, o card captura arraste para reorganizar.
+
+O cadastro MVI aceita ações de câmera/dispositivo por aplicativo ou URL, sempre executadas pelo agente. O editor oferece dispositivos e ações retornados pelo agente 1.1.14. As capacidades e limitações por sistema estão descrita em [device-shortcuts.md](device-shortcuts.md).
 
 | Tile | Ação |
 |------|------|
@@ -139,7 +147,7 @@ Knobs rotativos na mesma grade dos apps, **sem card nem título** — só o disc
 
 **Otimista:** mute volume/mic atualiza UI antes da resposta; **reverte** em falha.
 
-**`armAudioHold()`:** bloqueia poll de áudio por 2 s após interação do usuário.
+**`armAudioHold()`:** bloqueia poll de áudio por 500 ms durante ajuste e 1.200 ms após finalizar após interação do usuário.
 
 ---
 
@@ -191,7 +199,7 @@ Resumo:
 - Toque longo no tile → app some da grade na hora; `POST /apps/close` em paralelo
 - Mixer → slider/mute/mic mudam na hora; poll de áudio pausado durante uso
 - Troca de host → cache imediato, sem grade vazia
-- Poll (1,5 s / 2,5 s) só sincroniza fundo; **nunca** é o primeiro feedback do toque
+- Poll HTTP (apps 150 ms / áudio 300 ms, sem WebSocket) só sincroniza fundo; **nunca** é o primeiro feedback do toque
 - Erro → snackbar + revert do otimista; sucesso não exige modal
 
 ---
@@ -211,23 +219,27 @@ Resumo:
 | `listHint` | Hint quando lista vazia ou erro |
 | `feedback` | Snackbar (erro de ação) |
 
-### 5.2 Inicialização
+### 5.2 Escopo dos jobs
+
+Todos os jobs da tela usam o escopo padrão `viewModelScope`, cancelado quando o ViewModel sai do ciclo de vida. O construtor aceita um escopo opcional apenas para permitir que testes forneçam `runTest.backgroundScope`; assim o relógio virtual controla o polling sem esperar que um job periódico termine. Os testes drenam apenas o trabalho pronto com `runCurrent()` e o runner cancela o escopo de background ao final.
+
+### 5.3 Inicialização
 
 1. Carrega `iconCache` de `RunningAppIconCache`
 2. Observa `hostPreferences.observeHosts()`
 3. Se hosts vazios → limpa estado, para polling
 4. Se há hosts → `loadHost()` para índice selecionado
 
-### 5.3 `loadHost()` — sequência
+### 5.4 `loadHost()` — sequência
 
 1. Se sem cache e `showLoading` → `isLoadingApps = true`
-2. Se tem cache → delay `HOST_SWITCH_SETTLE_MS` (180 ms) antes de atualizar
+2. Se tem cache → delay `HOST_SWITCH_SETTLE_MS` (0 ms) antes de atualizar
 3. **Paralelo:** `loadRunningApps(includeIcons=false)` + `fetchAudio()`
 4. Publica apps rápidos → `isLoadingApps = false`
-5. Se faltam ícones → segunda carga `includeIcons=true` com `preferMerge=true`
+5. Se faltam ícones → segunda carga `includeIcons=true` com `preferMerge=true`; ícones que chegam depois também invalidam a assinatura do WebSocket para atualizar a grade conectada.
 6. `startAutoRefresh()` — polling contínuo
 
-### 5.4 Cache por host
+### 5.5 Cache por host
 
 | Cache | Conteúdo |
 |-------|----------|
@@ -238,77 +250,45 @@ Resumo:
 
 **Troca de host:** restaura cache imediatamente; recarrega em background se necessário.
 
-### 5.5 Timers
+### 5.6 Timers
 
 | Constante | Valor | Uso |
 |-----------|-------|-----|
-| `AUTO_REFRESH_MS` | 400 ms | Poll apps (ícones do cache do agente) |
-| `AUDIO_REFRESH_MS` | 400 ms | Poll áudio (job separado da lista de janelas) |
-| `AUDIO_HOLD_MS` | 400 ms | Bloqueia fetch áudio após ajuste do usuário |
-| `BURST_REFRESH_MS` | 350 ms | Intervalo burst após clique |
-| `BURST_REFRESH_COUNT` | 4 | Repetições do burst |
-| `PINNED_FOCUS_MAX_MS` | 8000 ms | Timeout highlight otimista |
+| `AUTO_REFRESH_MS` | 150 ms | Poll apps (ícones do cache do agente) |
+| `AUDIO_REFRESH_MS` | 300 ms | Poll áudio (job separado da lista de janelas) |
+| `AUDIO_DRAG_HOLD_MS` | 500 ms | Bloqueia fetch áudio após ajuste do usuário |
+| `BURST_REFRESH_MS` | 80 ms | Intervalo burst HTTP após clique quando o WebSocket está desconectado |
+| `BURST_REFRESH_COUNT` | 3 | Repetições do burst |
+| `PINNED_FOCUS_MAX_MS` | 1200 ms | Timeout highlight otimista |
 | `ACTIVE_CONFIRM_POLLS` | 1 | Aceita o app ativo no primeiro poll |
-| `FOCUS_SETTLE_MS` | 400 ms | Entre polls de confirmação |
-| `FOCUS_CONFIRM_POLLS` | 3 | Polls após foco bem-sucedido |
-| `HOST_SWITCH_SETTLE_MS` | 180 ms | Após trocar host |
-| `MISSING_ICON_CHECK_EVERY` | 6 ticks | Check ícones faltando (6 × 2,5 s ≈ 15 s) |
+| `HOST_SWITCH_SETTLE_MS` | 0 ms | Após trocar host |
+| `MISSING_ICON_CHECK_EVERY` | 5 ticks | Check ícones faltando; loop 150 ms sem WS / 5 s com WS |
 
-### 5.6 Clique em botão (`onButtonClick`)
+### 5.7 Clique em botão (`onButtonClick`)
 
-1. `armPinnedFocus(button)` — guarda buttonId, windowNumber, appName+title
-2. UI otimista: clicado `isActive=true`, outros `false`
-3. `startBurstRefresh()` — 1 + 4 polls rápidos
-4. `executeGridButton(button, host)`
-5. **Sucesso:** delay `FOCUS_SETTLE_MS` + 3× refresh com `FOCUS_SETTLE_MS`
-6. **Falha:** `clearPinnedFocus()`, snackbar com erro
+1. Resolve o launcher e suas janelas na associação atual. Com várias instâncias, publica `WindowSelection` no estado MVI.
+2. Valida novamente a janela escolhida; se desapareceu, informa erro sem substituir por outra.
+3. Aplica foco otimista e envia o comando pelo transporte disponível, usando `AppCommandMapping`.
+4. Atualiza os dados após a ação. Timeout após envio não causa repetição automática por HTTP.
+5. O catálogo e as preferências de layout permanecem independentes do estado de execução.
 
-### 5.6.1 Encerrar app (`onAppClose`)
+### 5.7.1 Encerrar janela
 
-1. Lê `payload.target`; Finder/sistema → snackbar, sem HTTP
-2. Tile só da Dock (já fechado) → no-op
-3. UI otimista: janelas daquele `target` viram o atalho da Dock (esmaecido); o ícone **não some**
-4. `POST /apps/close` em background (SIGTERM no processo; o agente ignora a janela antiga por ~2 s)
-5. **Não** dispara clique/foco; toque longo e toque curto são exclusivos
-6. Poll com janela stale **não** recoloca o app como ativo; só o atalho da Dock
-7. **Falha:** solta o hold + snackbar
+O launcher permanece no grid. Com várias instâncias, o estado MVI oferece a lista de janelas com título/monitor; a escolha envia ID Quartz e PID por HTTP ou WebSocket. O agente revalida a janela antes de usar Accessibility. Fechar a última janela deixa o launcher inativo, com a mesma identidade e layout. Erros de resolução/execução aparecem no feedback.
 
-### 5.7 Pinned focus
+### 5.8 Identidade e estado ativo
 
-Mantém tile clicado como "Em uso" até:
+`DockShortcutProjector` associa janelas a `PairedHost.applicationShortcuts`. O ID do launcher permanece através de mudanças de título, índice, PID e ID Quartz. `appOrder`, `appGridPositions` e `appTileSizes` são lidos por esse ID; favoritos usam seu ID próprio. Não há reconciliação contínua de posição por título/PID.
 
-- Agent confirma `isActive` no poll, ou
-- Timeout 8 s, ou
-- Falha na ação
+O agente macOS (`windowListerVersion` 25) informa a janela ativa e o monitor. A seleção pode mostrar várias janelas do mesmo app sem acrescentar cards à grade. Abas de navegador não substituem as janelas nativas na seleção do launcher. Detalhes e limitações estão em [shortcut-identity-review.md](shortcut-identity-review.md).
 
-**Match:** `buttonId`, ou `windowNumber` no payload, ou `target + windowTitle`.
+### 5.9 Snapshots e ícones
 
-### 5.8 Estabilização de lista (`stabilizeActiveState`)
-
-O app ativo é rastreado **por host**. Trocar de PC (swipe) não reaproveita o `currentActiveId` do Mac anterior.
-
-Quando janela ativa muda no poll do **mesmo** PC:
-
-- Aceita o novo `incomingActiveId` no primeiro poll (`ACTIVE_CONFIRM_POLLS = 1`)
-- Se o agente não marcar ninguém (`incomingActiveId == null`) e o id anterior **não está** nesta lista, limpa o destaque (não força o ativo do outro PC)
-- Se o id anterior ainda está na lista, mantém o highlight até o próximo poll com flag
-
-No agente macOS (`windowListerVersion` 20), `isActive` usa o app da frente do `NSWorkspace` e a janela `AXMain` visível — não só `windows[0]` do System Events. Em Mac com um monitor isso evita ficar sem tile “em uso”.
-
-### 5.9 Merge de botões (`preferMerge=true`)
-
-- Atualiza botões existentes por `id`
-- Adiciona novos apps
-- Preserva ícones anteriores se novo poll não traz ícone
-- Se `preferMerge && apps.isEmpty()` → mantém lista atual (não limpa em poll vazio)
+O merge conserva ícones de itens presentes quando a atualização não inclui ícones. Um snapshot vazio limpa o estado de execução; o catálogo persistido mantém os launchers inativos. Ícones recebidos ficam associados ao catálogo para apresentação após o app fechar.
 
 ### 5.10 Falha ao carregar apps
 
-| Situação | Comportamento |
-|----------|---------------|
-| Primeira carga (`showLoading`) | Lista vazia, `listHint = erro`, snackbar |
-| Poll silencioso com cache | Mantém cache; não snackbar |
-| Sem cache | Para auto-refresh, lista vazia + hint |
+Com cache, a UI conserva os launchers e exibe a falha. Após reiniciar sem conexão, o catálogo persistido também é restaurado, sem atribuir estado de janela ativa. Sem catálogo ou favoritos, a tela mostra o erro e o fluxo de pareamento disponível.
 
 ### 5.11 Hint lista vazia
 
@@ -330,7 +310,7 @@ Executado no **data layer**, consumido pelo ViewModel.
 
 **Ordenação:** posição na Dock (`dockIndex`); apps não fixados depois, por nome. Foco **não** muda a posição do tile.
 
-**ID estável:** `windowNumber` → `axWindowIndex` → `windowIndex` → hash título. Dock fechado: `app-{appName}-dock`.
+**Identidades distintas:** o launcher usa `ApplicationShortcut.id`, persistido por host. O runtime usa ID Quartz quando disponível e identificadores temporários de fallback. PID, título e índice AX não são chaves de tamanho/ordem. `ApplicationCatalogResolver` promove aliases não ambíguos ao bundle e consolida duplicatas antigas; `ShortcutWindowBinder` atribui cada janela uma vez, com prioridade projeto → favorito genérico → launcher padrão.
 
 **Grid lógica:** `row = index/3`, `col = index%3` (para futuro editor; UI usa adaptive grid).
 
@@ -363,13 +343,17 @@ Sem token → `ControlDeskError.Unauthorized`.
 | iOS | `control_desk_hosts.json` | Documents |
 | JVM | `hosts.json` | `~/.control-desk/` |
 
-**Por host:** `id`, `name`, `host`, `port`, `osType`, `sortOrder`, **token**, `buttons[]`.
+**Por host:** `id`, `name`, `host`, `port`, `osType`, `sortOrder`, **token**, `buttons[]`, `pinnedApps[]`.
+
+No Android, o arquivo é substituído atomicamente e a última cópia válida fica em `control_desk_hosts.json.bak` para recuperação se uma gravação for interrompida. Reparear o mesmo IP/porta atualiza o token sem descartar botões ou apps fixos. Atualizar o APK pelo mesmo `applicationId` e assinatura conserva os dados privados; desinstalar o app ou instalar como outro pacote limpa/isolada essa persistência.
+
+O identificador Android mudou de `com.controldesk.app` para `js.controldesk` em 01/09/2026. Uma instalação antiga com o identificador anterior tem um diretório privado separado e não transfere automaticamente seus pareamentos para o app novo. Mantenha `applicationId` estável nas versões publicadas.
 
 **Ao parear:** se host novo, `DefaultButtonTemplates` cria VOL+ e MIC nos `buttons` (salvos mas **não exibidos** na grade dinâmica v1).
 
 ### 8.2 Cache de ícones
 
-`control_desk_icon_cache.json` — mapa `buttonId → base64`.
+`control_desk_icon_cache_v2.json` — mapa `buttonId → base64`; o cache anterior é descartado para remover imagens corrompidas. No agente Mac, primeiro se extrai o ícone do bundle `.icns`, depois se tenta `NSWorkspace`; ícones pendentes são resolvidos num worker separado da consulta de janelas. Quando chegam, a grade conectada é atualizada pelo WebSocket e a imagem nova substitui uma entrada antiga no cache mobile.
 
 `putIfAbsent` ao receber ícone novo; persistido em disco.
 

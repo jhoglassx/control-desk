@@ -18,16 +18,13 @@ object MacDockApps {
     private val defaultsUrlRegex = Regex(""""_CFURLString"\s*=\s*"([^"]+)"""")
 
     fun merge(windows: List<RunningAppInfo>): List<RunningAppInfo> {
-        val pins = pinned()
+        return merge(windows, pinned())
+    }
+
+    internal fun merge(windows: List<RunningAppInfo>, pins: List<RunningAppInfo>): List<RunningAppInfo> {
         if (pins.isEmpty()) return windows
-        val byName = pins.associateBy { it.appName.lowercase() }
-        val byPath = pins.mapNotNull { pin ->
-            val path = MacAppIconResolver.pathFor(pin.appName)?.lowercase() ?: return@mapNotNull null
-            path to pin
-        }.toMap()
         val annotated = windows.map { app ->
-            val pin = byName[app.appName.lowercase()]
-                ?: MacAppIconResolver.pathFor(app.appName)?.lowercase()?.let { byPath[it] }
+            val pin = pins.firstOrNull { sameApplication(app, it) }
             if (pin == null) app else app.copy(isDockPinned = true, dockIndex = pin.dockIndex)
         }
         return annotated + extrasNotRunning(annotated, pins)
@@ -37,14 +34,18 @@ object MacDockApps {
         extrasNotRunning(windows, pinned())
 
     private fun extrasNotRunning(windows: List<RunningAppInfo>, pins: List<RunningAppInfo>): List<RunningAppInfo> {
-        val runningNames = windows.map { it.appName.lowercase() }.toSet()
-        val runningPaths = windows.mapNotNull { MacAppIconResolver.pathFor(it.appName)?.lowercase() }.toSet()
         return pins.filter { pin ->
-            if (pin.appName in ignored) return@filter false
-            if (pin.appName.lowercase() in runningNames) return@filter false
-            val path = MacAppIconResolver.pathFor(pin.appName)?.lowercase()
-            path == null || path !in runningPaths
+            pin.appName !in ignored && windows.none { sameApplication(it, pin) }
         }
+    }
+
+    private fun sameApplication(first: RunningAppInfo, second: RunningAppInfo): Boolean {
+        val firstPath = first.bundlePath ?: MacAppIconResolver.pathFor(first.appName)
+        val secondPath = second.bundlePath ?: MacAppIconResolver.pathFor(second.appName)
+        if (firstPath != null && secondPath != null) {
+            return firstPath.trimEnd('/').equals(secondPath.trimEnd('/'), ignoreCase = true)
+        }
+        return first.appName.equals(second.appName, ignoreCase = true)
     }
 
     private fun pinned(): List<RunningAppInfo> {
@@ -120,6 +121,7 @@ object MacDockApps {
             monitorIndex = 0,
             isDockPinned = true,
             dockIndex = index,
+            bundlePath = path,
         )
     }
 

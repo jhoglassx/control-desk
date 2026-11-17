@@ -4,7 +4,15 @@ import com.controldesk.domain.model.AudioState
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.RunningApp
+import com.controldesk.domain.model.PinnedAppShortcut
+import com.controldesk.domain.model.MacFileListing
 import kotlinx.coroutines.flow.Flow
+
+data class DiscoveredAgent(val name: String, val host: String, val port: Int)
+
+interface AgentDiscovery {
+    fun start(onChanged: (List<DiscoveredAgent>) -> Unit): AutoCloseable
+}
 
 interface HostPreferences {
     fun observeHosts(): Flow<List<PairedHost>>
@@ -14,8 +22,14 @@ interface HostPreferences {
 }
 
 interface AgentGateway {
+    suspend fun loadDevices(host: PairedHost): com.controldesk.domain.model.DeviceCatalog =
+        throw com.controldesk.domain.error.ControlDeskError.Generic("Atualize o agente para listar dispositivos.")
+    suspend fun executeDeviceCommand(host: PairedHost, command: com.controldesk.domain.model.DeviceCommand): com.controldesk.domain.model.ConnectedDevice =
+        throw com.controldesk.domain.error.ControlDeskError.Generic("Atualize o agente para controlar dispositivos.")
     suspend fun fetchHealth(host: PairedHost): Boolean?
     suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp>
+    suspend fun loadInstalledApps(host: PairedHost): List<PinnedAppShortcut>
+    suspend fun browseMacFiles(host: PairedHost, path: String? = null): MacFileListing
     suspend fun fetchAudio(host: PairedHost): AudioState
     suspend fun launchApp(host: PairedHost, button: GridButton): List<RunningApp>
     suspend fun closeApp(host: PairedHost, button: GridButton): List<RunningApp>
@@ -33,5 +47,6 @@ interface PairHostRemote {
 interface RunningAppIconCache {
     suspend fun load(): Map<String, String>
     suspend fun putIfAbsent(buttonId: String, base64: String)
+    suspend fun replace(buttonId: String, base64: String) = putIfAbsent(buttonId, base64)
     fun peek(buttonId: String): String?
 }

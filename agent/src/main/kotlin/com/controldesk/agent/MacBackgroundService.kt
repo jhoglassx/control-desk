@@ -40,20 +40,10 @@ object MacBackgroundService {
         }
 
         val installed = File(INSTALLED_APP)
-        if (installed.isDirectory &&
-            sourceApp.canonicalFile == installed.canonicalFile &&
-            serviceAlreadyRunning()
-        ) {
-            log("já em $INSTALLED_APP e porta 8741 ativa — nada a fazer")
-            return true
-        }
-
-        log("Sincronizando instalação (fonte: ${sourceApp.absolutePath})")
+        val port = System.getenv("CONTROL_DESK_PORT")?.toIntOrNull() ?: DEFAULT_PORT
+        log("Verificando serviço e instalação (fonte: ${sourceApp.absolutePath}, destino: ${installed.absolutePath})")
         val ok = runScript(script, sourceApp)
-        if (ok || serviceAlreadyRunning()) {
-            if (!ok) {
-                log("install-macos.sh falhou, mas o agente já responde na porta 8741 — ok")
-            }
+        if (ok && serviceAlreadyRunning(port)) {
             notifyUser(
                 title = "Control Desk Agent",
                 text = "Instalado. A janela de configurações mostra o PIN — feche quando terminar.",
@@ -115,12 +105,15 @@ object MacBackgroundService {
             false
         }
 
-    private fun serviceAlreadyRunning(): Boolean =
+    private fun serviceAlreadyRunning(port: Int): Boolean =
         runCatching {
-            val connection = java.net.URI("http://127.0.0.1:8741/health").toURL().openConnection()
+            val connection = java.net.URI("http://127.0.0.1:$port/health").toURL().openConnection()
             connection.connectTimeout = 400
             connection.readTimeout = 400
-            connection.getInputStream().bufferedReader().readText().contains("\"ok\":true")
+            val healthy = connection.getInputStream().bufferedReader().use { reader ->
+                reader.readText().contains("\"ok\":true")
+            }
+            healthy
         }.getOrDefault(false)
 
     private fun notifyUser(title: String, text: String, dialog: Boolean) {
@@ -131,7 +124,7 @@ object MacBackgroundService {
             """display notification ${appleString(text)} with title ${appleString(title)}"""
         }
         runCatching {
-            ProcessBuilder("osascript", "-e", script).start()
+            ProcessBuilder("osascript", "-e", script).start().waitFor(8, TimeUnit.SECONDS)
         }
     }
 
@@ -144,4 +137,6 @@ object MacBackgroundService {
         logFile.parentFile?.mkdirs()
         logFile.appendText("${System.currentTimeMillis()} $message\n")
     }
+
+    private const val DEFAULT_PORT = 8741
 }

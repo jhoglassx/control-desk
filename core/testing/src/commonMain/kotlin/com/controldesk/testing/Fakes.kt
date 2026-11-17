@@ -4,6 +4,8 @@ import com.controldesk.domain.model.AudioState
 import com.controldesk.domain.model.GridButton
 import com.controldesk.domain.model.PairedHost
 import com.controldesk.domain.model.RunningApp
+import com.controldesk.domain.model.PinnedAppShortcut
+import com.controldesk.domain.model.MacFileListing
 import com.controldesk.domain.repository.AgentGateway
 import com.controldesk.domain.repository.HostPreferences
 import com.controldesk.domain.repository.PairHostRemote
@@ -33,7 +35,37 @@ class FakeAgentGateway(
     var failWith: Throwable? = null,
     var removeOnClose: Boolean = true,
 ) : AgentGateway {
+    var devices = com.controldesk.domain.model.DeviceCatalog()
+    var deviceCommandGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    val deviceCommands = mutableListOf<com.controldesk.domain.model.DeviceCommand>()
+    override suspend fun loadDevices(host: PairedHost) = result(devices)
+    override suspend fun executeDeviceCommand(host: PairedHost, command: com.controldesk.domain.model.DeviceCommand): com.controldesk.domain.model.ConnectedDevice {
+        result(Unit)
+        deviceCommands += command
+        deviceCommandGate?.await()
+        val device = devices.devices.single { it.id == command.deviceId }
+        val updated = when (command.action) {
+            com.controldesk.domain.model.DeviceCapability.SET_ENABLED -> device.copy(enabled = command.booleanValue)
+            com.controldesk.domain.model.DeviceCapability.SET_MUTED -> device.copy(muted = command.booleanValue)
+            com.controldesk.domain.model.DeviceCapability.SET_LEVEL -> device.copy(level = command.level)
+            com.controldesk.domain.model.DeviceCapability.SET_DEFAULT -> device.copy(isDefault = true)
+            com.controldesk.domain.model.DeviceCapability.REQUEST_CAMERA_ACCESS -> device.copy(settings = device.settings + ("authorization" to "authorized"))
+            else -> {
+                val action = command.action.name
+                val key = when {
+                    action.startsWith("FOCUS_") -> "focusMode"
+                    action.startsWith("EXPOSURE_") -> "exposureMode"
+                    else -> "whiteBalanceMode"
+                }
+                device.copy(settings = device.settings + (key to action.substringAfterLast('_').lowercase()))
+            }
+        }
+        devices = devices.copy(devices = devices.devices.map { if (it.id == updated.id) updated else it })
+        return updated
+    }
+    var runningAppsLoadCount = 0
     val launched = mutableListOf<GridButton>()
+    val openedUrls = mutableListOf<String>()
     val closed = mutableListOf<GridButton>()
     val volumes = mutableListOf<Triple<Int?, Int?, Boolean?>>()
     val mics = mutableListOf<Triple<Boolean?, Boolean, Int?>>()
@@ -43,18 +75,23 @@ class FakeAgentGateway(
         return value
     }
 
-    override suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp> =
-        result(appsByHost[host.id] ?: apps)
+    override suspend fun loadRunningApps(host: PairedHost, includeIcons: Boolean): List<RunningApp> {
+        runningAppsLoadCount += 1
+        return result(appsByHost[host.id] ?: apps)
+    }
+    override suspend fun loadInstalledApps(host: PairedHost): List<PinnedAppShortcut> = result(emptyList())
+    override suspend fun browseMacFiles(host: PairedHost, path: String?): MacFileListing =
+        result(MacFileListing(path = path ?: "/Users/test", parentPath = null))
 
     override suspend fun fetchHealth(host: PairedHost): Boolean? = result(true)
     override suspend fun fetchAudio(host: PairedHost): AudioState = result(audio)
     override suspend fun launchApp(host: PairedHost, button: GridButton): List<RunningApp> {
-        result(emptyList())
+        result(Unit)
         launched += button
         return appsByHost[host.id] ?: apps
     }
     override suspend fun closeApp(host: PairedHost, button: GridButton): List<RunningApp> {
-        result(emptyList())
+        result(Unit)
         closed += button
         if (!removeOnClose) return appsByHost[host.id] ?: apps
         val target = button.payload["target"] ?: return appsByHost[host.id] ?: apps
@@ -62,11 +99,11 @@ class FakeAgentGateway(
         return appsByHost[host.id] ?: apps
     }
     override suspend fun switchBrowserTab(host: PairedHost, button: GridButton): List<RunningApp> {
-        result(emptyList())
+        result(Unit)
         launched += button
         return appsByHost[host.id] ?: apps
     }
-    override suspend fun openBrowser(host: PairedHost, url: String) { result(Unit) }
+    override suspend fun openBrowser(host: PairedHost, url: String) { result(Unit); openedUrls += url }
     override suspend fun closeBrowser(host: PairedHost) { result(Unit) }
     override suspend fun setVolume(host: PairedHost, level: Int?, delta: Int?, mute: Boolean?) {
         result(Unit)
@@ -92,7 +129,10 @@ class FakeIconCache : RunningAppIconCache {
     private val icons = mutableMapOf<String, String>()
     override suspend fun load(): Map<String, String> = icons.toMap()
     override suspend fun putIfAbsent(buttonId: String, base64: String) {
-        icons.putIfAbsent(buttonId, base64)
+        if (buttonId !in icons) icons[buttonId] = base64
+    }
+    override suspend fun replace(buttonId: String, base64: String) {
+        icons[buttonId] = base64
     }
     override fun peek(buttonId: String): String? = icons[buttonId]
 }

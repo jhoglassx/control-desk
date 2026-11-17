@@ -17,6 +17,7 @@ fun OsType.osShortLabel(): String = when (this) {
 
 @Serializable
 enum class ActionType {
+    REMOTE_DEVICE,
     REMOTE_LAUNCH,
     REMOTE_BROWSER_OPEN_SITE,
     REMOTE_BROWSER_CLOSE_APP,

@@ -2,23 +2,29 @@ package com.controldesk.agent
 
 import com.controldesk.logging.ControlDeskLog
 import com.controldesk.protocol.RunningAppInfo
+import com.controldesk.agent.macos.AccessibleWindowSnapshot
+import com.controldesk.agent.macos.MacWindowIdentityMatcher
+import com.controldesk.agent.macos.QuartzWindowSnapshot
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicBoolean
 
 object MacWindowLister {
     private val cache = AtomicReference<List<RunningAppInfo>>(emptyList())
     private val lastError = AtomicReference<String?>(null)
-    private val suppressedUntil = ConcurrentHashMap<String, Long>()
     private val cacheListeners = CopyOnWriteArrayList<() -> Unit>()
+    private val lastWindowIdentityLog = AtomicReference<String?>(null)
+    private val started = AtomicBoolean(false)
+    private val resolvingIcons = AtomicBoolean(false)
     private val ignored = setOf(
         "ControlDeskAgent", "AutoFill", "coreauthd", "loginwindow", "Wallpaper",
         "Window Server", "SystemUIServer", "Dock", "Control Center", "NotificationCenter",
@@ -30,18 +36,35 @@ object MacWindowLister {
     }
 
     fun warmUp() {
+        if (!started.compareAndSet(false, true)) return
         Thread({
             while (true) {
                 runCatching {
                     if (!MacAccessibility.isTrusted()) {
                         lastError.set("accessibility_disabled")
+                        val dockApps = MacDockApps.merge(emptyList())
+                        if (dockApps != cache.get()) {
+                            cache.set(dockApps)
+                            notifyCacheListeners()
+                        }
+                        Thread.sleep(WINDOW_REFRESH_MS)
+                        return@runCatching
                     }
-                    val windows = query().filterNot { isSuppressed(it.appName) }
+                    val windows = query()
                     cache.set(windows)
                     notifyCacheListeners()
-                    MacAppIconResolver.resolveMissing(windows.map { it.appName }, limit = 3)
+                    if (resolvingIcons.compareAndSet(false, true)) {
+                        Thread {
+                            try {
+                                MacAppIconResolver.resolveMissing(windows.map { it.appName }, limit = 24)
+                                cacheListeners.forEach { listener -> runCatching { listener() } }
+                            } finally {
+                                resolvingIcons.set(false)
+                            }
+                        }.apply { isDaemon = true; name = "app-icon-resolver"; start() }
+                    }
                 }
-                Thread.sleep(80)
+                Thread.sleep(WINDOW_REFRESH_MS)
             }
         }, "window-lister").apply {
             isDaemon = true
@@ -49,26 +72,16 @@ object MacWindowLister {
         }
     }
 
-    fun suppress(appName: String, ms: Long = 3_000L) {
-        val key = appName.trim().lowercase()
-        if (key.isEmpty()) return
-        suppressedUntil[key] = System.currentTimeMillis() + ms
-        cache.updateAndGet { windows -> windows.filterNot { it.appName.equals(appName, ignoreCase = true) } }
-    }
-
     fun refreshNow() {
         if (!MacAccessibility.isTrusted()) return
         runCatching {
-            val windows = query().filterNot { isSuppressed(it.appName) }
-            if (windows.isNotEmpty()) {
-                cache.set(windows)
-                notifyCacheListeners()
-            }
+            cache.set(query())
+            notifyCacheListeners()
         }
     }
 
     fun list(includeIcons: Boolean): List<RunningAppInfo> {
-        val snapshot = cache.get().ifEmpty { query() }.filterNot { isSuppressed(it.appName) }
+        val snapshot = cache.get().ifEmpty { query() }
         val merged = MacChromeTabs.mergeTabs(snapshot)
         val withDock = MacDockApps.merge(merged)
         val normalized = ensureSingleActive(withDock)
@@ -100,40 +113,110 @@ object MacWindowLister {
             noteError("osascript: ${raw.take(240)}")
             return cache.get()
         }
-        val parsed = runCatching { Json.parseToJsonElement(raw).jsonArray }.getOrNull()
-        if (parsed == null) {
+        val parsed = runCatching { Json.parseToJsonElement(raw) }.getOrNull()
+        val root = parsed as? JsonObject
+        val appRows = root?.get("apps") as? JsonArray ?: parsed as? JsonArray
+        if (appRows == null) {
             noteError("parse_failed: ${raw.take(120)}")
             return cache.get()
         }
-        lastError.set(null)
-        val windows = parsed.mapIndexedNotNull { index, element ->
-            val obj = element as? JsonObject ?: return@mapIndexedNotNull null
-            val appName = obj.str("appName") ?: return@mapIndexedNotNull null
-            if (appName in ignored) return@mapIndexedNotNull null
-            obj.str("bundlePath")?.let { MacAppIconResolver.remember(appName, it) }
-            val title = obj.str("windowTitle").orEmpty()
-            val minimized = obj.bool("minimized")
-            val visible = obj.bool("visible")
-            val label = when {
-                title.isNotBlank() && title != appName -> "$appName · $title"
-                minimized -> "$appName · min"
-                else -> appName
-            }
-            RunningAppInfo(
-                name = label,
-                appName = appName,
-                pid = obj.int("pid"),
-                windowTitle = title.takeIf { it.isNotBlank() },
-                windowIndex = obj.int("windowIndex") ?: index,
-                axWindowIndex = obj.int("axWindowIndex"),
-                windowNumber = obj.int("windowNumber") ?: (index + 1),
-                isActive = obj.bool("isActive"),
-                isVisible = visible,
-                monitorIndex = obj.int("monitorIndex")?.coerceAtLeast(1) ?: 1,
+        val appObjects = appRows.mapIndexedNotNull { index, element ->
+            (element as? JsonObject)?.let { index to it }
+        }
+        val quartzWindows = (root?.get("quartzWindows") as? JsonArray).orEmpty().mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val pid = obj.int("pid") ?: return@mapNotNull null
+            val id = obj.str("id")?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+            QuartzWindowSnapshot(
+                pid = pid,
+                id = id,
+                title = obj.str("title").orEmpty(),
+                x = obj.double("x"),
+                y = obj.double("y"),
+                width = obj.double("w"),
+                height = obj.double("h"),
             )
+        }
+        val accessibleRows = appObjects.mapNotNull { (rowIndex, obj) ->
+            val pid = obj.int("pid") ?: return@mapNotNull null
+            if (!obj.bool("hasWindow")) return@mapNotNull null
+            rowIndex to AccessibleWindowSnapshot(
+                pid = pid,
+                title = obj.str("windowTitle").orEmpty(),
+                x = obj.double("x"),
+                y = obj.double("y"),
+                width = obj.double("w"),
+                height = obj.double("h"),
+            )
+        }
+        val stableWindowIds = MacWindowIdentityMatcher.match(
+            accessibleRows.map { it.second },
+            quartzWindows,
+        ).mapIndexedNotNull { accessibleIndex, id ->
+            id?.let { accessibleRows[accessibleIndex].first to it }
+        }.toMap()
+        logWindowIdentitySnapshot(appObjects, accessibleRows, quartzWindows, stableWindowIds)
+        lastError.set(null)
+        val windows = appObjects.mapNotNull { (index, obj) ->
+            snapshotRow(obj, index, stableWindowIds[index])?.also { row ->
+                row.bundlePath?.let { MacAppIconResolver.remember(row.appName, it) }
+            }
         }
         return windows
     }
+
+    internal fun snapshotRow(obj: JsonObject, index: Int, stableWindowId: String?): RunningAppInfo? {
+        val appName = obj.str("appName") ?: return null
+        if (appName in ignored) return null
+        val hasWindow = obj.bool("hasWindow")
+        val title = if (hasWindow) obj.str("windowTitle").orEmpty() else ""
+        val label = when {
+            title.isNotBlank() && title != appName -> "$appName · $title"
+            hasWindow && obj.bool("minimized") -> "$appName · min"
+            else -> appName
+        }
+        return RunningAppInfo(
+            name = label,
+            appName = appName,
+            pid = obj.int("pid"),
+            windowTitle = title.takeIf(String::isNotBlank),
+            windowIndex = if (hasWindow) obj.int("windowIndex") ?: index else null,
+            axWindowIndex = if (hasWindow) obj.int("axWindowIndex") else null,
+            windowNumber = if (hasWindow) obj.int("windowNumber") ?: ((obj.int("windowIndex") ?: 0) + 1) else null,
+            stableWindowId = stableWindowId.takeIf { hasWindow },
+            windowCount = if (hasWindow) obj.int("windowCount") else 0,
+            isActive = hasWindow && obj.bool("isActive"),
+            isVisible = hasWindow && obj.bool("visible"),
+            monitorIndex = if (hasWindow) obj.int("monitorIndex")?.coerceAtLeast(1) ?: 1 else 0,
+            bundlePath = obj.str("bundlePath")?.takeIf(String::isNotBlank),
+        )
+    }
+
+    /** Emits a compact diagnostic only when window identity or geometry changes. */
+    private fun logWindowIdentitySnapshot(
+        appObjects: List<Pair<Int, JsonObject>>,
+        accessibleRows: List<Pair<Int, AccessibleWindowSnapshot>>,
+        quartzWindows: List<QuartzWindowSnapshot>,
+        stableWindowIds: Map<Int, String>,
+    ) {
+        val rows = accessibleRows.map { (rowIndex, ax) ->
+            val appName = appObjects.firstOrNull { it.first == rowIndex }?.second?.str("appName") ?: "?"
+            val quartzId = stableWindowIds[rowIndex] ?: "UNMATCHED"
+            val candidates = quartzWindows.asSequence()
+                .filter { it.pid == ax.pid }
+                .joinToString { quartz -> "${quartz.id}:${quartz.title.take(40)}@${coarse(quartz.x)},${coarse(quartz.y)},${coarse(quartz.width)}x${coarse(quartz.height)}" }
+            "$appName(pid=${ax.pid},title=${ax.title.take(90)},ax=${coarse(ax.x)},${coarse(ax.y)},${coarse(ax.width)}x${coarse(ax.height)},quartz=$quartzId,candidates=[$candidates])"
+        }
+        val signature = rows.joinToString("|")
+        if (lastWindowIdentityLog.getAndSet(signature) == signature) return
+        val sameProcessQuartzCount = accessibleRows.sumOf { (_, ax) -> quartzWindows.count { it.pid == ax.pid } }
+        val unmatched = accessibleRows.count { (rowIndex, _) -> rowIndex !in stableWindowIds }
+        ControlDeskLog.agent.i {
+            "[window-identity] AX=${accessibleRows.size} Quartz=${quartzWindows.size} samePidCandidates=$sameProcessQuartzCount unmatched=$unmatched ${rows.joinToString("; ")}"
+        }
+    }
+
+    private fun coarse(value: Double): Int = (value / 64.0).toInt() * 64
 
     private fun runScriptWithRetry(): String {
         repeat(2) { attempt ->
@@ -145,28 +228,22 @@ object MacWindowLister {
         return ""
     }
 
+    private const val WINDOW_REFRESH_MS = 1_000L
+
     private fun noteError(message: String) {
         if (lastError.get() == message) return
         lastError.set(message)
         ControlDeskLog.agent.w { "[window-lister] $message" }
     }
 
-    private fun isSuppressed(appName: String): Boolean {
-        val key = appName.lowercase()
-        val until = suppressedUntil[key] ?: return false
-        if (System.currentTimeMillis() >= until) {
-            suppressedUntil.remove(key)
-            return false
-        }
-        return true
-    }
-
     private fun JsonObject.str(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
     private fun JsonObject.bool(key: String): Boolean = this[key]?.jsonPrimitive?.booleanOrNull == true
     private fun JsonObject.int(key: String): Int? = this[key]?.jsonPrimitive?.intOrNull
+    private fun JsonObject.double(key: String): Double = this[key]?.jsonPrimitive?.doubleOrNull ?: 0.0
 
     private val LIST_SCRIPT = """
         ObjC.import('AppKit');
+        ObjC.import('CoreGraphics');
         function screenRects() {
           var screens = $.NSScreen.screens;
           var n = Number(screens.count);
@@ -198,6 +275,25 @@ object MacWindowLister {
             if (!app || !app.bundleURL) return '';
             return ObjC.unwrap(app.bundleURL.path) || '';
           } catch (e) { return ''; }
+        }
+        function quartzWindows() {
+          try {
+            var list = ObjC.castRefToObject($.CGWindowListCopyWindowInfo(0, $.kCGNullWindowID));
+            var out = [];
+            for (var i = 0; i < Number(list.count); i++) {
+              var item = list.objectAtIndex(i);
+              var pid = Number(ObjC.unwrap(item.objectForKey('kCGWindowOwnerPID')) || 0);
+              var id = Number(ObjC.unwrap(item.objectForKey('kCGWindowNumber')) || 0);
+              var title = ObjC.unwrap(item.objectForKey('kCGWindowName')) || '';
+              var rect = ObjC.deepUnwrap(item.objectForKey('kCGWindowBounds')) || {};
+              if (pid > 0 && id > 0) out.push({
+                pid: pid, id: String(id), title: String(title),
+                x: Number(rect.X || 0), y: Number(rect.Y || 0),
+                w: Number(rect.Width || 0), h: Number(rect.Height || 0)
+              });
+            }
+            return out;
+          } catch (e) { return []; }
         }
         function frontmostApp() {
           try {
@@ -244,9 +340,9 @@ object MacWindowLister {
           var screens = screenRects();
           var frontApp = frontmostApp();
           var se = Application('System Events');
+          var quartz = quartzWindows();
           var procs = se.applicationProcesses.whose({ backgroundOnly: false })();
           var rows = [];
-          var n = 1;
           for (var i = 0; i < procs.length; i++) {
             var p = procs[i];
             var name = p.name();
@@ -259,17 +355,17 @@ object MacWindowLister {
             var path = bundlePath(pid);
             var windows = [];
             try { windows = p.windows(); } catch (e) { windows = []; }
+            var appWindowCount = windows ? windows.length : 0;
             if (!windows || windows.length === 0) {
               rows.push({
                 appName: name,
                 pid: pid,
                 windowTitle: '',
                 isActive: false,
-                visible: true,
+                visible: false,
                 minimized: false,
-                windowIndex: 0,
-                axWindowIndex: 1,
-                windowNumber: n++,
+                hasWindow: false,
+                windowCount: 0,
                 monitorIndex: front ? 1 : 0,
                 bundlePath: path
               });
@@ -294,14 +390,17 @@ object MacWindowLister {
                 minimized: minimized,
                 windowIndex: w,
                 axWindowIndex: w + 1,
-                windowNumber: n++,
+                hasWindow: true,
+                windowCount: appWindowCount,
+                windowNumber: w + 1,
                 monitorIndex: monitorFor(px, py, pw, ph, screens),
-                bundlePath: path
+                bundlePath: path,
+                x: px, y: py, w: pw, h: ph
               });
             }
           }
           finalizeActive(rows, frontApp);
-          return JSON.stringify(rows);
+          return JSON.stringify({ apps: rows, quartzWindows: quartz });
         }
     """.trimIndent()
 }

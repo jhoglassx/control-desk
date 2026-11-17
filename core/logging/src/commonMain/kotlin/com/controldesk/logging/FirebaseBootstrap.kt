@@ -1,18 +1,23 @@
 package com.controldesk.logging
 
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+
+@OptIn(ExperimentalAtomicApi::class)
 internal object FirebaseBootstrap {
-    private val lock = Any()
-    private var ready = false
+    private val ready = AtomicBoolean(false)
+    private val initializing = AtomicBoolean(false)
 
     val isReady: Boolean
-        get() = ready
+        get() = ready.load()
 
     fun ensureInitialized(platformContext: Any? = null) {
-        if (ready) return
-        synchronized(lock) {
-            if (ready) return
+        if (ready.load() || !initializing.compareAndSet(false, true)) return
+        try {
             runCatching { platformInitializeFirebase(platformContext) }
-            .onSuccess { ready = true }
+                .onSuccess { ready.store(true) }
+        } finally {
+            initializing.store(false)
         }
     }
 }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.controldesk.agent.camera</string>
+<key>CFBundleName</key><string>Control Desk Camera</string>
+<key>CFBundleDisplayName</key><string>Control Desk Camera</string>
+<key>NSCameraUsageDescription</key><string>Configurar foco, exposição e balanço de branco da câmera selecionada pelo usuário. Não gravamos nem transmitimos vídeo.</string>
+</dict></plist>

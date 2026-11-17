@@ -6,11 +6,20 @@ import com.controldesk.protocol.AudioResponse
 import com.controldesk.protocol.BrowserTabSwitchRequest
 import com.controldesk.protocol.MicRequest
 import com.controldesk.protocol.RunningAppInfo
+import com.controldesk.protocol.InstalledAppInfo
+import com.controldesk.protocol.BrowseFilesResponse
 import com.controldesk.protocol.VolumeRequest
+import com.controldesk.agent.macos.MacFileBrowser
 
 interface PlatformExecutor {
+    fun devices(): com.controldesk.protocol.DeviceCatalogResponse = com.controldesk.protocol.DeviceCatalogResponse(
+        diagnostics = mapOf("platform" to "Catálogo de dispositivos indisponível neste executor"))
+    fun executeDeviceAction(request: com.controldesk.protocol.DeviceActionRequest): com.controldesk.protocol.DeviceActionResponse =
+        error("Controle de dispositivos indisponível neste executor")
     val osName: String
     fun listRunningApps(includeIcons: Boolean): List<RunningAppInfo>
+    fun listInstalledApps(): List<InstalledAppInfo>
+    fun browseFiles(path: String?): BrowseFilesResponse
     fun launchApp(request: AppLaunchRequest)
     fun closeApp(request: AppCloseRequest)
     fun openBrowser(url: String, browser: String?)
@@ -34,6 +43,8 @@ class LoggingPlatformExecutor : PlatformExecutor {
     override val osName: String = System.getProperty("os.name") ?: "unknown"
 
     override fun listRunningApps(includeIcons: Boolean): List<RunningAppInfo> = apps.toList()
+    override fun listInstalledApps(): List<InstalledAppInfo> = emptyList()
+    override fun browseFiles(path: String?): BrowseFilesResponse = BrowseFilesResponse(path ?: System.getProperty("user.home"))
 
     override fun launchApp(request: AppLaunchRequest) {
         apps.replaceAll { if (it.appName.equals(request.target, true) || it.name.equals(request.target, true)) it.copy(isActive = true) else it.copy(isActive = false) }
@@ -69,6 +80,9 @@ class LoggingPlatformExecutor : PlatformExecutor {
 }
 
 class NativePlatformExecutor : PlatformExecutor {
+    private val deviceService by lazy { com.controldesk.agent.devices.DeviceService.native() }
+    override fun devices() = deviceService.catalog()
+    override fun executeDeviceAction(request: com.controldesk.protocol.DeviceActionRequest) = deviceService.execute(request)
     private val os = System.getProperty("os.name").lowercase()
     private val isMac = os.contains("mac")
     private val fallback = LoggingPlatformExecutor()
@@ -82,6 +96,12 @@ class NativePlatformExecutor : PlatformExecutor {
     override fun listRunningApps(includeIcons: Boolean): List<RunningAppInfo> =
         if (isMac) MacWindowLister.list(includeIcons) else fallback.listRunningApps(includeIcons)
 
+    override fun listInstalledApps(): List<InstalledAppInfo> =
+        if (isMac) MacInstalledApps.list() else fallback.listInstalledApps()
+
+    override fun browseFiles(path: String?): BrowseFilesResponse =
+        if (isMac) MacFileBrowser.list(path) else fallback.browseFiles(path)
+
     override fun launchApp(request: AppLaunchRequest) {
         if (isMac) {
             MacFocusApp.focus(request)
@@ -94,7 +114,7 @@ class NativePlatformExecutor : PlatformExecutor {
 
     override fun closeApp(request: AppCloseRequest) {
         if (isMac) {
-            MacAppQuit.quit(request.target)
+            MacAppQuit.quit(request)
             MacWindowLister.refreshNow()
             MacChromeTabs.refreshNow()
         } else {

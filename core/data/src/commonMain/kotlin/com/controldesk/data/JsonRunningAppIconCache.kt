@@ -28,6 +28,15 @@ class JsonRunningAppIconCache(
         }
     }
 
+    override suspend fun replace(buttonId: String, base64: String) {
+        if (buttonId.isBlank() || base64.isBlank()) return
+        mutex.withLock {
+            if (memory[buttonId] == base64) return
+            memory[buttonId] = base64
+            fileStore.writeText(fileName, json.encodeToString(IconCacheFile(memory)))
+        }
+    }
+
     override fun peek(buttonId: String): String? = memory[buttonId]
 
     fun hydrate(snapshot: Map<String, String>) {
@@ -41,7 +50,7 @@ class JsonRunningAppIconCache(
     }
 
     companion object {
-        const val ICON_CACHE_FILE = "control_desk_icon_cache.json"
+        const val ICON_CACHE_FILE = "control_desk_icon_cache_v2.json"
     }
 }
 

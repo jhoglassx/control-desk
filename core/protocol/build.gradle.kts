@@ -1,11 +1,15 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlinSerialization)
 }
 
 kotlin {
-    jvmToolchain(21)
-    jvm()
+    jvmToolchain(17)
+    jvm {
+        compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+    }
     iosX64()
     iosArm64()
     iosSimulatorArm64()

@@ -19,6 +19,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketSession
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -71,6 +72,16 @@ class AgentWsHub(
         scope.cancel()
     }
 
+    fun disconnectAll() {
+        scope.launch {
+            sessions.toList().forEach { session ->
+                runCatching {
+                    session.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Pairing revoked"))
+                }
+            }
+        }
+    }
+
     suspend fun handleSession(session: WebSocketSession, token: String) {
         if (!authStore.isValidToken(token)) {
             session.sendJson(WsServerMessage(type = WsMessageType.ERROR, ok = false, message = "Unauthorized"))
@@ -88,7 +99,14 @@ class AgentWsHub(
                 if (message == null) {
                     session.sendJson(WsServerMessage(type = WsMessageType.ERROR, ok = false, message = "Invalid message"))
                 } else {
-                    handleMessage(session, message)
+                    try {
+                        handleMessage(session, message)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        ControlDeskLog.agent.e(error) { "[ws] command failed: ${message.type}" }
+                        sendError(session, message.id, error.message ?: "Command failed")
+                    }
                 }
             }
         } finally {
@@ -214,6 +232,8 @@ class AgentWsHub(
             append(':')
             append(app.axWindowIndex ?: app.windowIndex ?: -1)
             append(':')
+            append(app.stableWindowId.orEmpty())
+            append(':')
             append(app.isActive)
             append(':')
             append(app.isVisible)
@@ -221,6 +241,8 @@ class AgentWsHub(
             append(app.monitorIndex)
             append(':')
             append(app.windowTitle.orEmpty())
+            append(':')
+            append(app.iconBase64?.hashCode() ?: 0)
         }
     }
 

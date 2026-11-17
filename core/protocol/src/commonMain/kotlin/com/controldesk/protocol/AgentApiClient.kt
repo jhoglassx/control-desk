@@ -14,6 +14,20 @@ import io.ktor.http.contentType
 class AgentApiClient(
     private val httpClient: HttpClient,
 ) {
+    suspend fun devices(baseUrl: String, token: String): DeviceCatalogResponse =
+        httpClient.get("$baseUrl/devices") {
+            bearerAuth(token)
+            timeout { requestTimeoutMillis = 20_000 }
+        }.body()
+
+    suspend fun deviceAction(baseUrl: String, token: String, request: DeviceActionRequest): DeviceActionResponse =
+        httpClient.post("$baseUrl/devices/actions") {
+            bearerAuth(token)
+            timeout { requestTimeoutMillis = 95_000 }
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.body()
+
     suspend fun health(baseUrl: String): HealthResponse =
         httpClient.get("$baseUrl/health").body()
 
@@ -27,6 +41,17 @@ class AgentApiClient(
         httpClient.get("$baseUrl/apps/running") {
             bearerAuth(token)
             parameter("icons", if (includeIcons) 1 else 0)
+        }.body()
+
+    suspend fun installedApps(baseUrl: String, token: String): InstalledAppsResponse =
+        httpClient.get("$baseUrl/apps/installed") { bearerAuth(token) }.body()
+
+    suspend fun browseFiles(baseUrl: String, token: String, request: BrowseFilesRequest): BrowseFilesResponse =
+        httpClient.post("$baseUrl/files/browse") {
+            timeout { requestTimeoutMillis = COMMAND_TIMEOUT_MS }
+            bearerAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody(request)
         }.body()
 
     suspend fun launchApp(baseUrl: String, token: String, request: AppLaunchRequest): ActionAck =

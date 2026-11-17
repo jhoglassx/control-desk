@@ -1,6 +1,7 @@
 package com.controldesk.app.di
 
 import com.controldesk.data.storage.FileStore
+import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSString
@@ -9,6 +10,7 @@ import platform.Foundation.NSUserDomainMask
 import platform.Foundation.stringWithContentsOfFile
 import platform.Foundation.writeToFile
 
+@OptIn(ExperimentalForeignApi::class)
 class IosFileStore : FileStore {
     private val documentsDir: String = NSSearchPathForDirectoriesInDomains(
         NSDocumentDirectory,

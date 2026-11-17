@@ -8,6 +8,8 @@ data class HealthResponse(
     val version: String = "1.1.0",
     val os: String? = null,
     val windowListerVersion: Int? = null,
+    val deviceCatalogVersion: Int = 0,
+    val buildId: String? = null,
     val accessibilityEnabled: Boolean? = null,
 )
 
@@ -30,12 +32,45 @@ data class AppLaunchRequest(
     val windowTitle: String? = null,
     val windowIndex: Int? = null,
     val windowNumber: Int? = null,
+    val bundlePath: String? = null,
+    val projectPath: String? = null,
+    val pid: Int? = null,
+    val axWindowIndex: Int? = null,
+    val stableWindowId: String? = null,
+)
+
+@Serializable
+data class InstalledAppInfo(
+    val name: String,
+    val bundlePath: String,
+    val iconBase64: String? = null,
+)
+
+@Serializable
+data class InstalledAppsResponse(val apps: List<InstalledAppInfo> = emptyList())
+
+@Serializable
+data class BrowseFilesRequest(val path: String? = null)
+
+@Serializable
+data class BrowseFileEntry(val name: String, val path: String, val isDirectory: Boolean)
+
+@Serializable
+data class BrowseFilesResponse(
+    val path: String,
+    val parentPath: String? = null,
+    val entries: List<BrowseFileEntry> = emptyList(),
 )
 
 @Serializable
 data class AppCloseRequest(
     val target: String,
     val targetType: String = "appName",
+    val pid: Int? = null,
+    val windowTitle: String? = null,
+    val axWindowIndex: Int? = null,
+    val windowCount: Int? = null,
+    val stableWindowId: String? = null,
 )
 
 @Serializable
@@ -80,6 +115,8 @@ data class SetupResponse(
     val pin: String? = null,
     val backgroundService: Boolean = true,
     val accessibilityEnabled: Boolean? = null,
+    val agentVersion: String = "unknown",
+    val buildId: String? = null,
 )
 
 @Serializable
@@ -105,6 +142,9 @@ data class RunningAppInfo(
     val windowIndex: Int? = null,
     val axWindowIndex: Int? = null,
     val windowNumber: Int? = null,
+    /** Stable macOS Quartz window ID; unlike windowIndex, this does not shift when sibling windows change. */
+    val stableWindowId: String? = null,
+    val windowCount: Int? = null,
     val iconBase64: String? = null,
     val isActive: Boolean = false,
     val isVisible: Boolean = true,
@@ -113,6 +153,7 @@ data class RunningAppInfo(
     val monitorIndex: Int = 0,
     val isDockPinned: Boolean = false,
     val dockIndex: Int = -1,
+    val bundlePath: String? = null,
 )
 
 @Serializable

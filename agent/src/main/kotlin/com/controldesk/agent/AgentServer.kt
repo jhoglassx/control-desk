@@ -13,6 +13,8 @@ import com.controldesk.protocol.MicRequest
 import com.controldesk.protocol.PairRequest
 import com.controldesk.protocol.PairResponse
 import com.controldesk.protocol.RunningAppsResponse
+import com.controldesk.protocol.InstalledAppsResponse
+import com.controldesk.protocol.BrowseFilesRequest
 import com.controldesk.protocol.SetupResponse
 import com.controldesk.protocol.VolumeRequest
 import io.ktor.http.ContentType
@@ -50,8 +52,10 @@ class AgentServer(
 ) {
     private var engine: EmbeddedServer<*, *>? = null
     private val wsHub = AgentWsHub(authStore, executor)
+    private val pairAttemptLimiter = PairAttemptLimiter()
 
     fun start() {
+        val serviceBuildId = AgentBuildIdentity.VALUE
         wsHub.start()
         engine = embeddedServer(CIO, port = port, host = bind) {
             install(ContentNegotiation) {
@@ -87,22 +91,41 @@ class AgentServer(
                     call.respondDto(
                         HealthResponse(
                             ok = true,
-                            version = "1.1.0",
+                            version = AgentVersion.VALUE,
                             os = executor.osName,
-                            windowListerVersion = 20,
+                            windowListerVersion = 25,
+                            deviceCatalogVersion = 1,
+                            buildId = serviceBuildId,
                             accessibilityEnabled = macAccessibilityEnabled(),
                         ),
                     )
                 }
+                get("/setup/health") {
+                    if (!call.isLocalhost()) {
+                        call.respondText("""{"ok":false}""", ContentType.Application.Json, HttpStatusCode.Forbidden)
+                        return@get
+                    }
+                    call.respondDto(setupResponse())
+                }
                 post("/pair") {
                     val body = call.receive<PairRequest>()
+                    val address = call.request.local.remoteHost
+                    if (!pairAttemptLimiter.allow(address)) {
+                        call.respondDto(
+                            PairResponse(ok = false, message = "Too many invalid PIN attempts. Try again in 5 minutes."),
+                            HttpStatusCode.TooManyRequests,
+                        )
+                        return@post
+                    }
                     val token = authStore.pair(body.pin)
                     if (token == null) {
+                        pairAttemptLimiter.recordFailure(address)
                         call.respondDto(
                             PairResponse(ok = false, message = "Invalid PIN"),
                             HttpStatusCode.Unauthorized,
                         )
                     } else {
+                        pairAttemptLimiter.recordSuccess(address)
                         call.respondDto(PairResponse(ok = true, token = token))
                     }
                 }
@@ -115,15 +138,23 @@ class AgentServer(
                         )
                         return@get
                     }
-                    call.respondDto(
-                        SetupResponse(
-                            ok = true,
-                            port = port,
-                            pin = authStore.currentPin(),
-                            backgroundService = true,
-                            accessibilityEnabled = macAccessibilityEnabled(),
-                        ),
-                    )
+                    call.respondDto(setupResponse())
+                }
+                get("/setup/devices") {
+                    if (!call.isLocalhost()) {
+                        call.respondText("""{"ok":false}""", ContentType.Application.Json, HttpStatusCode.Forbidden)
+                        return@get
+                    }
+                    call.respondDto(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { executor.devices() })
+                }
+                post("/setup/camera-access") {
+                    if (!call.isLocalhost()) {
+                        call.respondText("""{"ok":false}""", ContentType.Application.Json, HttpStatusCode.Forbidden)
+                        return@post
+                    }
+                    val body = call.receive<com.controldesk.protocol.DeviceActionRequest>()
+                    require(body.action == "REQUEST_CAMERA_ACCESS") { "Esta rota apenas solicita autorização de câmera." }
+                    call.respondDto(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { executor.executeDeviceAction(body) })
                 }
                 post("/setup/new-pin") {
                     if (!call.isLocalhost()) {
@@ -135,17 +166,39 @@ class AgentServer(
                         return@post
                     }
                     val pin = authStore.activatePin()
-                    call.respondDto(
-                        SetupResponse(
-                            ok = true,
-                            port = port,
-                            pin = pin,
-                            backgroundService = true,
-                            accessibilityEnabled = macAccessibilityEnabled(),
-                        ),
+                    pairAttemptLimiter.clear()
+                    call.respondDto(setupResponse(pin))
+                }
+                post("/setup/revoke-tokens") {
+                    if (!call.isLocalhost()) {
+                        call.respondText("""{"ok":false}""", ContentType.Application.Json, HttpStatusCode.Forbidden)
+                        return@post
+                    }
+                    val revoked = authStore.revokeAllTokens()
+                    wsHub.disconnectAll()
+                    call.respondText(
+                        buildJsonObject {
+                            put("ok", true)
+                            put("revoked", revoked)
+                        }.toString(),
+                        ContentType.Application.Json,
                     )
                 }
                 authenticate("paired") {
+                    get("/devices") {
+                        call.respondDto(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { executor.devices() })
+                    }
+                    post("/devices/actions") {
+                        val body = call.receive<com.controldesk.protocol.DeviceActionRequest>()
+                        call.respondDto(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { executor.executeDeviceAction(body) })
+                    }
+                    get("/apps/installed") {
+                        call.respondDto(InstalledAppsResponse(apps = executor.listInstalledApps()))
+                    }
+                    post("/files/browse") {
+                        val body = call.receive<BrowseFilesRequest>()
+                        call.respondDto(executor.browseFiles(body.path))
+                    }
                     get("/apps/running") {
                         val icons = call.request.queryParameters["icons"] == "1"
                         call.respondDto(RunningAppsResponse(apps = executor.listRunningApps(includeIcons = icons)))
@@ -212,6 +265,16 @@ class AgentServer(
         return remote == "127.0.0.1" || remote == "localhost" || remote == "::1" || remote == "[::1]"
     }
 
+    private fun setupResponse(pin: String? = authStore.currentPin()) = SetupResponse(
+        ok = true,
+        port = port,
+        pin = pin,
+        backgroundService = true,
+        accessibilityEnabled = macAccessibilityEnabled(),
+        agentVersion = AgentVersion.VALUE,
+        buildId = AgentBuildIdentity.VALUE,
+    )
+
     private fun macAccessibilityEnabled(): Boolean? {
         if (!executor.osName.contains("mac", ignoreCase = true)) return null
         return runCatching { MacAccessibility.isTrusted() }.getOrDefault(false)
@@ -223,4 +286,45 @@ private suspend inline fun <reified T> ApplicationCall.respondDto(
     status: HttpStatusCode = HttpStatusCode.OK,
 ) {
     respondText(AgentJson.encodeToString(value), ContentType.Application.Json, status)
+}
+
+private class PairAttemptLimiter(
+    private val maxFailures: Int = 5,
+    private val windowMs: Long = 5 * 60 * 1000L,
+) {
+    private data class Attempts(var count: Int, var firstFailureAt: Long)
+    private val lock = Any()
+    private val attempts = mutableMapOf<String, Attempts>()
+
+    fun allow(address: String): Boolean = synchronized(lock) {
+        val entry = attempts[address] ?: return@synchronized true
+        if (System.currentTimeMillis() - entry.firstFailureAt >= windowMs) {
+            attempts.remove(address)
+            true
+        } else {
+            entry.count < maxFailures
+        }
+    }
+
+    fun recordFailure(address: String): Unit = synchronized(lock) {
+        val now = System.currentTimeMillis()
+        attempts.entries.removeAll { now - it.value.firstFailureAt >= windowMs }
+        if (address !in attempts && attempts.size >= MAX_TRACKED_ADDRESSES) {
+            attempts.entries.firstOrNull()?.let { attempts.remove(it.key) }
+        }
+        val entry = attempts[address]
+        if (entry == null || now - entry.firstFailureAt >= windowMs) {
+            attempts[address] = Attempts(1, now)
+        } else {
+            entry.count += 1
+        }
+        Unit
+    }
+
+    fun recordSuccess(address: String): Unit = synchronized(lock) { attempts.remove(address); Unit }
+    fun clear(): Unit = synchronized(lock) { attempts.clear(); Unit }
+
+    private companion object {
+        const val MAX_TRACKED_ADDRESSES = 1024
+    }
 }

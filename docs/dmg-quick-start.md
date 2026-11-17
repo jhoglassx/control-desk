@@ -1,15 +1,15 @@
 # Control Desk Agent — início rápido (DMG)
 
-1. Abra o DMG
-2. Arraste **ControlDeskAgent.app** para **Aplicativos** (ou dê duplo clique no app)
-3. A janela abre com PIN e IP — use no celular em **Parear PC** (porta **8741**)
-4. **Ajustes → Privacidade e Segurança → Acessibilidade** → marque **ControlDeskAgent**
-5. Feche a janela — o agente continua em segundo plano (sem ícone no Dock)
+1. Abra o DMG e arraste **ControlDeskAgent.app** para **Aplicativos**.
+2. Abra o app em Aplicativos; ele se instala para iniciar com sua sessão e abre a configuração.
+3. No celular, abra **Parear computador** → **Buscar Mac na mesma rede**, selecione este Mac e informe o PIN de 6 dígitos mostrado.
+4. Ative **Ajustes → Privacidade e Segurança → Acessibilidade → ControlDeskAgent** para permitir controle de janelas.
+5. Toque em **Concluir**. O serviço continua ativo em segundo plano após fechar a janela.
 
 | Contexto | IP no app |
 |----------|-----------|
 | Emulador Android no Mac | `10.0.2.2` |
-| Celular na Wi‑Fi | IP LAN do Mac (na janela de configurações) |
+| Celular na Wi‑Fi | Descoberta automática; use o IP LAN se configurar manualmente |
 
 Para ver o PIN de novo: abra **Control Desk Agent** em Aplicativos.
 
